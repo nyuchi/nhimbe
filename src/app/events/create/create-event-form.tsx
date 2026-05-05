@@ -154,6 +154,7 @@ export default function CreateEventForm() {
   // Hosting (step 3)
   const [hostMode, setHostMode] = useState<"person" | "organization">("person");
   const [hostOrganizationId, setHostOrganizationId] = useState<string | null>(null);
+  const [hostOrgIds, setHostOrgIds] = useState<string[]>([]);
 
   // Cover image
   const [coverImage, setCoverImage] = useState<string | null>(null);
@@ -316,11 +317,16 @@ export default function CreateEventForm() {
       if (target >= 3) {
         if (capacity !== null && capacity < 1) return "Capacity must be at least 1 attendee";
         if (!isFree && ticketUrl.trim() && !isValidUrl(ticketUrl.trim())) return "Please enter a valid ticket URL";
-        if (hostMode === "organization" && !hostOrganizationId) return "Pick which organisation is hosting, or switch back to a personal host";
+        if (hostMode === "organization") {
+          if (!hostOrganizationId) return "Pick which organisation is hosting, or switch back to a personal host";
+          if (hostOrgIds.length > 0 && !hostOrgIds.includes(hostOrganizationId)) {
+            return "That organisation isn't linked to your account. Pick one from the list or switch to a personal host.";
+          }
+        }
       }
       return null;
     },
-    [eventName, category, eventDate, endTime, startTime, isOnline, venue, selectedCity, meetingUrl, capacity, isFree, ticketUrl, hostMode, hostOrganizationId],
+    [eventName, category, eventDate, endTime, startTime, isOnline, venue, selectedCity, meetingUrl, capacity, isFree, ticketUrl, hostMode, hostOrganizationId, hostOrgIds],
   );
 
   const goNext = () => {
@@ -511,6 +517,7 @@ export default function CreateEventForm() {
             hostMode={hostMode}
             organizationId={hostOrganizationId}
             onChange={(mode, orgId) => { setHostMode(mode); setHostOrganizationId(orgId); touchForm(); }}
+            onOrgsLoaded={(orgs) => setHostOrgIds(orgs.map((o) => o.id))}
           />
 
           <div className="flex gap-2 mb-4">

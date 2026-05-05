@@ -7,18 +7,36 @@ import { useAuth } from "@/components/auth/auth-context";
 import { getOrgsForPerson } from "@/lib/supabase/api";
 import type { OrganizationRow } from "@/lib/supabase/types";
 
+function OrgLogo({ src, name }: { src: string; name: string }) {
+  const [errored, setErrored] = useState(false);
+  if (errored) {
+    return <Building2 className="w-4 h-4 text-text-secondary" aria-hidden />;
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={`${name} logo`}
+      loading="lazy"
+      onError={() => setErrored(true)}
+      className="w-full h-full object-cover"
+    />
+  );
+}
+
 interface HostModePickerProps {
   hostMode: "person" | "organization";
   organizationId: string | null;
   onChange: (mode: "person" | "organization", organizationId: string | null) => void;
+  onOrgsLoaded?: (orgs: OrganizationRow[]) => void;
 }
 
-export function HostModePicker({ hostMode, organizationId, onChange }: HostModePickerProps) {
+export function HostModePicker({ hostMode, organizationId, onChange, onOrgsLoaded }: HostModePickerProps) {
   const { user } = useAuth();
   const [orgs, setOrgs] = useState<OrganizationRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const personId = (user as { person_id?: string } | null)?.person_id ?? null;
+  const personId = user?.id ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -26,7 +44,9 @@ export function HostModePicker({ hostMode, organizationId, onChange }: HostModeP
     setLoading(true);
     getOrgsForPerson(personId)
       .then((res) => {
-        if (!cancelled) setOrgs(res);
+        if (cancelled) return;
+        setOrgs(res);
+        onOrgsLoaded?.(res);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -34,7 +54,7 @@ export function HostModePicker({ hostMode, organizationId, onChange }: HostModeP
     return () => {
       cancelled = true;
     };
-  }, [personId]);
+  }, [personId, onOrgsLoaded]);
 
   const personLabel = user?.name || "You";
 
@@ -99,8 +119,7 @@ export function HostModePicker({ hostMode, organizationId, onChange }: HostModeP
           >
             <div className="w-9 h-9 rounded-full bg-elevated flex items-center justify-center overflow-hidden">
               {org.logo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={org.logo} alt="" className="w-full h-full object-cover" />
+                <OrgLogo src={org.logo} name={org.name} />
               ) : (
                 <Building2 className="w-4 h-4 text-text-secondary" aria-hidden />
               )}
