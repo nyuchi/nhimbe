@@ -1,20 +1,26 @@
 "use client";
 
-import { StytchProvider as StytchProviderSDK, createStytchUIClient } from "@stytch/nextjs";
+import { StytchProvider as StytchProviderSDK } from "@stytch/nextjs";
+import { createStytchHeadlessClient } from "@stytch/nextjs/headless";
 import { ReactNode } from "react";
 
-// Lazy-initialize Stytch client to avoid build-time errors
-let stytchClient: ReturnType<typeof createStytchUIClient> | null = null;
+// We only use Stytch's hooks (useStytch / useStytchUser / useStytchSession) and
+// the magic-links / oauth authenticate methods. The "headless" entry point gives
+// us those without pulling in Stytch's bundled UI components — which previously
+// shipped a bundled copy of Preact that crashed at hydration with
+// "undefined is not an object (evaluating 'tj.context')" on every page that
+// loaded the auth context. Since we render Stytch's auth flow ourselves on
+// /authenticate and /auth/signin, we don't need any of the UI client features.
+let stytchClient: ReturnType<typeof createStytchHeadlessClient> | null = null;
 
 function getStytchClient() {
   if (!stytchClient) {
     const token = process.env.NEXT_PUBLIC_STYTCH_PUBLIC_TOKEN;
     if (!token) {
       console.error("[mukoko:auth] NEXT_PUBLIC_STYTCH_PUBLIC_TOKEN is not set");
-      // Return a placeholder — Stytch SDK handles empty tokens gracefully
-      return createStytchUIClient("");
+      return createStytchHeadlessClient("");
     }
-    stytchClient = createStytchUIClient(token);
+    stytchClient = createStytchHeadlessClient(token);
   }
   return stytchClient;
 }

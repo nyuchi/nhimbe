@@ -14,6 +14,7 @@ import { AuthProvider } from "@/components/auth/auth-context";
 import { StytchProvider } from "@/components/auth/stytch-provider";
 import { ErrorBoundary } from "@/components/error/error-boundary";
 import { WidgetErrorBoundary } from "@/components/error/widget-error-boundary";
+import { SectionErrorBoundary } from "@/components/error/section-error-boundary";
 import { LiveRegionProvider } from "@/components/ui/live-region";
 import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
@@ -187,7 +188,11 @@ export default function RootLayout({
                   <WidgetErrorBoundary fallback={<MinimalNav />} name="Header">
                     <Header />
                   </WidgetErrorBoundary>
-                  <main id="main-content" className="flex-1 relative z-10 pb-16 md:pb-0">{children}</main>
+                  <main id="main-content" className="flex-1 relative z-10 pb-16 md:pb-0">
+                    <SectionErrorBoundary section="Page content">
+                      {children}
+                    </SectionErrorBoundary>
+                  </main>
                   <WidgetErrorBoundary fallback={null} name="MobileNav">
                     <MobileBottomNav />
                   </WidgetErrorBoundary>
