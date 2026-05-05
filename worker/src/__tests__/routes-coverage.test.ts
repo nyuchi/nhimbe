@@ -18,7 +18,7 @@ import {
 } from './mocks';
 
 // Mock Stytch auth for admin route tests
-vi.mock('../auth/stytch', () => ({
+vi.mock('../auth/workos', () => ({
   getAuthenticatedUser: vi.fn().mockResolvedValue({
     user: null,
     failureReason: 'no_token',
@@ -27,7 +27,7 @@ vi.mock('../auth/stytch', () => ({
   extractBearerToken: vi.fn(),
 }));
 
-import { getAuthenticatedUser } from '../auth/stytch';
+import { getAuthenticatedUser } from '../auth/workos';
 const mockGetAuth = vi.mocked(getAuthenticatedUser);
 
 let env: Env;

@@ -9,9 +9,9 @@ import {
   ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { useStytchUser, useStytchSession, useStytch } from "@stytch/nextjs";
+import { useAuth as useAuthKit, useAccessToken } from "@workos-inc/authkit-nextjs/components";
 
-export type UserRole = 'user' | 'moderator' | 'admin' | 'super_admin';
+export type UserRole = "user" | "moderator" | "admin" | "super_admin";
 
 export interface NhimbeUser {
   id: string;
@@ -21,7 +21,10 @@ export interface NhimbeUser {
   addressLocality?: string;
   addressCountry?: string;
   interests?: string[];
-  stytchUserId: string;
+  // schema.org Person UUID from identity.person — this is what auth.uid() returns under our platform JWT.
+  personId: string;
+  // WorkOS user id (kept for audit / migration). Replaces the old stytchUserId field.
+  workosUserId: string;
   role: UserRole;
 }
 
@@ -32,7 +35,6 @@ export interface ProfileCompleteness {
   complete: boolean;
 }
 
-// Role permission helpers
 const ROLE_HIERARCHY: Record<UserRole, number> = {
   user: 0,
   moderator: 1,
@@ -59,82 +61,72 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://events-api.mukoko.com";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const { user: workosUser, loading: authKitLoading, signOut: authKitSignOut } = useAuthKit();
+  const { accessToken, getAccessToken } = useAccessToken();
+
   const [nhimbeUser, setNhimbeUser] = useState<NhimbeUser | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [hasSynced, setHasSynced] = useState(false);
-  const router = useRouter();
 
-  const { user: stytchUser, isInitialized: userInitialized } = useStytchUser();
-  const { session, isInitialized: sessionInitialized } = useStytchSession();
-  const stytch = useStytch();
-
-  const isSDKReady = userInitialized && sessionInitialized;
-
-  // Sync with backend when Stytch session is available
   const syncWithBackend = useCallback(async () => {
-    if (!stytchUser || !session) return;
+    if (!workosUser) return;
 
     setSyncing(true);
     try {
-      const tokens = stytch.session.getTokens();
-      const sessionJwt = tokens?.session_jwt;
-      if (!sessionJwt) {
+      // Pull a fresh access token if AuthKit hasn't surfaced one yet (e.g., right after callback).
+      const token = accessToken ?? (await getAccessToken().catch(() => null));
+      if (!token) {
         setSyncing(false);
         return;
       }
 
-      const email = stytchUser.emails?.[0]?.email || "";
-      const name =
-        `${stytchUser.name?.first_name || ""} ${stytchUser.name?.last_name || ""}`.trim();
+      const email = workosUser.email ?? "";
+      const name = [workosUser.firstName, workosUser.lastName].filter(Boolean).join(" ").trim();
 
       const response = await fetch(`${API_URL}/api/auth/sync`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${sessionJwt}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          stytch_user_id: stytchUser.user_id,
+          workos_user_id: workosUser.id,
           email,
           name,
         }),
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as { user: NhimbeUser };
         setNhimbeUser(data.user);
       } else {
-        const errData = await response.json().catch(() => ({})) as { error?: string; reason?: string };
+        const errData = (await response.json().catch(() => ({}))) as { error?: string; reason?: string };
         console.error("[nhimbe] auth/sync failed:", response.status, errData.reason || errData.error || "unknown");
-        // Do not create fallback user — stay logged out so the UI accurately reflects auth state
         setNhimbeUser(null);
       }
     } catch (err) {
       console.error("[nhimbe] auth/sync network error:", err);
-      // Do not create fallback user — stay logged out on network errors
       setNhimbeUser(null);
     } finally {
       setSyncing(false);
       setHasSynced(true);
     }
-  }, [stytchUser, session, stytch]);
+  }, [workosUser, accessToken, getAccessToken]);
 
-  // Sync when Stytch user/session become available
   useEffect(() => {
-    if (isSDKReady && stytchUser && session && !hasSynced) {
-      syncWithBackend();
+    if (!authKitLoading && workosUser && !hasSynced) {
+      void syncWithBackend();
     }
-    // Clear nhimbe user if Stytch session is gone
-    if (isSDKReady && !stytchUser && !session) {
+    if (!authKitLoading && !workosUser) {
       setNhimbeUser(null);
       setHasSynced(false);
     }
-  }, [isSDKReady, stytchUser, session, hasSynced, syncWithBackend]);
+  }, [authKitLoading, workosUser, hasSynced, syncWithBackend]);
 
   const signIn = useCallback(
     (returnUrl?: string) => {
       if (returnUrl && typeof window !== "undefined") {
-        // Only allow relative paths to prevent open redirect attacks
         const isRelativePath = returnUrl.startsWith("/") && !returnUrl.startsWith("//");
         if (isRelativePath) {
           localStorage.setItem("auth_redirect", returnUrl);
@@ -142,28 +134,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       router.push("/auth/signin");
     },
-    [router]
+    [router],
   );
 
   const signOut = useCallback(async () => {
     try {
-      await stytch.session.revoke();
+      await authKitSignOut({ returnTo: "/" });
     } catch {
-      // Session may already be expired
+      // AuthKit will redirect on success; if the call throws (offline etc.) we still want
+      // to clear local state.
     } finally {
       setNhimbeUser(null);
       setHasSynced(false);
-      router.push("/");
     }
-  }, [stytch, router]);
+  }, [authKitSignOut]);
 
   const refreshUser = useCallback(async () => {
     setHasSynced(false);
     await syncWithBackend();
   }, [syncWithBackend]);
 
-  const isLoading = !isSDKReady || syncing;
-  const isAuthenticated = !!stytchUser && !!session && !!nhimbeUser;
+  const isLoading = authKitLoading || syncing;
+  const isAuthenticated = !!workosUser && !!nhimbeUser;
 
   const hasName = !!nhimbeUser?.name && nhimbeUser.name !== "" && nhimbeUser.name !== "User";
   const hasAddressLocality = !!nhimbeUser?.addressLocality;

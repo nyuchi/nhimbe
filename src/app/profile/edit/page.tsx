@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useStytch } from "@stytch/nextjs";
+import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { useAuth } from "@/components/auth/auth-context";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import Link from "next/link";
 
 function ProfileEditContent() {
   const router = useRouter();
-  const stytch = useStytch();
+  const { accessToken, getAccessToken } = useAccessToken();
   const { user, refreshUser } = useAuth();
 
   const [name, setName] = useState("");
@@ -72,9 +72,8 @@ function ProfileEditContent() {
     setError(null);
 
     try {
-      const tokens = stytch.session.getTokens();
-      const sessionJwt = tokens?.session_jwt;
-      if (!sessionJwt) {
+      const token = accessToken ?? (await getAccessToken().catch(() => null));
+      if (!token) {
         throw new Error("No session found. Please sign in again.");
       }
 
@@ -92,7 +91,7 @@ function ProfileEditContent() {
         return;
       }
 
-      await updateProfile(sessionJwt, changedFields);
+      await updateProfile(token, changedFields);
       await refreshUser();
       router.push("/profile");
     } catch (err) {

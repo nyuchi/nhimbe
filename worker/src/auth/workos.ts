@@ -1,17 +1,29 @@
 /**
- * Stytch Session JWT Local Validation for nhimbe Worker
+ * WorkOS Access Token Validation for nhimbe Worker
  *
- * Authentication is handled entirely by the Stytch frontend SDK.
- * The backend only validates session JWTs locally using Stytch's
- * public JWKS — no Stytch API calls or secrets required.
+ * AuthKit (frontend) issues WorkOS access tokens; the worker validates them
+ * locally using WorkOS's public JWKS — no WorkOS API call required for the
+ * common auth-on-every-request path.
+ *
+ * Replaces the previous Stytch JWT validator. Same shape (RS256 signed JWT,
+ * JWKS-backed, cached for 1 hour) — only the issuer / audience / JWKS URL
+ * change. Caller surface is unchanged: getAuthenticatedUser() still returns
+ * an AuthResult and the same failure-reason enum (with `_workos_` namespacing
+ * for the few enum values that were Stytch-specific).
  */
 
-interface StytchEnv {
-  STYTCH_PROJECT_ID: string;
+interface WorkOSEnv {
+  /** Public WorkOS Client ID — used both as the audience claim and to build the JWKS URL. */
+  WORKOS_CLIENT_ID: string;
 }
 
 export interface AuthenticatedUser {
+  /** WorkOS user id (e.g. user_01H...). Use this to look up identity.person via workos_user_id. */
   userId: string;
+  /** Optional org id from the access token (when the user is signed in to a specific organisation). */
+  organizationId?: string;
+  /** Email claim if present in the access token. */
+  email?: string;
 }
 
 // ============================================
@@ -34,15 +46,12 @@ interface JWKS {
 let jwksCache: { keys: JWKS; fetchedAt: number } | null = null;
 const JWKS_CACHE_TTL = 3600_000; // 1 hour
 
-function getJwksUrl(projectId: string): string {
-  const baseUrl = projectId.startsWith("project-test-")
-    ? "https://test.stytch.com"
-    : "https://api.stytch.com";
-  return `${baseUrl}/v1/sessions/jwks/${projectId}`;
+function getJwksUrl(clientId: string): string {
+  return `https://api.workos.com/sso/jwks/${clientId}`;
 }
 
-async function fetchJWKS(projectId: string): Promise<JWKS> {
-  const url = getJwksUrl(projectId);
+async function fetchJWKS(clientId: string): Promise<JWKS> {
+  const url = getJwksUrl(clientId);
   const maxRetries = 2;
   let lastError: Error | null = null;
 
@@ -64,7 +73,7 @@ async function fetchJWKS(projectId: string): Promise<JWKS> {
   throw lastError!;
 }
 
-async function getJWKS(projectId: string, forceRefresh = false): Promise<JWKS> {
+async function getJWKS(clientId: string, forceRefresh = false): Promise<JWKS> {
   if (
     !forceRefresh &&
     jwksCache &&
@@ -73,7 +82,7 @@ async function getJWKS(projectId: string, forceRefresh = false): Promise<JWKS> {
     return jwksCache.keys;
   }
 
-  const jwks = await fetchJWKS(projectId);
+  const jwks = await fetchJWKS(clientId);
   jwksCache = { keys: jwks, fetchedAt: Date.now() };
   return jwks;
 }
@@ -99,7 +108,7 @@ async function importRSAPublicKey(jwk: JWK): Promise<CryptoKey> {
     { kty: jwk.kty, n: jwk.n, e: jwk.e, alg: "RS256" },
     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
     false,
-    ["verify"]
+    ["verify"],
   );
 }
 
@@ -112,10 +121,13 @@ interface JWTHeader {
 interface JWTPayload {
   sub: string;
   iss: string;
-  aud: string[];
+  aud?: string | string[];
   exp: number;
   iat: number;
   nbf?: number;
+  email?: string;
+  /** WorkOS organisation id (when signed in to a specific org). */
+  org_id?: string;
 }
 
 export type JWTFailureReason =
@@ -136,37 +148,33 @@ export interface JWTResult {
   detail?: string;
 }
 
-async function verifyJWT(
-  token: string,
-  projectId: string
-): Promise<JWTResult> {
+async function verifyJWT(token: string, clientId: string): Promise<JWTResult> {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) return { payload: null, failureReason: "malformed_token" };
 
     const [headerB64, payloadB64, signatureB64] = parts;
 
-    // Decode header
-    const header: JWTHeader = JSON.parse(
-      new TextDecoder().decode(base64urlDecode(headerB64))
-    );
+    const header: JWTHeader = JSON.parse(new TextDecoder().decode(base64urlDecode(headerB64)));
     if (header.alg !== "RS256" || !header.kid) {
-      return { payload: null, failureReason: "unsupported_algorithm", detail: `alg=${header.alg}, kid=${header.kid}` };
+      return {
+        payload: null,
+        failureReason: "unsupported_algorithm",
+        detail: `alg=${header.alg}, kid=${header.kid}`,
+      };
     }
 
-    // Get JWKS and find matching key
     let jwks: JWKS;
     try {
-      jwks = await getJWKS(projectId);
+      jwks = await getJWKS(clientId);
     } catch (e) {
       return { payload: null, failureReason: "jwks_fetch_failed", detail: String(e) };
     }
     let jwk = jwks.keys.find((k) => k.kid === header.kid);
 
-    // If key not found, force refresh JWKS (handles key rotation)
     if (!jwk) {
       try {
-        jwks = await getJWKS(projectId, true);
+        jwks = await getJWKS(clientId, true);
       } catch (e) {
         return { payload: null, failureReason: "jwks_fetch_failed", detail: `refresh: ${String(e)}` };
       }
@@ -176,42 +184,51 @@ async function verifyJWT(
       }
     }
 
-    // Verify signature
     const key = await importRSAPublicKey(jwk);
     const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
     const signature = base64urlDecode(signatureB64);
 
-    const valid = await crypto.subtle.verify(
-      "RSASSA-PKCS1-v1_5",
-      key,
-      signature,
-      data
-    );
+    const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature, data);
     if (!valid) return { payload: null, failureReason: "invalid_signature" };
 
-    // Decode and validate payload claims
-    const payload: JWTPayload = JSON.parse(
-      new TextDecoder().decode(base64urlDecode(payloadB64))
-    );
+    const payload: JWTPayload = JSON.parse(new TextDecoder().decode(base64urlDecode(payloadB64)));
 
     const now = Math.floor(Date.now() / 1000);
 
     if (payload.exp && now >= payload.exp) {
-      return { payload: null, failureReason: "token_expired", detail: `exp=${payload.exp}, now=${now}, expired ${now - payload.exp}s ago` };
+      return {
+        payload: null,
+        failureReason: "token_expired",
+        detail: `exp=${payload.exp}, now=${now}, expired ${now - payload.exp}s ago`,
+      };
     }
     if (payload.nbf && now < payload.nbf) {
       return { payload: null, failureReason: "token_not_yet_valid", detail: `nbf=${payload.nbf}, now=${now}` };
     }
-    if (payload.iss !== `stytch.com/${projectId}`) {
-      return { payload: null, failureReason: "issuer_mismatch", detail: `got="${payload.iss}", expected="stytch.com/${projectId}"` };
+    // WorkOS sets iss to https://api.workos.com (no client-id suffix).
+    if (payload.iss !== "https://api.workos.com") {
+      return {
+        payload: null,
+        failureReason: "issuer_mismatch",
+        detail: `got="${payload.iss}", expected="https://api.workos.com"`,
+      };
     }
-    if (!payload.aud?.includes(projectId)) {
-      return { payload: null, failureReason: "audience_mismatch", detail: `aud=${JSON.stringify(payload.aud)}, expected="${projectId}"` };
+
+    // Audience can be string or array, and may be omitted on some token kinds.
+    if (payload.aud) {
+      const audMatches = Array.isArray(payload.aud) ? payload.aud.includes(clientId) : payload.aud === clientId;
+      if (!audMatches) {
+        return {
+          payload: null,
+          failureReason: "audience_mismatch",
+          detail: `aud=${JSON.stringify(payload.aud)}, expected="${clientId}"`,
+        };
+      }
     }
 
     return { payload };
   } catch (error) {
-    console.error("JWT verification error:", error);
+    console.error("[mukoko:auth] WorkOS JWT verification error:", error);
     return { payload: null, failureReason: "verification_error", detail: String(error) };
   }
 }
@@ -220,9 +237,6 @@ async function verifyJWT(
 // Public API
 // ============================================
 
-/**
- * Extract bearer token from Authorization header
- */
 export function extractBearerToken(request: Request): string | null {
   const authHeader = request.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
@@ -238,20 +252,26 @@ export interface AuthResult {
 }
 
 /**
- * Validate the Stytch session JWT locally and return the authenticated user.
- * No Stytch API calls are made — verification uses the public JWKS.
+ * Validate the WorkOS access token locally and return the authenticated user.
+ * No WorkOS API calls are made — verification uses the public JWKS.
  */
 export async function getAuthenticatedUser(
   request: Request,
-  env: StytchEnv
+  env: WorkOSEnv,
 ): Promise<AuthResult> {
   const token = extractBearerToken(request);
   if (!token) return { user: null, failureReason: "no_token" };
 
-  const result = await verifyJWT(token, env.STYTCH_PROJECT_ID);
+  const result = await verifyJWT(token, env.WORKOS_CLIENT_ID);
   if (!result.payload) {
     return { user: null, failureReason: result.failureReason, detail: result.detail };
   }
 
-  return { user: { userId: result.payload.sub } };
+  return {
+    user: {
+      userId: result.payload.sub,
+      organizationId: result.payload.org_id,
+      email: result.payload.email,
+    },
+  };
 }

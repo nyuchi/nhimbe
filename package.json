@@ -13,10 +13,9 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "@stytch/nextjs": "^22.0.8",
-    "@stytch/vanilla-js": "^6.0.8",
     "@supabase/supabase-js": "^2.105.1",
     "@vercel/analytics": "^2.0.1",
+    "@workos-inc/authkit-nextjs": "^4.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useStytch } from "@stytch/nextjs";
+import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { useAuth } from "@/components/auth/auth-context";
 import { updateProfile } from "@/lib/api";
 import { Loader2 } from "lucide-react";
@@ -18,7 +18,7 @@ export function NamePrompt({ onComplete }: NamePromptProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { refreshUser } = useAuth();
-  const stytch = useStytch();
+  const { accessToken, getAccessToken } = useAccessToken();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,11 +31,10 @@ export function NamePrompt({ onComplete }: NamePromptProps) {
     setError(null);
 
     try {
-      const tokens = stytch.session.getTokens();
-      const sessionJwt = tokens?.session_jwt;
-      if (!sessionJwt) throw new Error("No session found");
+      const token = accessToken ?? (await getAccessToken().catch(() => null));
+      if (!token) throw new Error("No session found");
 
-      await updateProfile(sessionJwt, { name: name.trim() });
+      await updateProfile(token, { name: name.trim() });
       await refreshUser();
       onComplete();
     } catch (err) {

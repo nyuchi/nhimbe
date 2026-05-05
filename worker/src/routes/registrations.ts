@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { writeAuth } from "../middleware/auth";
-import { getAuthenticatedUser } from "../auth/stytch";
+import { getAuthenticatedUser } from "../auth/workos";
 import { validateRequiredFields } from "../utils/validation";
 import { generateId } from "../utils/ids";
 

@@ -1,7 +1,7 @@
 import { createMiddleware } from "hono/factory";
 import type { Env, UserRole } from "../types";
 import { hasPermission } from "../types";
-import { getAuthenticatedUser } from "../auth/stytch";
+import { getAuthenticatedUser } from "../auth/workos";
 
 // Trusted domains — always allow these and all their subdomains
 const TRUSTED_DOMAINS = ["nyuchi.com", "mukoko.com", "nhimbe.com"];
@@ -73,7 +73,7 @@ export interface AdminUser {
 export async function getAdminUser(request: Request, env: Env, requiredRole: UserRole): Promise<AdminUser | null> {
   const authResult = await getAuthenticatedUser(request, env);
   if (!authResult.user) return null;
-  const stytchUser = authResult.user;
+  const authUser = authResult.user;
 
   interface DbUserRow {
     _id: string;
@@ -82,9 +82,12 @@ export async function getAdminUser(request: Request, env: Env, requiredRole: Use
     role: string | null;
   }
 
+  // The users.stytch_user_id column stores the WorkOS user id post-migration.
+  // Column name retained to avoid a breaking D1 migration on this PR; rename
+  // to external_user_id is tracked separately.
   const user = await env.DB.prepare(
-    "SELECT _id, email, name, role FROM users WHERE stytch_user_id = ?"
-  ).bind(stytchUser.userId).first() as DbUserRow | null;
+    "SELECT _id, email, name, role FROM users WHERE stytch_user_id = ?",
+  ).bind(authUser.userId).first() as DbUserRow | null;
 
   if (!user) return null;
 

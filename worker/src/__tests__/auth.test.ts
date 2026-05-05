@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { extractBearerToken, getAuthenticatedUser } from '../auth/stytch';
+import { extractBearerToken, getAuthenticatedUser } from '../auth/workos';
 
 // ============================================
 // extractBearerToken
@@ -71,7 +71,7 @@ describe('extractBearerToken', () => {
 // ============================================
 
 describe('getAuthenticatedUser', () => {
-  const mockEnv = { STYTCH_PROJECT_ID: 'project-test-12345' };
+  const mockEnv = { WORKOS_CLIENT_ID: 'project-test-12345' };
 
   beforeEach(() => {
     vi.restoreAllMocks();

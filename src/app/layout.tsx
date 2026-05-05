@@ -11,7 +11,7 @@ import { Footer } from "@/components/layout/footer";
 import { AnimatedBackground } from "@/components/ui/animated-background";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth/auth-context";
-import { StytchProvider } from "@/components/auth/stytch-provider";
+import { WorkOSProvider } from "@/components/auth/workos-provider";
 import { ErrorBoundary } from "@/components/error/error-boundary";
 import { WidgetErrorBoundary } from "@/components/error/widget-error-boundary";
 import { LiveRegionProvider } from "@/components/ui/live-region";
@@ -179,7 +179,7 @@ export default function RootLayout({
           Skip to main content
         </a>
         <ErrorBoundary fallback={<DegradedShell />}>
-          <StytchProvider>
+          <WorkOSProvider>
             <AuthProvider>
               <ThemeProvider defaultTheme="system">
                 <LiveRegionProvider>
@@ -197,7 +197,7 @@ export default function RootLayout({
                 </LiveRegionProvider>
               </ThemeProvider>
             </AuthProvider>
-          </StytchProvider>
+          </WorkOSProvider>
         </ErrorBoundary>
         <Analytics />
         <ServiceWorkerRegister />
