@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import KraalDetailClient from "./kraal-detail-client";
+import { SectionErrorBoundary } from "@/components/error/section-error-boundary";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface KraalDetailPageProps {
   params: Promise<{ id: string }>;
@@ -12,5 +16,10 @@ export const metadata: Metadata = {
 
 export default async function KraalDetailPage({ params }: KraalDetailPageProps) {
   const { id } = await params;
-  return <KraalDetailClient circleId={id} />;
+  if (!UUID_RE.test(id)) notFound();
+  return (
+    <SectionErrorBoundary section="Kraal">
+      <KraalDetailClient circleId={id} />
+    </SectionErrorBoundary>
+  );
 }

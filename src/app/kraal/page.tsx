@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import KraalIndexClient from "./kraal-index-client";
+import { SectionErrorBoundary } from "@/components/error/section-error-boundary";
 
 export const metadata: Metadata = {
   title: "Kraal — your gathering circles",
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function KraalIndexPage() {
-  return <KraalIndexClient />;
+  return (
+    <SectionErrorBoundary section="Your kraals">
+      <KraalIndexClient />
+    </SectionErrorBoundary>
+  );
 }
