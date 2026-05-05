@@ -151,8 +151,9 @@ export default function KraalDetailClient({ circleId }: KraalDetailClientProps) 
             : p,
         ),
       );
-    } catch {
-      // Silent — toggle is best-effort.
+    } catch (e) {
+      console.warn("[mukoko] kraal reaction failed", e);
+      setError("Couldn't save your reaction. Tap again to retry.");
     }
   };
 
