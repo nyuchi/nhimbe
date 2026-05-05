@@ -1,0 +1,6 @@
+# Ignore everything by default — opt files in over time.
+*
+
+# Re-include the prettier config itself so the check has at least one
+# known-good file to format-verify each run.
+!.prettierrc.json
