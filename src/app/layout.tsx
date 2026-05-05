@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Noto_Sans, Noto_Serif } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import Script from "next/script";
 import "./globals.css";
 
 const notoSans = Noto_Sans({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
@@ -200,6 +201,12 @@ export default function RootLayout({
         </ErrorBoundary>
         <Analytics />
         <ServiceWorkerRegister />
+        <Script id="intercom-settings" strategy="afterInteractive">
+          {`window.intercomSettings = { api_base: "https://api-iam.intercom.io", app_id: "f1vga504" };`}
+        </Script>
+        <Script id="intercom-loader" strategy="afterInteractive">
+          {`(function(){var w=window;var ic=w.Intercom;if(typeof ic==="function"){ic('reattach_activator');ic('update',w.intercomSettings);}else{var d=document;var i=function(){i.c(arguments);};i.q=[];i.c=function(args){i.q.push(args);};w.Intercom=i;var l=function(){var s=d.createElement('script');s.type='text/javascript';s.async=true;s.src='https://widget.intercom.io/widget/f1vga504';var x=d.getElementsByTagName('script')[0];x.parentNode.insertBefore(s,x);};if(document.readyState==='complete'){l();}else if(w.attachEvent){w.attachEvent('onload',l);}else{w.addEventListener('load',l,false);}}})();`}
+        </Script>
       </body>
     </html>
   );
