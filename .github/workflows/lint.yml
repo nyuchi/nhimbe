@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   actionlint:
-    name: actionlint
+    name: lint / actionlint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +20,7 @@ jobs:
           reporter: github-check
 
   json-validity:
-    name: JSON validity
+    name: lint / JSON validity
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,14 +37,14 @@ jobs:
           exit $fail
 
   markdownlint:
-    name: markdownlint
+    name: lint / markdownlint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: DavidAnson/markdownlint-cli2-action@v18
 
   prettier:
-    name: prettier
+    name: lint / prettier
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,7 +54,7 @@ jobs:
       - run: npx --yes prettier@3 --check . --ignore-path .prettierignore
 
   yamllint:
-    name: yamllint
+    name: lint / yamllint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
