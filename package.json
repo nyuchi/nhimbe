@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "@stytch/nextjs": "^22.0.8",
-    "@stytch/vanilla-js": "^6.0.8",
+    "@stytch/nextjs": "21.18.1",
+    "@stytch/vanilla-js": "5.45.1",
     "@supabase/supabase-js": "^2.105.1",
     "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",
