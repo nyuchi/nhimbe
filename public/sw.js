@@ -18,7 +18,12 @@ self.addEventListener("activate", (event) => {
 function isCacheable(request, response) {
   if (!response || !response.ok) return false;
   if (response.type === "opaque" || response.type === "opaqueredirect") return false;
-  const url = new URL(request.url);
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return false;
+  }
   if (url.protocol !== "http:" && url.protocol !== "https:") return false;
   return true;
 }
