@@ -128,6 +128,74 @@ export async function getOrgsForPerson(personId: string): Promise<OrganizationRo
     .filter((o): o is OrganizationRow => Boolean(o));
 }
 
+// ─── Event host info ─────────────────────────────────────────────────────
+// Reads owner_type / owner_id from events.event then resolves the host from
+// either identity.entity (organisation / family) or identity.person.
+
+export type EventHostInfo = {
+  ownerType: "person" | "organization" | "family";
+  id: string;
+  name: string;
+  description: string | null;
+  avatar: string | null;
+  slug: string | null;
+  verificationStatus: string | null;
+};
+
+export async function getEventHostInfo(eventId: string): Promise<EventHostInfo | null> {
+  const supabase = getSupabaseBrowserClient();
+
+  const { data: event, error: evtErr } = await supabase
+    .schema("events")
+    .from("event")
+    .select("id, owner_type, owner_id")
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (evtErr || !event || !event.owner_id) return null;
+
+  const ownerType = event.owner_type as string;
+  const ownerId = event.owner_id as string;
+
+  if (ownerType === "person") {
+    const { data: person, error } = await supabase
+      .schema("identity")
+      .from("person")
+      .select("id, display_name, given_name, family_name, image")
+      .eq("id", ownerId)
+      .maybeSingle();
+    if (error || !person) return null;
+    const p = person as Pick<PersonRow, "id" | "display_name" | "given_name" | "family_name" | "image">;
+    return {
+      ownerType: "person",
+      id: p.id,
+      name: p.display_name || `${p.given_name ?? ""} ${p.family_name ?? ""}`.trim() || "Unknown",
+      description: null,
+      avatar: p.image,
+      slug: null,
+      verificationStatus: null,
+    };
+  }
+
+  const { data: entity, error: entityErr } = await supabase
+    .schema("entity")
+    .from("entity")
+    .select("id, entity_type, name, description, logo, slug, verification_status")
+    .eq("id", ownerId)
+    .maybeSingle();
+  if (entityErr || !entity) return null;
+  const e = entity as Pick<EntityRow, "id" | "entity_type" | "name" | "description" | "logo" | "slug" | "verification_status">;
+  return {
+    ownerType: e.entity_type === "family" ? "family" : "organization",
+    id: e.id,
+    name: e.name,
+    description: e.description,
+    avatar: e.logo,
+    slug: e.slug,
+    verificationStatus: e.verification_status,
+  };
+}
+
 // ─── Create Event ────────────────────────────────────────────────────────
 // Inserts into events.event with the schema.org-aligned column shape.
 
