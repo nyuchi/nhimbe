@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { TrendingUp, Eye, Users, Star, Share2, QrCode, Flame, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { EventQRCode } from "./event-qr-code";
 import { ShareButton } from "./event-actions";
 import { RSVPButton } from "./rsvp-button";
 import { HostReputation } from "@/components/ui/host-reputation";
+import { EventEntityHostCard } from "./event-entity-host-card";
 import { t } from "@/lib/i18n";
 import type { Event, EventStats, ReviewStats } from "@/lib/api";
 
@@ -35,6 +37,7 @@ function StatBox({ icon, label, value }: { icon: React.ReactNode; label: string;
 }
 
 export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
+  const [hasEntityHost, setHasEntityHost] = useState(false);
   const capacityPercent = event.maximumAttendeeCapacity
     ? Math.min((event.attendeeCount / event.maximumAttendeeCapacity) * 100, 100)
     : 0;
@@ -148,19 +151,22 @@ export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
         </Card>
       )}
 
-      {/* Host Reputation */}
-      <HostReputation
-        host={{
-          name: event.organizer.name,
-          handle: event.organizer.identifier,
-          initials: event.organizer.initials,
-          eventsHosted: event.organizer.eventCount,
-          rating: reviewStats?.averageRating,
-          reviewCount: reviewStats?.totalReviews,
-          badges: event.organizer.eventCount > 10 ? ["trusted-host", "veteran"] : event.organizer.eventCount > 5 ? ["trusted-host"] : ["rising-star"],
-        }}
-        variant="compact"
-      />
+      {/* Host card — entity path (Supabase) with legacy fallback */}
+      <EventEntityHostCard eventId={event.id} onResolved={setHasEntityHost} />
+      {!hasEntityHost && (
+        <HostReputation
+          host={{
+            name: event.organizer.name,
+            handle: event.organizer.identifier,
+            initials: event.organizer.initials,
+            eventsHosted: event.organizer.eventCount,
+            rating: reviewStats?.averageRating,
+            reviewCount: reviewStats?.totalReviews,
+            badges: event.organizer.eventCount > 10 ? ["trusted-host", "veteran"] : event.organizer.eventCount > 5 ? ["trusted-host"] : ["rising-star"],
+          }}
+          variant="compact"
+        />
+      )}
 
       {/* View Kraal */}
       <Card
