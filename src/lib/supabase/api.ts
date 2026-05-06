@@ -69,7 +69,10 @@ export async function searchVenues(query: string, limit = 8): Promise<PlaceRow[]
 // Falls back to the legacy business.membership query if entity.membership
 // returns nothing, so the picker degrades gracefully during the migration.
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function getEntitiesForPerson(personId: string): Promise<EntityRow[]> {
+  if (!UUID_RE.test(personId)) return [];
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .schema("entity")
@@ -190,7 +193,7 @@ export async function createEventOnSupabase(input: CreateEventOnSupabaseInput): 
     virtuallocation: input.virtualLocation,
     image: input.image,
     organizer: isEntityHosted
-      ? { "@type": input.hostEntityType === "family" ? "Organization" : "Organization", id: input.hostEntityId }
+      ? { "@type": "Organization", id: input.hostEntityId }
       : isOrgHosted
         ? { "@type": "Organization", id: input.organizationId }
         : { "@type": "Person", id: input.ownerPersonId },

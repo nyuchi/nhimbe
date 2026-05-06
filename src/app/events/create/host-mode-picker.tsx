@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { User, Building2, Home, BadgeCheck, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/components/auth/auth-context";
@@ -9,9 +9,17 @@ import type { EntityRow } from "@/lib/supabase/types";
 
 export type HostMode = "person" | "organization" | "family";
 
+function isHttpsUrl(url: string): boolean {
+  try {
+    return new URL(url).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function EntityLogo({ src, name }: { src: string; name: string }) {
   const [errored, setErrored] = useState(false);
-  if (errored) return <Building2 className="w-4 h-4 text-text-secondary" aria-hidden />;
+  if (errored || !isHttpsUrl(src)) return <Building2 className="w-4 h-4 text-text-secondary" aria-hidden />;
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
@@ -107,8 +115,10 @@ export function HostModePicker({
     return () => { cancelled = true; };
   }, [personId, onEntitiesLoaded]);
 
-  const orgs = entities.filter((e) => e.entity_type === "organization");
-  const families = entities.filter((e) => e.entity_type === "family");
+  const { orgs, families } = useMemo(() => ({
+    orgs: entities.filter((e) => e.entity_type === "organization"),
+    families: entities.filter((e) => e.entity_type === "family"),
+  }), [entities]);
   const personLabel = user?.name || "You";
 
   return (
