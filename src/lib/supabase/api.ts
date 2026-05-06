@@ -83,7 +83,7 @@ export async function getEntitiesForPerson(personId: string): Promise<EntityRow[
   type Row = { entity: EntityRow | null };
   const entities = ((data as unknown as Row[]) ?? [])
     .map((r) => r.entity)
-    .filter((e): e is EntityRow => Boolean(e) && e.entity_type !== "person");
+    .filter((e): e is EntityRow => e !== null && e.entity_type !== "person");
 
   if (entities.length > 0) return entities;
 
