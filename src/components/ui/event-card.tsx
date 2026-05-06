@@ -61,11 +61,11 @@ export function EventCard({
   const pulseDots = Math.min(5, Math.max(0, Math.round(Math.log10(Math.max(attendeeCount, 1)) * 2)));
 
   return (
-    <article className="rounded-(--radius-card) overflow-hidden bg-surface transition-all duration-[var(--motion-emphasis)] ease-[var(--easing-spring)] hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/40">
+    <article data-slot="event-card" className="rounded-(--radius-card) overflow-hidden bg-surface transition-all duration-[var(--motion-emphasis)] ease-[var(--easing-spring)] hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/40">
     <Link href={`/events/${id}`} className="block cursor-pointer">
       <div>
         {/* Cover */}
-        <div className="h-50 relative" style={coverStyle}>
+        <div data-slot="event-card-cover" className="h-50 relative" style={coverStyle}>
           {/* Date Badge - theme-aware */}
           <div className="absolute top-4 left-4 bg-background/90 dark:bg-black/70 backdrop-blur-sm px-3.5 py-2.5 rounded-xl text-center border border-foreground/10">
             <div className="text-2xl font-extrabold text-primary leading-none">
@@ -124,7 +124,7 @@ export function EventCard({
         </div>
 
         {/* Info */}
-        <div className="p-5">
+        <div data-slot="event-card-body" className="p-5">
           <h3 className="font-serif text-lg font-bold mb-2.5 leading-tight tracking-tight">{title}</h3>
 
           <div className="flex items-center gap-2 text-sm text-foreground/60 mb-3">
