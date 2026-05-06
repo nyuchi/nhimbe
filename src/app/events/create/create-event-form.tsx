@@ -14,7 +14,7 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import { createEvent, getCategories, getCities, uploadMedia, getMediaUrl, type CreateEventInput, type Category } from "@/lib/api";
-import { getInterestCategories } from "@/lib/supabase/api";
+import { getInterestCategories, createEventOnSupabase } from "@/lib/supabase/api";
 import { mineralThemes, mineralThemeIds, getThemeColors } from "@/lib/themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,7 @@ import { ThemeSelector } from "./theme-selector";
 import { EventOptionsCard } from "./event-options-card";
 import { FormFieldRow } from "./form-field-row";
 import { WizardStepIndicator } from "./wizard-step-indicator";
-import { HostModePicker } from "./host-mode-picker";
+import { HostModePicker, type HostMode } from "./host-mode-picker";
 
 type WizardStep = 1 | 2 | 3;
 const STEPS: { id: WizardStep; label: string }[] = [
@@ -152,9 +152,8 @@ export default function CreateEventForm() {
   const [error, setError] = useState<string | null>(null);
 
   // Hosting (step 3)
-  const [hostMode, setHostMode] = useState<"person" | "organization">("person");
-  const [hostOrganizationId, setHostOrganizationId] = useState<string | null>(null);
-  const [hostOrgIds, setHostOrgIds] = useState<string[]>([]);
+  const [hostMode, setHostMode] = useState<HostMode>("person");
+  const [hostEntityId, setHostEntityId] = useState<string | null>(null);
 
   // Cover image
   const [coverImage, setCoverImage] = useState<string | null>(null);
@@ -317,16 +316,13 @@ export default function CreateEventForm() {
       if (target >= 3) {
         if (capacity !== null && capacity < 1) return "Capacity must be at least 1 attendee";
         if (!isFree && ticketUrl.trim() && !isValidUrl(ticketUrl.trim())) return "Please enter a valid ticket URL";
-        if (hostMode === "organization") {
-          if (!hostOrganizationId) return "Pick which organisation is hosting, or switch back to a personal host";
-          if (hostOrgIds.length > 0 && !hostOrgIds.includes(hostOrganizationId)) {
-            return "That organisation isn't linked to your account. Pick one from the list or switch to a personal host.";
-          }
+        if ((hostMode === "organization" || hostMode === "family") && !hostEntityId) {
+          return `Pick which ${hostMode} is hosting, or switch back to a personal host`;
         }
       }
       return null;
     },
-    [eventName, category, eventDate, endTime, startTime, isOnline, venue, selectedCity, meetingUrl, capacity, isFree, ticketUrl, hostMode, hostOrganizationId, hostOrgIds],
+    [eventName, category, eventDate, endTime, startTime, isOnline, venue, selectedCity, meetingUrl, capacity, isFree, ticketUrl, hostMode, hostEntityId],
   );
 
   const goNext = () => {
@@ -411,9 +407,40 @@ export default function CreateEventForm() {
         offers: !isFree && ticketUrl.trim() ? { url: ticketUrl.trim() } : undefined,
       };
 
-      const result = await createEvent(eventData);
-      setFormTouched(false);
-      router.push(`/events/${result.event.id}`);
+      // Prefer the Supabase direct path when a personId is available.
+      // The worker path is kept as fallback for unauthenticated submissions
+      // and for environments where Supabase isn't wired yet.
+      if (user?.id) {
+        const isoEnd = endTime
+          ? new Date(`${eventDate}T${endTime}:00${tzOffset}`).toISOString()
+          : null;
+        const supabaseResult = await createEventOnSupabase({
+          ownerPersonId: user.id,
+          organizationId: hostMode === "organization" ? hostEntityId : null,
+          hostEntityId: (hostMode === "family" || hostMode === "organization") ? hostEntityId : null,
+          hostEntityType: hostMode === "family" ? "family" : hostMode === "organization" ? "organization" : null,
+          name: eventData.name,
+          description: eventData.description,
+          startdate: isoStart,
+          enddate: isoEnd,
+          timezone: tzLabel,
+          category: category || null,
+          keywords: tags,
+          image: uploadedCoverImageUrl ? [uploadedCoverImageUrl] : null,
+          placeId: null,
+          virtualLocation: isOnline && meetingUrl.trim() ? { url: meetingUrl.trim(), platform: meetingPlatform } : null,
+          attendanceMode: isOnline ? "OnlineEventAttendanceMode" : "OfflineEventAttendanceMode",
+          maximumAttendeeCapacity: capacity,
+          requiresApproval: requireApproval,
+          visibility,
+        });
+        setFormTouched(false);
+        router.push(`/events/${supabaseResult.id}`);
+      } else {
+        const result = await createEvent(eventData);
+        setFormTouched(false);
+        router.push(`/events/${result.event.id}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create event. Please try again.");
     } finally {
@@ -515,9 +542,8 @@ export default function CreateEventForm() {
 
           <HostModePicker
             hostMode={hostMode}
-            organizationId={hostOrganizationId}
-            onChange={(mode, orgId) => { setHostMode(mode); setHostOrganizationId(orgId); touchForm(); }}
-            onOrgsLoaded={(orgs) => setHostOrgIds(orgs.map((o) => o.id))}
+            hostEntityId={hostEntityId}
+            onChange={(mode, entityId) => { setHostMode(mode); setHostEntityId(entityId); touchForm(); }}
           />
 
           <div className="flex gap-2 mb-4">

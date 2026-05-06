@@ -10,6 +10,7 @@ import type {
   CircleMembershipRow,
   CirclePostRow,
   CircleRow,
+  EntityRow,
   EventInsert,
   EventRow,
   InterestCategoryRow,
@@ -61,9 +62,51 @@ export async function searchVenues(query: string, limit = 8): Promise<PlaceRow[]
   return (data ?? []) as PlaceRow[];
 }
 
-// ─── Organisations the current person belongs to ────────────────────────
-// Used by the host-mode toggle on step 3 of the creation wizard. Returns
-// every organisation the current person is a member of.
+// ─── Entities the current person belongs to ──────────────────────────────
+// Used by the 3-way host picker on step 3 of the creation wizard.
+// Returns all active entity memberships (families + organisations) via
+// entity.membership → identity.entity.
+// Falls back to the legacy business.membership query if entity.membership
+// returns nothing, so the picker degrades gracefully during the migration.
+
+export async function getEntitiesForPerson(personId: string): Promise<EntityRow[]> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .schema("entity")
+    .from("membership")
+    .select("entity:entity_id(id, entity_type, name, alternatename, description, logo, slug, url, verification_status, verification_tier_level, member_count)")
+    .eq("person_id", personId)
+    .eq("status", "active");
+  if (error) {
+    console.warn("[mukoko] getEntitiesForPerson failed:", error.message);
+  }
+  type Row = { entity: EntityRow | null };
+  const entities = ((data as unknown as Row[]) ?? [])
+    .map((r) => r.entity)
+    .filter((e): e is EntityRow => Boolean(e) && e.entity_type !== "person");
+
+  if (entities.length > 0) return entities;
+
+  // Legacy fallback — business.membership (deprecated path)
+  return getOrgsForPerson(personId).then((orgs) =>
+    orgs.map((o) => ({
+      id: o.id,
+      entity_type: "organization" as const,
+      name: o.name,
+      alternatename: null,
+      description: o.description,
+      logo: o.logo,
+      slug: o.slug,
+      url: o.url,
+      verification_status: o.verified ? "verified" : null,
+      verification_tier_level: null,
+      member_count: null,
+    })),
+  );
+}
+
+// ─── Organisations the current person belongs to (legacy) ────────────────
+// Kept for backwards compat. Prefer getEntitiesForPerson for new code.
 
 export async function getOrgsForPerson(personId: string): Promise<OrganizationRow[]> {
   const supabase = getSupabaseBrowserClient();
@@ -87,7 +130,12 @@ export async function getOrgsForPerson(personId: string): Promise<OrganizationRo
 
 export type CreateEventOnSupabaseInput = {
   ownerPersonId: string;
+  /** Org-hosted (business.organization FK) — use organizationId for legacy org path */
   organizationId: string | null;
+  /** Entity-hosted (identity.entity FK) — covers families + new-path orgs */
+  hostEntityId?: string | null;
+  /** Entity type for the host entity (used to set owner_type correctly) */
+  hostEntityType?: "organization" | "family" | null;
   name: string;
   description: string;
   startdate: string;
@@ -113,7 +161,19 @@ export async function createEventOnSupabase(input: CreateEventOnSupabaseInput): 
     .replace(/\s+/g, "-")
     .slice(0, 60);
 
-  const isOrgHosted = Boolean(input.organizationId);
+  const isEntityHosted = Boolean(input.hostEntityId);
+  const isOrgHosted = !isEntityHosted && Boolean(input.organizationId);
+
+  const ownerType = isEntityHosted
+    ? (input.hostEntityType ?? "organization")
+    : isOrgHosted
+      ? "organization"
+      : "person";
+  const ownerId = isEntityHosted
+    ? (input.hostEntityId as string)
+    : isOrgHosted
+      ? (input.organizationId as string)
+      : input.ownerPersonId;
 
   const row: Partial<EventInsert> = {
     name: input.name,
@@ -129,19 +189,21 @@ export async function createEventOnSupabase(input: CreateEventOnSupabaseInput): 
     place_id: input.placeId,
     virtuallocation: input.virtualLocation,
     image: input.image,
-    organizer: isOrgHosted
-      ? { "@type": "Organization", id: input.organizationId }
-      : { "@type": "Person", id: input.ownerPersonId },
-    organizer_person_id: isOrgHosted ? null : input.ownerPersonId,
-    organization_id: input.organizationId,
+    organizer: isEntityHosted
+      ? { "@type": input.hostEntityType === "family" ? "Organization" : "Organization", id: input.hostEntityId }
+      : isOrgHosted
+        ? { "@type": "Organization", id: input.organizationId }
+        : { "@type": "Person", id: input.ownerPersonId },
+    organizer_person_id: isEntityHosted || isOrgHosted ? null : input.ownerPersonId,
+    organization_id: isOrgHosted ? input.organizationId : null,
     category: input.category,
     keywords: input.keywords,
     maximumattendeecapacity: input.maximumAttendeeCapacity,
     requires_approval: input.requiresApproval,
     visibility: input.visibility,
     calendar_type: "event",
-    owner_type: isOrgHosted ? "organization" : "person",
-    owner_id: isOrgHosted ? (input.organizationId as string) : input.ownerPersonId,
+    owner_type: ownerType,
+    owner_id: ownerId,
   };
 
   const { data, error } = await supabase
