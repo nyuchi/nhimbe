@@ -41,6 +41,8 @@ jobs:
           NEXT_PUBLIC_STYTCH_PUBLIC_TOKEN: placeholder
           NEXT_PUBLIC_API_URL: https://api.example.com
           NEXT_PUBLIC_SITE_URL: https://example.com
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
 
   frontend-tests:
     name: Frontend Tests

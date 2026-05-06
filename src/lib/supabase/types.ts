@@ -282,6 +282,32 @@ export type ProvinceRow = {
 
 // ─── identity / business ────────────────────────────────────────────────
 
+/** identity.entity — canonical base table for Person, Organisation, Family */
+export type EntityRow = {
+  id: string;
+  entity_type: "person" | "family" | "organization" | string;
+  name: string;
+  alternatename: string | null;
+  description: string | null;
+  logo: string | null;
+  slug: string | null;
+  url: string | null;
+  verification_status: string | null;
+  verification_tier_level: number | null;
+  member_count: number | null;
+};
+
+/** entity.membership — joins person_id ↔ entity_id */
+export type EntityMembershipRow = {
+  id: string;
+  person_id: string;
+  entity_id: string;
+  role: string;
+  role_title: string | null;
+  status: string;
+  is_primary: boolean | null;
+};
+
 export type PersonRow = {
   id: string;
   given_name: string | null;

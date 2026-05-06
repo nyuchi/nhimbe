@@ -1,17 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { User, Building2, BadgeCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { User, Building2, Home, BadgeCheck, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/components/auth/auth-context";
-import { getOrgsForPerson } from "@/lib/supabase/api";
-import type { OrganizationRow } from "@/lib/supabase/types";
+import { getEntitiesForPerson } from "@/lib/supabase/api";
+import type { EntityRow } from "@/lib/supabase/types";
 
-function OrgLogo({ src, name }: { src: string; name: string }) {
-  const [errored, setErrored] = useState(false);
-  if (errored) {
-    return <Building2 className="w-4 h-4 text-text-secondary" aria-hidden />;
+export type HostMode = "person" | "organization" | "family";
+
+function isHttpsUrl(url: string): boolean {
+  try {
+    return new URL(url).protocol === "https:";
+  } catch {
+    return false;
   }
+}
+
+function EntityLogo({ src, name }: { src: string; name: string }) {
+  const [errored, setErrored] = useState(false);
+  if (errored || !isHttpsUrl(src)) return <Building2 className="w-4 h-4 text-text-secondary" aria-hidden />;
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
@@ -25,15 +33,68 @@ function OrgLogo({ src, name }: { src: string; name: string }) {
 }
 
 interface HostModePickerProps {
-  hostMode: "person" | "organization";
-  organizationId: string | null;
-  onChange: (mode: "person" | "organization", organizationId: string | null) => void;
-  onOrgsLoaded?: (orgs: OrganizationRow[]) => void;
+  hostMode: HostMode;
+  hostEntityId: string | null;
+  onChange: (mode: HostMode, entityId: string | null) => void;
+  onEntitiesLoaded?: (entities: EntityRow[]) => void;
 }
 
-export function HostModePicker({ hostMode, organizationId, onChange, onOrgsLoaded }: HostModePickerProps) {
+function PickerRow({
+  active,
+  onClick,
+  avatar,
+  label,
+  sublabel,
+  verified,
+}: {
+  active: boolean;
+  onClick: () => void;
+  avatar: React.ReactNode;
+  label: string;
+  sublabel: string;
+  verified?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={[
+        "w-full px-4 py-3.5 flex items-center gap-3 text-left transition-colors",
+        active ? "bg-primary/10" : "hover:bg-elevated",
+      ].join(" ")}
+    >
+      <div className="w-9 h-9 rounded-full bg-elevated flex items-center justify-center overflow-hidden shrink-0">
+        {avatar}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="font-medium flex items-center gap-1.5 truncate">
+          {label}
+          {verified && (
+            <BadgeCheck className="w-4 h-4 text-primary shrink-0" aria-label="Verified" />
+          )}
+        </div>
+        <div className="text-sm text-text-tertiary truncate">{sublabel}</div>
+      </div>
+      <span
+        className={[
+          "w-4 h-4 rounded-full border-2 shrink-0",
+          active ? "border-primary bg-primary" : "border-text-tertiary",
+        ].join(" ")}
+        aria-hidden
+      />
+    </button>
+  );
+}
+
+export function HostModePicker({
+  hostMode,
+  hostEntityId,
+  onChange,
+  onEntitiesLoaded,
+}: HostModePickerProps) {
   const { user } = useAuth();
-  const [orgs, setOrgs] = useState<OrganizationRow[]>([]);
+  const [entities, setEntities] = useState<EntityRow[]>([]);
   const [loading, setLoading] = useState(false);
 
   const personId = user?.id ?? null;
@@ -42,20 +103,22 @@ export function HostModePicker({ hostMode, organizationId, onChange, onOrgsLoade
     let cancelled = false;
     if (!personId) return;
     setLoading(true);
-    getOrgsForPerson(personId)
+    getEntitiesForPerson(personId)
       .then((res) => {
         if (cancelled) return;
-        setOrgs(res);
-        onOrgsLoaded?.(res);
+        setEntities(res);
+        onEntitiesLoaded?.(res);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [personId, onOrgsLoaded]);
+    return () => { cancelled = true; };
+  }, [personId, onEntitiesLoaded]);
 
+  const { orgs, families } = useMemo(() => ({
+    orgs: entities.filter((e) => e.entity_type === "organization"),
+    families: entities.filter((e) => e.entity_type === "family"),
+  }), [entities]);
   const personLabel = user?.name || "You";
 
   return (
@@ -65,87 +128,73 @@ export function HostModePicker({ hostMode, organizationId, onChange, onOrgsLoade
       </h3>
 
       <Card className="divide-y divide-elevated border-0 bg-surface overflow-hidden">
-        <button
-          type="button"
+        {/* Personal */}
+        <PickerRow
+          active={hostMode === "person"}
           onClick={() => onChange("person", null)}
-          aria-pressed={hostMode === "person"}
-          className={[
-            "w-full px-4 py-3.5 flex items-center gap-3 text-left transition-colors",
-            hostMode === "person"
-              ? "bg-primary/10"
-              : "hover:bg-elevated",
-          ].join(" ")}
-        >
-          <div className="w-9 h-9 rounded-full bg-elevated flex items-center justify-center">
-            <User className="w-4 h-4 text-text-secondary" aria-hidden />
-          </div>
-          <div className="flex-1">
-            <div className="font-medium">{personLabel}</div>
-            <div className="text-sm text-text-tertiary">Personal — your name on the listing</div>
-          </div>
-          <span
-            className={[
-              "w-4 h-4 rounded-full border-2",
-              hostMode === "person" ? "border-primary bg-primary" : "border-text-tertiary",
-            ].join(" ")}
-            aria-hidden
-          />
-        </button>
+          avatar={<User className="w-4 h-4 text-text-secondary" aria-hidden />}
+          label={personLabel}
+          sublabel="Personal — your name on the listing"
+        />
 
-        {orgs.length === 0 && !loading && (
+        {/* Families */}
+        {families.map((entity) => (
+          <PickerRow
+            key={entity.id}
+            active={hostMode === "family" && hostEntityId === entity.id}
+            onClick={() => onChange("family", entity.id)}
+            avatar={
+              entity.logo ? (
+                <EntityLogo src={entity.logo} name={entity.name} />
+              ) : (
+                <Home className="w-4 h-4 text-text-secondary" aria-hidden />
+              )
+            }
+            label={entity.name}
+            sublabel={entity.description || "Family host"}
+            verified={entity.verification_status === "verified"}
+          />
+        ))}
+
+        {/* Organisations */}
+        {orgs.map((entity) => (
+          <PickerRow
+            key={entity.id}
+            active={hostMode === "organization" && hostEntityId === entity.id}
+            onClick={() => onChange("organization", entity.id)}
+            avatar={
+              entity.logo ? (
+                <EntityLogo src={entity.logo} name={entity.name} />
+              ) : (
+                <Building2 className="w-4 h-4 text-text-secondary" aria-hidden />
+              )
+            }
+            label={entity.name}
+            sublabel={entity.description || "Organisation host"}
+            verified={entity.verification_status === "verified"}
+          />
+        ))}
+
+        {/* Loading state */}
+        {loading && (
+          <div className="px-4 py-3.5 flex items-center gap-3 text-text-tertiary">
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+            <span className="text-sm">Loading your families &amp; organisations…</span>
+          </div>
+        )}
+
+        {/* Empty state when no entities at all */}
+        {!loading && entities.length === 0 && (
           <div className="px-4 py-3.5 flex items-center gap-3 opacity-60">
             <div className="w-9 h-9 rounded-full bg-elevated flex items-center justify-center">
               <Building2 className="w-4 h-4 text-text-tertiary" aria-hidden />
             </div>
             <div className="flex-1">
-              <div className="text-sm text-text-secondary">No organisations linked yet</div>
-              <div className="text-xs text-text-tertiary">Add one in your profile to host as an org.</div>
+              <div className="text-sm text-text-secondary">No families or organisations linked</div>
+              <div className="text-xs text-text-tertiary">Add one in your profile to host as a group.</div>
             </div>
           </div>
         )}
-
-        {orgs.map((org) => (
-          <button
-            key={org.id}
-            type="button"
-            onClick={() => onChange("organization", org.id)}
-            aria-pressed={hostMode === "organization" && organizationId === org.id}
-            className={[
-              "w-full px-4 py-3.5 flex items-center gap-3 text-left transition-colors",
-              hostMode === "organization" && organizationId === org.id
-                ? "bg-primary/10"
-                : "hover:bg-elevated",
-            ].join(" ")}
-          >
-            <div className="w-9 h-9 rounded-full bg-elevated flex items-center justify-center overflow-hidden">
-              {org.logo ? (
-                <OrgLogo src={org.logo} name={org.name} />
-              ) : (
-                <Building2 className="w-4 h-4 text-text-secondary" aria-hidden />
-              )}
-            </div>
-            <div className="flex-1">
-              <div className="font-medium flex items-center gap-1.5">
-                {org.name}
-                {org.verified && (
-                  <BadgeCheck className="w-4 h-4 text-primary" aria-label="Verified organisation" />
-                )}
-              </div>
-              <div className="text-sm text-text-tertiary truncate">
-                {org.description || "Organisation host"}
-              </div>
-            </div>
-            <span
-              className={[
-                "w-4 h-4 rounded-full border-2",
-                hostMode === "organization" && organizationId === org.id
-                  ? "border-primary bg-primary"
-                  : "border-text-tertiary",
-              ].join(" ")}
-              aria-hidden
-            />
-          </button>
-        ))}
       </Card>
     </div>
   );
