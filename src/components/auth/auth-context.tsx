@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth as useAuthKit, useAccessToken } from "@workos-inc/authkit-nextjs/components";
+import { setSupabaseAccessToken } from "@/lib/supabase/client";
 
 export type UserRole = "user" | "moderator" | "admin" | "super_admin";
 
@@ -123,6 +124,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setHasSynced(false);
     }
   }, [authKitLoading, workosUser, hasSynced, syncWithBackend]);
+
+  // Forward the WorkOS access token into the Supabase browser client so any
+  // direct supabase.* call (Kraal, getEntitiesForPerson, etc.) authenticates
+  // as the signed-in person and RLS policies that read `auth.jwt()->>sub`
+  // resolve to identity.person.id.
+  useEffect(() => {
+    setSupabaseAccessToken(accessToken ?? null);
+  }, [accessToken]);
 
   const signIn = useCallback(
     (returnUrl?: string) => {
