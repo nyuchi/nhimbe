@@ -252,7 +252,7 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
               From cultural celebrations and faith gatherings to tech meetups, comedy nights, music festivals and family days — find what brings your community together. Powered by Ubuntu philosophy.
             </p>
             <div className="flex flex-wrap items-center gap-3">
-              <Button asChild className="rounded-full h-[var(--touch-target)] px-6">
+              <Button asChild className="rounded-full h-[var(--touch-target-lg)] px-6">
                 <Link href="/events/create">
                   Create Your First Event
                   <ArrowRight className="w-4 h-4" aria-hidden />

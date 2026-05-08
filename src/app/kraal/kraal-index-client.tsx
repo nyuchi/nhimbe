@@ -67,7 +67,7 @@ export default function KraalIndexClient() {
             </p>
             <Link
               href="/auth/signin"
-              className="inline-flex items-center gap-2 px-5 h-[var(--touch-target-sm)] rounded-full bg-primary text-primary-foreground font-semibold"
+              className="inline-flex items-center gap-2 px-5 h-[var(--touch-target)] rounded-full bg-primary text-primary-foreground font-semibold"
             >
               Sign in <ArrowRight className="w-4 h-4" aria-hidden />
             </Link>
@@ -101,7 +101,7 @@ export default function KraalIndexClient() {
             </p>
             <Link
               href="/events"
-              className="inline-flex items-center gap-2 px-5 h-[var(--touch-target-sm)] rounded-full bg-primary text-primary-foreground font-semibold"
+              className="inline-flex items-center gap-2 px-5 h-[var(--touch-target)] rounded-full bg-primary text-primary-foreground font-semibold"
             >
               Find an event
               <ArrowRight className="w-4 h-4" aria-hidden />

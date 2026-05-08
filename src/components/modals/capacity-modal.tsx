@@ -47,7 +47,7 @@ export function CapacityModal({
         <div className="pt-2">
           <Button
             onClick={onClose}
-            className="w-full py-3 h-12 bg-primary text-primary-foreground rounded-xl font-semibold"
+            className="w-full h-[var(--touch-target)] bg-primary text-primary-foreground rounded-xl font-semibold"
           >
             Done
           </Button>

@@ -195,7 +195,7 @@ export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
           </div>
           <Link
             href={event.eventCircleId ? `/kraal/${event.eventCircleId}` : "/kraal"}
-            className="inline-flex items-center justify-center gap-1.5 w-full h-[var(--touch-target-sm)] rounded-full bg-primary text-primary-foreground text-sm font-semibold transition-transform duration-[var(--motion-quick)] hover:-translate-y-px"
+            className="inline-flex items-center justify-center gap-1.5 w-full h-[var(--touch-target)] rounded-full bg-primary text-primary-foreground text-sm font-semibold transition-transform duration-[var(--motion-quick)] hover:-translate-y-px"
           >
             {t("kraal.viewKraal")}
             <ArrowRight className="w-4 h-4" aria-hidden />

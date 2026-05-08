@@ -82,7 +82,7 @@ function FilterBar({
             data-slot="filter-chip"
             data-active={allSelected}
             className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 min-h-[var(--touch-target-sm)] text-sm font-medium transition-colors",
               allSelected
                 ? "bg-primary text-primary-foreground"
                 : "bg-foreground/5 text-foreground/60 hover:bg-foreground/10"
@@ -101,7 +101,7 @@ function FilterBar({
               data-slot="filter-chip"
               data-active={isActive}
               className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 min-h-[var(--touch-target-sm)] text-sm font-medium transition-colors",
                 isActive
                   ? "bg-primary text-primary-foreground"
                   : "bg-foreground/5 text-foreground/60 hover:bg-foreground/10"

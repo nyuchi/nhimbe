@@ -64,10 +64,15 @@
   --easing-standard: cubic-bezier(0.4, 0.0, 0.2, 1);
   --easing-spring:   cubic-bezier(0.175, 0.885, 0.32, 1.275);
 
-  /* Touch targets / component sizing */
-  --touch-target:    56px;
-  --touch-target-sm: 48px;
-  --min-touch:       48px;
+  /* Touch targets / component sizing — 3-tier Nyuchi scale
+   * lg  56px  primary mobile CTA (hero, FAB, bottom action bar)
+   * md  48px  default interactive elements (buttons, selects, nav items)
+   * sm  44px  chips, icon buttons, dense secondary actions (WCAG 2.5.5 min)
+   */
+  --touch-target-lg: 56px;
+  --touch-target:    48px;
+  --touch-target-sm: 44px;
+  --min-touch:       44px;
   --header-height:    56px;
   --bottom-nav-height: 80px;
   --page-max-width:    1280px;
@@ -238,12 +243,12 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* Touch target minimum size */
+/* Touch target minimum size — WCAG 2.5.5 (44px) */
 button,
 input,
 select,
 textarea {
-  min-height: 44px;
+  min-height: var(--min-touch);
 }
 
 /* Mobile input improvements - prevent zoom on iOS (font-size >= 16px) */
