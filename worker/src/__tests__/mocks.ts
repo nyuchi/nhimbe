@@ -133,8 +133,6 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
     SUPABASE_URL: 'https://test-project.supabase.co',
     SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
     SUPABASE_PAY_URL: 'https://test-pay-project.supabase.co',
-    SUPABASE_PAY_PUBLISHABLE_KEY: 'sb_publishable_test',
-    PAY_API_KEY: 'test-pay-api-key',
     AI: createMockAI(),
     VECTORIZE: createMockVectorize(),
     DB: createMockD1(),

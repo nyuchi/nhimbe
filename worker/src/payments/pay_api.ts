@@ -1,47 +1,45 @@
 /**
- * Tiny client for the `payments-api` Edge Function on nyuchi_pay_db.
+ * Tiny client for the `payments-intents` Edge Function on nyuchi_pay_db.
  *
  * The pay DB is API-only — direct PostgREST access is locked down via RLS
- * and the service-role key never leaves the Edge Function runtime. The
- * worker proves it's a trusted caller by sending two headers:
- *   - x-supabase-pay-publishable-key  : sb_publishable_…  (caller identity)
- *   - Authorization: Bearer <PAY_API_KEY>                 (shared secret)
+ * and the service-role key never leaves the Edge Function runtime. Auth is
+ * pure WorkOS access-token pass-through: the worker forwards the signed-in
+ * user's JWT, and the Edge Function validates it locally against WorkOS's
+ * JWKS (no machine-to-machine secret on this path).
  *
- * Both are timing-safe-compared on the pay side. The publishable key lets
- * us roll caller identities independently of the shared secret if a
- * consumer is compromised.
+ * Webhooks (Paynow callbacks) live in a separate `payments-webhooks-paynow`
+ * function and use HMAC-SHA512 signature verification — that flow has no
+ * user context, so it doesn't go through this client.
  */
 
 import type { Env } from "../types";
 
 export class PayApiConfigError extends Error {
   constructor() {
-    super(
-      "[mukoko] Missing pay-api env: SUPABASE_PAY_URL / SUPABASE_PAY_PUBLISHABLE_KEY / PAY_API_KEY",
-    );
+    super("[mukoko] Missing pay-api env: SUPABASE_PAY_URL");
     this.name = "PayApiConfigError";
   }
 }
 
 interface PayApiOptions {
-  path: string;                       // "/v1/health" or "/v1/intents"
+  /** Edge function path AFTER the function name, e.g. "/v1/health" or "/v1/intents". */
+  path: string;
   method?: "GET" | "POST";
   body?: unknown;
+  /** WorkOS access token from the signed-in user's request. Required for auth-protected paths. */
+  accessToken: string;
 }
 
 export async function payApiFetch<T>(env: Env, opts: PayApiOptions): Promise<T> {
   const url = env.SUPABASE_PAY_URL;
-  const publishableKey = env.SUPABASE_PAY_PUBLISHABLE_KEY;
-  const apiKey = env.PAY_API_KEY;
-  if (!url || !publishableKey || !apiKey) throw new PayApiConfigError();
+  if (!url) throw new PayApiConfigError();
 
-  const fullUrl = `${url.replace(/\/$/, "")}/functions/v1/payments-api${opts.path}`;
+  const fullUrl = `${url.replace(/\/$/, "")}/functions/v1/payments-intents${opts.path}`;
 
   const response = await fetch(fullUrl, {
     method: opts.method ?? "GET",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "x-supabase-pay-publishable-key": publishableKey,
+      Authorization: `Bearer ${opts.accessToken}`,
       "Content-Type": "application/json",
     },
     body: opts.body ? JSON.stringify(opts.body) : undefined,

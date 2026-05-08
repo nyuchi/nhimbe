@@ -1,7 +1,7 @@
 /**
  * Tests for the pay-api edge-function client. Verifies that the worker
- * sends the right auth headers and propagates errors correctly. We do
- * NOT hit the real Edge Function — fetch is stubbed.
+ * forwards the user's WorkOS access token correctly and propagates errors.
+ * The real Edge Function is never hit — fetch is stubbed.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { payApiFetch, PayApiConfigError } from "../payments/pay_api";
@@ -15,14 +15,14 @@ afterEach(() => {
 });
 
 describe("payApiFetch", () => {
-  it("throws PayApiConfigError when env is missing", async () => {
-    const env = createMockEnv({ PAY_API_KEY: undefined });
-    await expect(payApiFetch(env, { path: "/v1/health" })).rejects.toBeInstanceOf(
-      PayApiConfigError,
-    );
+  it("throws PayApiConfigError when SUPABASE_PAY_URL is missing", async () => {
+    const env = createMockEnv({ SUPABASE_PAY_URL: undefined });
+    await expect(
+      payApiFetch(env, { path: "/v1/health", accessToken: "tok" }),
+    ).rejects.toBeInstanceOf(PayApiConfigError);
   });
 
-  it("sends Authorization Bearer + publishable-key headers", async () => {
+  it("forwards the WorkOS access token as Authorization Bearer", async () => {
     const env = createMockEnv();
     const seen: { url?: string; init?: RequestInit } = {};
     vi.stubGlobal(
@@ -39,14 +39,18 @@ describe("payApiFetch", () => {
       }),
     );
 
-    const result = await payApiFetch<{ ok: boolean }>(env, { path: "/v1/health" });
+    const result = await payApiFetch<{ ok: boolean }>(env, {
+      path: "/v1/health",
+      accessToken: "workos.access.token",
+    });
     expect(result.ok).toBe(true);
     expect(seen.url).toBe(
-      "https://test-pay-project.supabase.co/functions/v1/payments-api/v1/health",
+      "https://test-pay-project.supabase.co/functions/v1/payments-intents/v1/health",
     );
     const headers = new Headers(seen.init?.headers as HeadersInit);
-    expect(headers.get("Authorization")).toBe("Bearer test-pay-api-key");
-    expect(headers.get("x-supabase-pay-publishable-key")).toBe("sb_publishable_test");
+    expect(headers.get("Authorization")).toBe("Bearer workos.access.token");
+    // No machine-to-machine secret is sent on the user-context path.
+    expect(headers.get("x-supabase-pay-publishable-key")).toBeNull();
   });
 
   it("propagates non-2xx responses as errors", async () => {
@@ -57,6 +61,8 @@ describe("payApiFetch", () => {
         new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 }),
       ),
     );
-    await expect(payApiFetch(env, { path: "/v1/health" })).rejects.toThrow(/401/);
+    await expect(
+      payApiFetch(env, { path: "/v1/health", accessToken: "tok" }),
+    ).rejects.toThrow(/401/);
   });
 });

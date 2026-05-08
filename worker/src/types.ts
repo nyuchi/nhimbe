@@ -345,14 +345,12 @@ export interface Env {
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   // Supabase nyuchi_pay_db — API-only. The worker never touches the pay DB
-  // directly; it calls the `payments-api` Edge Function with the publishable
-  // key (caller identity) + PAY_API_KEY (shared secret). The pay DB's
-  // service-role key never leaves the Edge Function runtime.
-  // SUPABASE_PAY_URL is a public var; SUPABASE_PAY_PUBLISHABLE_KEY is a public
-  // var (sb_publishable_…); PAY_API_KEY is a wrangler secret.
+  // directly; it calls the `payments-intents` Edge Function with the
+  // signed-in user's WorkOS access token forwarded as Authorization Bearer.
+  // The Edge Function validates the JWT against WorkOS's JWKS independently
+  // — no shared secret on the user-context path. Webhooks (Paynow) hit a
+  // separate function with HMAC verification.
   SUPABASE_PAY_URL?: string;
-  SUPABASE_PAY_PUBLISHABLE_KEY?: string;
-  PAY_API_KEY?: string;
   // Cloudflare bindings
   AI: Ai;
   VECTORIZE: VectorizeIndex;
