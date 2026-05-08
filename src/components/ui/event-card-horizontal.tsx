@@ -41,10 +41,11 @@ export function EventCardHorizontal({
     : `${location.addressLocality}, ${location.addressCountry}`;
 
   return (
-    <Link href={`/events/${id}`} className="block group">
+    <Link data-slot="event-card-horizontal" href={`/events/${id}`} className="block group">
       <div className="flex gap-4 p-2 -m-2 rounded-xl hover:bg-surface/50 transition-colors">
         {/* Square Image Thumbnail */}
         <div
+          data-slot="event-card-horizontal-thumbnail"
           className="w-[72px] h-[72px] shrink-0 rounded-lg overflow-hidden"
           style={
             !coverImage
@@ -64,7 +65,7 @@ export function EventCardHorizontal({
         </div>
 
         {/* Event Details */}
-        <div className="flex-1 min-w-0 py-0.5">
+        <div data-slot="event-card-horizontal-body" className="flex-1 min-w-0 py-0.5">
           {/* Date/Time */}
           <p className="text-sm text-text-secondary mb-1">{dateTime}</p>
 
