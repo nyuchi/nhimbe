@@ -331,8 +331,11 @@ export interface Env {
   PAYNOW_INTEGRATION_ID?: string;
   PAYNOW_INTEGRATION_KEY?: string;
   ALLOWED_ORIGINS?: string;
-  // Stytch (frontend SDK handles auth; backend only needs project ID for local JWT validation)
-  STYTCH_PROJECT_ID: string;
+  // WorkOS AuthKit — frontend handles sign-in via AuthKit hosted UI; the worker
+  // only needs the public Client ID to validate access-token JWTs against
+  // WorkOS's JWKS (https://api.workos.com/sso/jwks/<client_id>). No WorkOS API
+  // secret is required on the worker side for the auth path.
+  WORKOS_CLIENT_ID: string;
   // MongoDB Atlas — primary database (set via `wrangler secret put MONGODB_URI`)
   MONGODB_URI?: string;
   // Cloudflare bindings
@@ -490,7 +493,8 @@ export interface User {
   eventsHosted: number;
   role: UserRole;
   onboardingCompleted: boolean;
-  stytchUserId?: string;
+  /** WorkOS user id post-AuthKit migration. Field name retained from the Stytch era for compatibility. */
+  workosUserId?: string;
   dateCreated: string;       // schema.org dateCreated
   dateModified: string;
 }

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { writeAuth } from "../middleware/auth";
-import { getAuthenticatedUser } from "../auth/stytch";
+import { getAuthenticatedUser } from "../auth/workos";
 import { generateId } from "../utils/ids";
 
 export const waitlist = new Hono<{ Bindings: Env }>();

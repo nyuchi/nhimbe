@@ -27,7 +27,7 @@ interface CircuitBreakerState {
 const circuits = new Map<string, CircuitBreakerState>();
 
 const DEFAULT_CONFIGS: Record<string, CircuitBreakerConfig> = {
-  stytch: { failureThreshold: 3, cooldownMs: 2 * 60_000, timeoutMs: 5_000 },
+  workos: { failureThreshold: 3, cooldownMs: 2 * 60_000, timeoutMs: 5_000 },
   vectorize: { failureThreshold: 5, cooldownMs: 5 * 60_000, timeoutMs: 8_000 },
   ai: { failureThreshold: 3, cooldownMs: 5 * 60_000, timeoutMs: 15_000 },
   r2: { failureThreshold: 5, cooldownMs: 1 * 60_000, timeoutMs: 10_000 },

@@ -1,28 +1,37 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
-import { getAuthenticatedUser } from "../auth/stytch";
+import { getAuthenticatedUser } from "../auth/workos";
 import { safeParseJSON } from "../utils/validation";
 import { generateId } from "../utils/ids";
 
 export const auth = new Hono<{ Bindings: Env }>();
 
+// The users.stytch_user_id column stores the WorkOS user id post-migration.
+// Column rename to external_user_id is tracked separately so we don't ship
+// a breaking D1 schema change in this PR.
+
 // POST /api/auth/sync
 auth.post("/sync", async (c) => {
   const authResult = await getAuthenticatedUser(c.req.raw, c.env);
   if (!authResult.user) {
-    console.error("Auth failed (sync):", authResult.failureReason, authResult.detail);
+    console.error("[mukoko:auth] sync failed:", authResult.failureReason, authResult.detail);
     return c.json({ error: "Unauthorized", reason: authResult.failureReason }, 401);
   }
-  const stytchUser = authResult.user;
+  const authUser = authResult.user;
 
-  const body = await c.req.json() as {
-    stytch_user_id: string;
+  const body = (await c.req.json()) as {
+    workos_user_id?: string;
+    /** @deprecated kept for one release while clients still send it */
+    stytch_user_id?: string;
     email: string;
     name: string;
   };
 
-  if (!body.stytch_user_id || !body.email) {
-    return c.json({ error: "stytch_user_id and email are required" }, 400);
+  const externalUserId = body.workos_user_id ?? body.stytch_user_id ?? authUser.userId;
+  const email = body.email ?? authUser.email ?? "";
+
+  if (!externalUserId || !email) {
+    return c.json({ error: "workos_user_id and email are required" }, 400);
   }
 
   interface DbUser {
@@ -39,9 +48,11 @@ auth.post("/sync", async (c) => {
     deleted_at: string | null;
   }
 
-  const existingUser = await c.env.DB.prepare(
-    "SELECT * FROM users WHERE stytch_user_id = ? OR email = ?"
-  ).bind(stytchUser.userId, body.email).first() as DbUser | null;
+  const existingUser = (await c.env.DB.prepare(
+    "SELECT * FROM users WHERE stytch_user_id = ? OR email = ?",
+  )
+    .bind(externalUserId, email)
+    .first()) as DbUser | null;
 
   if (existingUser?.deleted_at) {
     return c.json({ error: "Account suspended", reason: "account_suspended" }, 403);
@@ -49,8 +60,10 @@ auth.post("/sync", async (c) => {
 
   if (existingUser) {
     await c.env.DB.prepare(
-      "UPDATE users SET last_login_at = datetime('now'), stytch_user_id = ?, date_modified = datetime('now') WHERE _id = ?"
-    ).bind(stytchUser.userId, existingUser._id).run();
+      "UPDATE users SET last_login_at = datetime('now'), stytch_user_id = ?, date_modified = datetime('now') WHERE _id = ?",
+    )
+      .bind(externalUserId, existingUser._id)
+      .run();
 
     const user = {
       id: existingUser._id,
@@ -60,32 +73,35 @@ auth.post("/sync", async (c) => {
       addressLocality: existingUser.address_locality,
       addressCountry: existingUser.address_country,
       interests: safeParseJSON(existingUser.interests, []) as string[],
-      onboardingCompleted: !!(existingUser.onboarding_completed),
-      stytchUserId: stytchUser.userId,
-      role: existingUser.role || 'user',
+      onboardingCompleted: !!existingUser.onboarding_completed,
+      personId: existingUser._id,
+      workosUserId: externalUserId,
+      role: existingUser.role || "user",
     };
 
     return c.json({ user });
   }
 
-  // New user — create record immediately so profile updates can find them
   const newId = generateId();
   await c.env.DB.prepare(`
     INSERT INTO users (_id, email, name, stytch_user_id, last_login_at)
     VALUES (?, ?, ?, ?, datetime('now'))
-  `).bind(newId, body.email, body.name || "", stytchUser.userId).run();
+  `)
+    .bind(newId, email, body.name || "", externalUserId)
+    .run();
 
   const user = {
     id: newId,
-    email: body.email,
+    email,
     name: body.name || "",
     image: null,
     addressLocality: null,
     addressCountry: null,
     interests: [],
     onboardingCompleted: false,
-    stytchUserId: stytchUser.userId,
-    role: 'user',
+    personId: newId,
+    workosUserId: externalUserId,
+    role: "user",
   };
 
   return c.json({ user });
@@ -95,10 +111,10 @@ auth.post("/sync", async (c) => {
 auth.get("/me", async (c) => {
   const authResult = await getAuthenticatedUser(c.req.raw, c.env);
   if (!authResult.user) {
-    console.error("Auth failed (me):", authResult.failureReason, authResult.detail);
+    console.error("[mukoko:auth] me failed:", authResult.failureReason, authResult.detail);
     return c.json({ error: "Unauthorized", reason: authResult.failureReason }, 401);
   }
-  const stytchUser = authResult.user;
+  const authUser = authResult.user;
 
   interface DbUserRow {
     _id: string;
@@ -113,9 +129,11 @@ auth.get("/me", async (c) => {
     role: string | null;
     deleted_at: string | null;
   }
-  const result = await c.env.DB.prepare(
-    "SELECT * FROM users WHERE stytch_user_id = ?"
-  ).bind(stytchUser.userId).first() as DbUserRow | null;
+  const result = (await c.env.DB.prepare(
+    "SELECT * FROM users WHERE stytch_user_id = ?",
+  )
+    .bind(authUser.userId)
+    .first()) as DbUserRow | null;
 
   if (!result) {
     return c.json({ error: "User not found" }, 404);
@@ -133,9 +151,10 @@ auth.get("/me", async (c) => {
     addressLocality: result.address_locality,
     addressCountry: result.address_country,
     interests: safeParseJSON(result.interests, []) as string[],
-    onboardingCompleted: !!(result.onboarding_completed),
-    stytchUserId: result.stytch_user_id,
-    role: result.role || 'user',
+    onboardingCompleted: !!result.onboarding_completed,
+    personId: result._id,
+    workosUserId: result.stytch_user_id,
+    role: result.role || "user",
   };
 
   return c.json({ user });
@@ -145,12 +164,12 @@ auth.get("/me", async (c) => {
 auth.patch("/profile", async (c) => {
   const authResult = await getAuthenticatedUser(c.req.raw, c.env);
   if (!authResult.user) {
-    console.error("Auth failed (profile):", authResult.failureReason, authResult.detail);
+    console.error("[mukoko:auth] profile failed:", authResult.failureReason, authResult.detail);
     return c.json({ error: "Unauthorized", reason: authResult.failureReason }, 401);
   }
-  const stytchUser = authResult.user;
+  const authUser = authResult.user;
 
-  const body = await c.req.json() as {
+  const body = (await c.req.json()) as {
     name?: string;
     email?: string;
     addressLocality?: string;
@@ -158,7 +177,6 @@ auth.patch("/profile", async (c) => {
     interests?: string[];
   };
 
-  // At least one field must be provided
   if (!body.name && !body.addressLocality && !body.addressCountry && !body.interests) {
     return c.json({ error: "At least one field is required" }, 400);
   }
@@ -176,9 +194,11 @@ auth.patch("/profile", async (c) => {
     onboarding_completed: number | null;
   }
 
-  const existingUser = await c.env.DB.prepare(
-    "SELECT * FROM users WHERE stytch_user_id = ?"
-  ).bind(stytchUser.userId).first() as DbUser | null;
+  const existingUser = (await c.env.DB.prepare(
+    "SELECT * FROM users WHERE stytch_user_id = ?",
+  )
+    .bind(authUser.userId)
+    .first()) as DbUser | null;
 
   if (!existingUser) {
     return c.json({ error: "User not found. Please sign out and sign in again." }, 404);
@@ -188,19 +208,31 @@ auth.patch("/profile", async (c) => {
   const setClauses: string[] = [];
   const values: (string | number)[] = [];
 
-  if (body.name !== undefined) { setClauses.push("name = ?"); values.push(body.name); }
-  if (body.addressLocality !== undefined) { setClauses.push("address_locality = ?"); values.push(body.addressLocality); }
-  if (body.addressCountry !== undefined) { setClauses.push("address_country = ?"); values.push(body.addressCountry); }
-  if (body.interests !== undefined) { setClauses.push("interests = ?"); values.push(JSON.stringify(body.interests)); }
+  if (body.name !== undefined) {
+    setClauses.push("name = ?");
+    values.push(body.name);
+  }
+  if (body.addressLocality !== undefined) {
+    setClauses.push("address_locality = ?");
+    values.push(body.addressLocality);
+  }
+  if (body.addressCountry !== undefined) {
+    setClauses.push("address_country = ?");
+    values.push(body.addressCountry);
+  }
+  if (body.interests !== undefined) {
+    setClauses.push("interests = ?");
+    values.push(JSON.stringify(body.interests));
+  }
   setClauses.push("date_modified = datetime('now')");
 
-  await c.env.DB.prepare(
-    `UPDATE users SET ${setClauses.join(", ")} WHERE _id = ?`
-  ).bind(...values, userId).run();
+  await c.env.DB.prepare(`UPDATE users SET ${setClauses.join(", ")} WHERE _id = ?`)
+    .bind(...values, userId)
+    .run();
 
-  const result = await c.env.DB.prepare(
-    "SELECT * FROM users WHERE _id = ?"
-  ).bind(userId).first() as DbUser | null;
+  const result = (await c.env.DB.prepare("SELECT * FROM users WHERE _id = ?")
+    .bind(userId)
+    .first()) as DbUser | null;
 
   if (!result) {
     return c.json({ error: "User not found" }, 404);
@@ -214,8 +246,9 @@ auth.patch("/profile", async (c) => {
     addressLocality: result.address_locality,
     addressCountry: result.address_country,
     interests: safeParseJSON(result.interests, []) as string[],
-    onboardingCompleted: !!(result.onboarding_completed),
-    stytchUserId: result.stytch_user_id,
+    onboardingCompleted: !!result.onboarding_completed,
+    personId: result._id,
+    workosUserId: result.stytch_user_id,
     role: result.role || "user",
   };
 

@@ -129,7 +129,7 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
     ENVIRONMENT: 'test',
     API_KEY: 'test-api-key-12345',
     ALLOWED_ORIGINS: 'http://localhost:3000',
-    STYTCH_PROJECT_ID: 'project-test-12345',
+    WORKOS_CLIENT_ID: 'project-test-12345',
     AI: createMockAI(),
     VECTORIZE: createMockVectorize(),
     DB: createMockD1(),

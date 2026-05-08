@@ -4,7 +4,7 @@ import { safeParseInt, slugify, getInitials } from "../utils/validation";
 import { generateId, generateShortCode } from "../utils/ids";
 import { dbRowToEvent } from "../utils/db";
 import { writeAuth } from "../middleware/auth";
-import { getAuthenticatedUser } from "../auth/stytch";
+import { getAuthenticatedUser } from "../auth/workos";
 import { indexEvent, removeEventFromIndex } from "../ai/embeddings";
 import { toCsv } from "../utils/export";
 import { logAudit } from "../utils/audit";

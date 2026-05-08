@@ -11,7 +11,7 @@ ENVIRONMENT = "development"
 ALLOWED_ORIGINS = "http://localhost:3000,http://localhost:3001"
 # Stytch project ID — public value, used for local JWT validation via JWKS.
 # No Stytch secret needed; auth is handled entirely by the frontend SDK.
-STYTCH_PROJECT_ID = "project-live-86090362-2491-4ca7-9037-f7688c7699ce"
+WORKOS_CLIENT_ID = "REPLACE_WITH_WORKOS_CLIENT_ID"
 
 # Development settings
 [dev]
@@ -119,7 +119,7 @@ simple = { limit = 100, period = 60 }  # 100 requests per minute
 # ============================================
 [env.production]
 name = "mukoko-nhimbe-api"
-vars = { ENVIRONMENT = "production", ALLOWED_ORIGINS = "https://nhimbe.com,https://www.nhimbe.com,https://mukoko.com,https://www.mukoko.com", STYTCH_PROJECT_ID = "project-live-86090362-2491-4ca7-9037-f7688c7699ce" }
+vars = { ENVIRONMENT = "production", ALLOWED_ORIGINS = "https://nhimbe.com,https://www.nhimbe.com,https://mukoko.com,https://www.mukoko.com", WORKOS_CLIENT_ID = "REPLACE_WITH_WORKOS_CLIENT_ID" }
 routes = [
   { pattern = "events-api.mukoko.com", custom_domain = true }
 ]
@@ -184,7 +184,7 @@ simple = { limit = 100, period = 60 }
 # ============================================
 [env.staging]
 name = "mukoko-nhimbe-api-staging"
-vars = { ENVIRONMENT = "staging", ALLOWED_ORIGINS = "https://staging.nhimbe.com", STYTCH_PROJECT_ID = "project-test-6add5f68-59c6-4086-88e8-8e0dc819a9a3" }
+vars = { ENVIRONMENT = "staging", ALLOWED_ORIGINS = "https://staging.nhimbe.com", WORKOS_CLIENT_ID = "REPLACE_WITH_WORKOS_CLIENT_ID" }
 
 [env.staging.ai]
 binding = "AI"

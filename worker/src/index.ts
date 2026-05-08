@@ -66,7 +66,7 @@ app.use("*", async (c, next) => {
     envValidated = true;
     const missing: string[] = [];
     if (!c.env.API_KEY) missing.push("API_KEY");
-    if (!c.env.STYTCH_PROJECT_ID) missing.push("STYTCH_PROJECT_ID");
+    if (!c.env.WORKOS_CLIENT_ID) missing.push("WORKOS_CLIENT_ID");
     if (!c.env.DB) missing.push("DB (D1 binding)");
     if (!c.env.CACHE) missing.push("CACHE (KV binding)");
     if (!c.env.RATE_LIMITER) missing.push("RATE_LIMITER binding");

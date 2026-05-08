@@ -15,12 +15,12 @@ import {
 } from './mocks';
 
 // Mock the Stytch auth module
-vi.mock('../auth/stytch', () => ({
+vi.mock('../auth/workos', () => ({
   getAuthenticatedUser: vi.fn(),
   extractBearerToken: vi.fn(),
 }));
 
-import { getAuthenticatedUser } from '../auth/stytch';
+import { getAuthenticatedUser } from '../auth/workos';
 const mockGetAuth = vi.mocked(getAuthenticatedUser);
 
 describe('PATCH /api/auth/profile', () => {

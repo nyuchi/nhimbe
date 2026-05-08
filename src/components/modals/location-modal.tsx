@@ -8,6 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
 
+function isValidMeetingUrl(value: string): boolean {
+  try {
+    new URL(value.trim());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 interface LocationModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -50,14 +59,18 @@ export function LocationModal({
   return (
     <ResponsiveModal open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }} title="Event Location">
       <div className="space-y-4">
-        <div className="flex items-center gap-3 p-3 bg-surface rounded-xl">
+        <label
+          htmlFor="online-event-toggle"
+          className="flex items-center gap-3 p-3 bg-surface rounded-xl cursor-pointer select-none"
+        >
           <Globe className="w-5 h-5 text-text-secondary" />
           <span className="flex-1">Online Event</span>
           <Switch
+            id="online-event-toggle"
             checked={isOnline}
             onCheckedChange={setIsOnline}
           />
-        </div>
+        </label>
         {isOnline && (
           <>
             {/* Meeting Platform */}
@@ -106,10 +119,8 @@ export function LocationModal({
                 }
                 className="w-full px-4 py-3 bg-surface rounded-xl border-none outline-none text-base"
               />
-              {meetingUrl.trim() ? (
-                (() => { try { new URL(meetingUrl.trim()); return true; } catch { return false; } })()
-                  ? <p className="text-xs text-text-tertiary mt-2">Attendees will see this link after registering</p>
-                  : <p className="text-xs text-red-400 mt-2">Please enter a valid URL starting with https://</p>
+              {meetingUrl.trim() && !isValidMeetingUrl(meetingUrl) ? (
+                <p className="text-xs text-red-400 mt-2">Please enter a valid URL starting with https://</p>
               ) : (
                 <p className="text-xs text-text-tertiary mt-2">Attendees will see this link after registering</p>
               )}
