@@ -16,3 +16,10 @@ WORKOS_CLIENT_ID=REPLACE_WITH_WORKOS_CLIENT_ID
 # (bypasses RLS — only used in the worker, never sent to the browser).
 # In production: `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
 SUPABASE_SERVICE_ROLE_KEY=REPLACE_WITH_SERVICE_ROLE_KEY
+
+# Supabase nyuchi_pay_db — shared secret for the payments-api Edge Function.
+# The same value must be set as a Supabase secret on the pay-db project
+# (Supabase Dashboard → Settings → Edge Functions → Secrets) and as a worker
+# secret here (`wrangler secret put PAY_API_KEY`). Generate a strong random
+# string (e.g. `openssl rand -hex 32`); rotate by updating both sides.
+PAY_API_KEY=REPLACE_WITH_SHARED_SECRET
