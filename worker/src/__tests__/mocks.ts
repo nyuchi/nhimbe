@@ -130,6 +130,8 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
     API_KEY: 'test-api-key-12345',
     ALLOWED_ORIGINS: 'http://localhost:3000',
     WORKOS_CLIENT_ID: 'project-test-12345',
+    SUPABASE_URL: 'https://test-project.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
     AI: createMockAI(),
     VECTORIZE: createMockVectorize(),
     DB: createMockD1(),

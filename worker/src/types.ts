@@ -338,6 +338,12 @@ export interface Env {
   WORKOS_CLIENT_ID: string;
   // MongoDB Atlas — primary database (set via `wrangler secret put MONGODB_URI`)
   MONGODB_URI?: string;
+  // Supabase (nyuchi_platform_db) — replaces D1 reads for identity/role lookups.
+  // SUPABASE_URL is the project REST root, SUPABASE_SERVICE_ROLE_KEY bypasses
+  // RLS for trusted server-side reads. Set the URL as a `[vars]` value and the
+  // key via `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
+  SUPABASE_URL?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
   // Cloudflare bindings
   AI: Ai;
   VECTORIZE: VectorizeIndex;

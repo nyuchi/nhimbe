@@ -3,7 +3,7 @@
  * categories, checkin, health, media, payments, referrals,
  * reviews, series, waitlist
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ExecutionContext } from '@cloudflare/workers-types';
 import type { Env } from '../types';
 import worker from '../index';
@@ -34,6 +34,12 @@ let env: Env;
 
 beforeEach(() => {
   env = createMockEnv();
+});
+
+afterEach(() => {
+  // Clean up any global stubs (e.g. fetch) installed by setupAdminAuth so
+  // they don't bleed into the next test.
+  vi.unstubAllGlobals();
 });
 
 // ============================================
@@ -1013,8 +1019,16 @@ describe('GET /api/community/events/:eventId/analytics', () => {
 // ============================================
 
 /**
- * Helper: configure mockGetAuth so getAdminUser succeeds.
- * Returns the admin DB row that should be returned by the first DB.prepare() call.
+ * Helper: configure mockGetAuth + the Supabase identity.person fetch so
+ * getAdminUser resolves to an admin user. Post-migration getAdminUser hits
+ * `identity.person` in nyuchi_platform_db via PostgREST, not D1, so this
+ * stubs `globalThis.fetch` for the role lookup.
+ *
+ * Maps the worker's UserRole hierarchy to the platform_db role names:
+ *   super_admin → platform_admin
+ *   admin       → admin
+ *   moderator   → moderator
+ *   user        → user
  */
 function setupAdminAuth(
   role: string = 'admin',
@@ -1026,12 +1040,31 @@ function setupAdminAuth(
     detail: null,
   });
 
-  return {
-    _id: adminId,
+  const platformRole =
+    role === 'super_admin' ? 'platform_admin' : role;
+
+  const personRow = {
+    id: adminId,
     email: 'admin@nhimbe.com',
     name: 'Admin User',
-    role,
+    role: platformRole,
   };
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/person') && url.includes('workos_user_id=eq.')) {
+        return new Response(JSON.stringify([personRow]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ error: 'unmocked', url }), { status: 404 });
+    }),
+  );
+
+  return personRow;
 }
 
 describe('GET /api/admin/stats', () => {
@@ -1051,40 +1084,36 @@ describe('GET /api/admin/stats', () => {
   });
 
   it('returns dashboard stats when authenticated as moderator', async () => {
-    const adminRow = setupAdminAuth('moderator');
+    setupAdminAuth('moderator');
 
-    // Build a DB mock that handles multiple prepare() calls in sequence
+    // Build a DB mock that handles multiple prepare() calls in sequence.
+    // getAdminUser no longer hits D1 (reads identity.person via PostgREST),
+    // so callIndex starts at 1 with the first stats query.
     const db = createMockD1();
     let callIndex = 0;
     (db.prepare as ReturnType<typeof vi.fn>).mockImplementation(() => {
       callIndex++;
-      // Call 1: getAdminUser looks up user by stytch_user_id
-      if (callIndex === 1) {
-        return createMockD1Statement({
-          first: vi.fn().mockResolvedValue(adminRow),
-        });
-      }
-      // Calls 2-4: totalUsers, totalEvents, totalRegistrations (Promise.all)
-      if (callIndex >= 2 && callIndex <= 4) {
-        const counts: Record<number, number> = { 2: 150, 3: 45, 4: 320 };
+      // Calls 1-3: totalUsers, totalEvents, totalRegistrations (Promise.all)
+      if (callIndex >= 1 && callIndex <= 3) {
+        const counts: Record<number, number> = { 1: 150, 2: 45, 3: 320 };
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ count: counts[callIndex] }),
         });
       }
-      // Call 5: activeEvents
-      if (callIndex === 5) {
+      // Call 4: activeEvents
+      if (callIndex === 4) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ count: 12 }),
         });
       }
-      // Call 6: recentViews (30 days)
-      if (callIndex === 6) {
+      // Call 5: recentViews (30 days)
+      if (callIndex === 5) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ count: 500 }),
         });
       }
-      // Call 7: recentEvents (all with results)
-      if (callIndex === 7) {
+      // Call 6: recentEvents (all with results)
+      if (callIndex === 6) {
         return createMockD1Statement({
           all: vi.fn().mockResolvedValue({
             results: [
@@ -1093,8 +1122,8 @@ describe('GET /api/admin/stats', () => {
           }),
         });
       }
-      // Call 8: recentUsers
-      if (callIndex === 8) {
+      // Call 7: recentUsers
+      if (callIndex === 7) {
         return createMockD1Statement({
           all: vi.fn().mockResolvedValue({
             results: [
@@ -1103,20 +1132,20 @@ describe('GET /api/admin/stats', () => {
           }),
         });
       }
-      // Call 9: support_tickets (may throw — table doesn't exist)
-      if (callIndex === 9) {
+      // Call 8: support_tickets (may throw — table doesn't exist)
+      if (callIndex === 8) {
         return createMockD1Statement({
           all: vi.fn().mockResolvedValue({ results: [] }),
         });
       }
-      // Calls 10-12: prevUsers, prevEvents, prevViews (growth calculations)
-      if (callIndex >= 10 && callIndex <= 12) {
+      // Calls 9-11: prevUsers, prevEvents, prevViews (growth calculations)
+      if (callIndex >= 9 && callIndex <= 11) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ count: 5 }),
         });
       }
-      // Calls 13-14: recentUsersCount, recentEventsCount (last 30 days)
-      if (callIndex >= 13 && callIndex <= 14) {
+      // Calls 12-13: recentUsersCount, recentEventsCount (last 30 days)
+      if (callIndex >= 12 && callIndex <= 13) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ count: 20 }),
         });
@@ -1152,78 +1181,73 @@ describe('GET /api/admin/stats', () => {
   });
 
   it('growth metrics are calculated (not hardcoded 0)', async () => {
-    const adminRow = setupAdminAuth('admin');
+    setupAdminAuth('admin');
 
+    // getAdminUser is now Supabase-backed; D1 calls start at the stats queries.
     const db = createMockD1();
     let callIndex = 0;
     (db.prepare as ReturnType<typeof vi.fn>).mockImplementation(() => {
       callIndex++;
-      // Call 1: getAdminUser role lookup
-      if (callIndex === 1) {
-        return createMockD1Statement({
-          first: vi.fn().mockResolvedValue(adminRow),
-        });
-      }
-      // Calls 2-4: totalUsers, totalEvents, totalRegistrations
-      if (callIndex >= 2 && callIndex <= 4) {
+      // Calls 1-3: totalUsers, totalEvents, totalRegistrations
+      if (callIndex >= 1 && callIndex <= 3) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ count: 100 }),
         });
       }
-      // Call 5: activeEvents
-      if (callIndex === 5) {
+      // Call 4: activeEvents
+      if (callIndex === 4) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ count: 10 }),
         });
       }
-      // Call 6: recentViews (30 days) — 80 views
-      if (callIndex === 6) {
+      // Call 5: recentViews (30 days) — 80 views
+      if (callIndex === 5) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ count: 80 }),
         });
       }
-      // Call 7: recentEvents
+      // Call 6: recentEvents
+      if (callIndex === 6) {
+        return createMockD1Statement({
+          all: vi.fn().mockResolvedValue({ results: [] }),
+        });
+      }
+      // Call 7: recentUsers
       if (callIndex === 7) {
         return createMockD1Statement({
           all: vi.fn().mockResolvedValue({ results: [] }),
         });
       }
-      // Call 8: recentUsers
+      // Call 8: support_tickets
       if (callIndex === 8) {
         return createMockD1Statement({
           all: vi.fn().mockResolvedValue({ results: [] }),
         });
       }
-      // Call 9: support_tickets
+      // Calls 9-11: prevUsers=10, prevEvents=5, prevViews=40
       if (callIndex === 9) {
-        return createMockD1Statement({
-          all: vi.fn().mockResolvedValue({ results: [] }),
-        });
-      }
-      // Calls 10-12: prevUsers=10, prevEvents=5, prevViews=40
-      if (callIndex === 10) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ count: 10 }),
         });
       }
-      if (callIndex === 11) {
+      if (callIndex === 10) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ count: 5 }),
         });
       }
-      if (callIndex === 12) {
+      if (callIndex === 11) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ count: 40 }),
         });
       }
-      // Call 13: recentUsersCount=30 (last 30 days)
-      if (callIndex === 13) {
+      // Call 12: recentUsersCount=30 (last 30 days)
+      if (callIndex === 12) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ count: 30 }),
         });
       }
-      // Call 14: recentEventsCount=15
-      if (callIndex === 14) {
+      // Call 13: recentEventsCount=15
+      if (callIndex === 13) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ count: 15 }),
         });
@@ -1271,25 +1295,19 @@ describe('POST /api/admin/users/:id/suspend', () => {
   });
 
   it('suspends a user (sets deleted_at)', async () => {
-    const adminRow = setupAdminAuth('admin', 'usr-admin-001');
+    setupAdminAuth('admin', 'usr-admin-001');
 
     const db = createMockD1();
     let callIndex = 0;
     (db.prepare as ReturnType<typeof vi.fn>).mockImplementation(() => {
       callIndex++;
-      // Call 1: getAdminUser role lookup
+      // Call 1: verify target user exists
       if (callIndex === 1) {
-        return createMockD1Statement({
-          first: vi.fn().mockResolvedValue(adminRow),
-        });
-      }
-      // Call 2: verify target user exists
-      if (callIndex === 2) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ _id: 'usr-target' }),
         });
       }
-      // Call 3: UPDATE users SET deleted_at
+      // Call 2: UPDATE users SET deleted_at
       return createMockD1Statement();
     });
     env = createMockEnv({ DB: db });
@@ -1306,19 +1324,11 @@ describe('POST /api/admin/users/:id/suspend', () => {
   });
 
   it('returns 404 for non-existent user', async () => {
-    const adminRow = setupAdminAuth('admin');
+    setupAdminAuth('admin');
 
     const db = createMockD1();
-    let callIndex = 0;
     (db.prepare as ReturnType<typeof vi.fn>).mockImplementation(() => {
-      callIndex++;
-      // Call 1: getAdminUser role lookup
-      if (callIndex === 1) {
-        return createMockD1Statement({
-          first: vi.fn().mockResolvedValue(adminRow),
-        });
-      }
-      // Call 2: verify target user — not found
+      // Call 1 (only): verify target user — not found
       return createMockD1Statement({
         first: vi.fn().mockResolvedValue(null),
       });
@@ -1357,25 +1367,19 @@ describe('POST /api/admin/users/:id/activate', () => {
   });
 
   it('activates a user (clears deleted_at)', async () => {
-    const adminRow = setupAdminAuth('admin', 'usr-admin-001');
+    setupAdminAuth('admin', 'usr-admin-001');
 
     const db = createMockD1();
     let callIndex = 0;
     (db.prepare as ReturnType<typeof vi.fn>).mockImplementation(() => {
       callIndex++;
-      // Call 1: getAdminUser role lookup
+      // Call 1: verify target user exists
       if (callIndex === 1) {
-        return createMockD1Statement({
-          first: vi.fn().mockResolvedValue(adminRow),
-        });
-      }
-      // Call 2: verify target user exists
-      if (callIndex === 2) {
         return createMockD1Statement({
           first: vi.fn().mockResolvedValue({ _id: 'usr-target' }),
         });
       }
-      // Call 3: UPDATE users SET deleted_at = NULL
+      // Call 2: UPDATE users SET deleted_at = NULL
       return createMockD1Statement();
     });
     env = createMockEnv({ DB: db });

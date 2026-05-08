@@ -11,3 +11,8 @@
 # Auth is handled entirely by the Stytch frontend SDK.
 # The backend validates session JWTs locally via Stytch's public JWKS.
 WORKOS_CLIENT_ID=REPLACE_WITH_WORKOS_CLIENT_ID
+
+# Supabase nyuchi_platform_db — service-role key for trusted server-side reads
+# (bypasses RLS — only used in the worker, never sent to the browser).
+# In production: `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
+SUPABASE_SERVICE_ROLE_KEY=REPLACE_WITH_SERVICE_ROLE_KEY
