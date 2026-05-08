@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { X, Sparkles, Loader2 } from "lucide-react";
-import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { useAuth } from "@/components/auth/auth-context";
 import { updateProfile, getCategories, type Category } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -12,7 +11,6 @@ const DISMISS_KEY = "nhimbe_interests_prompt_dismissed";
 
 export function InterestsPrompt() {
   const { user, isAuthenticated, refreshUser } = useAuth();
-  const { accessToken, getAccessToken } = useAccessToken();
   const [categories, setCategories] = useState<Category[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,12 +35,10 @@ export function InterestsPrompt() {
   };
 
   const handleSave = async () => {
-    if (selected.length === 0) return;
+    if (selected.length === 0 || !user?.personId) return;
     setLoading(true);
     try {
-      const token = accessToken ?? (await getAccessToken().catch(() => null));
-      if (!token) return;
-      await updateProfile(token, { interests: selected });
+      await updateProfile(user.personId, { interests: selected });
       await refreshUser();
     } catch {
       // Silently fail — non-blocking prompt

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
-import { AuthProvider, useAuth, type NhimbeUser } from "./auth-context";
+import { AuthProvider, useAuth } from "./auth-context";
+import type { PersonRow } from "@/lib/supabase/types";
 
 // Mock next/navigation
 const mockPush = vi.fn();
@@ -29,6 +30,21 @@ vi.mock("@workos-inc/authkit-nextjs/components", () => ({
     accessToken: mockAccessToken,
     getAccessToken: mockGetAccessToken,
   }),
+}));
+
+// Mock Supabase client setter — auth-context calls setSupabaseAccessToken on
+// every token rotation. We just want to confirm it's invoked.
+const mockSetSupabaseAccessToken = vi.fn();
+vi.mock("@/lib/supabase/client", () => ({
+  setSupabaseAccessToken: (t: string | null) => mockSetSupabaseAccessToken(t),
+  getSupabaseBrowserClient: () => ({}),
+}));
+
+// Mock the Supabase identity.person upsert. AuthProvider replaces the old
+// /api/auth/sync round-trip with this call after PR-34.
+const mockUpsertPersonFromWorkos = vi.fn();
+vi.mock("@/lib/supabase/api", () => ({
+  upsertPersonFromWorkos: (...args: unknown[]) => mockUpsertPersonFromWorkos(...args),
 }));
 
 function TestConsumer() {
@@ -64,9 +80,34 @@ describe("AuthContext", () => {
       },
       configurable: true,
     });
-
-    global.fetch = vi.fn();
   });
+
+  // Helper — build a realistic identity.person row that maps cleanly to a
+  // NhimbeUser for assertions.
+  function personRow(overrides: Partial<PersonRow> & { id: string; workos_user_id: string }): PersonRow {
+    return {
+      id: overrides.id,
+      workos_user_id: overrides.workos_user_id,
+      name: null,
+      givenname: null,
+      familyname: null,
+      alternatename: null,
+      email: null,
+      image: null,
+      bio: null,
+      description: null,
+      address: null,
+      knowsabout: null,
+      role: "user",
+      onboarding_completed: false,
+      profile_completed: false,
+      email_verified: false,
+      last_login_at: null,
+      created_at: null,
+      updated_at: null,
+      ...overrides,
+    };
+  }
 
   it("finishes loading when no AuthKit session exists", async () => {
     render(
@@ -93,18 +134,7 @@ describe("AuthContext", () => {
     expect(screen.getByTestId("loading").textContent).toBe("loading");
   });
 
-  it("syncs with backend when AuthKit user exists", async () => {
-    const backendUser: NhimbeUser = {
-      id: "usr-backend-1",
-      email: "test@example.com",
-      name: "Backend User",
-      addressLocality: "Harare",
-      interests: ["music", "tech"],
-      personId: "usr-backend-1",
-      workosUserId: "user_workos_123",
-      role: "user",
-    };
-
+  it("syncs with Supabase when AuthKit user exists", async () => {
     mockWorkosUser = {
       id: "user_workos_123",
       email: "test@example.com",
@@ -112,10 +142,16 @@ describe("AuthContext", () => {
       lastName: "User",
     };
 
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ user: backendUser }),
-    });
+    mockUpsertPersonFromWorkos.mockResolvedValueOnce(
+      personRow({
+        id: "usr-backend-1",
+        workos_user_id: "user_workos_123",
+        email: "test@example.com",
+        name: "Backend User",
+        address: { addressLocality: "Harare" },
+        knowsabout: ["music", "tech"],
+      }),
+    );
 
     render(
       <AuthProvider>
@@ -127,16 +163,18 @@ describe("AuthContext", () => {
       expect(screen.getByTestId("loading").textContent).toBe("not-loading");
     });
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining("/api/auth/sync"),
-      expect.objectContaining({ method: "POST" }),
+    expect(mockUpsertPersonFromWorkos).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workosUserId: "user_workos_123",
+        email: "test@example.com",
+      }),
     );
 
     expect(screen.getByTestId("authenticated").textContent).toBe("yes");
     expect(screen.getByTestId("user-name").textContent).toBe("Backend User");
   });
 
-  it("stays logged out when backend sync fails", async () => {
+  it("stays logged out when Supabase upsert fails", async () => {
     mockWorkosUser = {
       id: "user_workos_456",
       email: "fallback@example.com",
@@ -144,10 +182,7 @@ describe("AuthContext", () => {
       lastName: "User",
     };
 
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-    });
+    mockUpsertPersonFromWorkos.mockResolvedValueOnce(null);
 
     render(
       <AuthProvider>
@@ -163,17 +198,6 @@ describe("AuthContext", () => {
   });
 
   it("computes profileCompleteness based on user fields", async () => {
-    const backendUser: NhimbeUser = {
-      id: "usr-complete",
-      email: "complete@example.com",
-      name: "Complete User",
-      addressLocality: "Harare",
-      interests: ["music"],
-      personId: "usr-complete",
-      workosUserId: "user_workos_789",
-      role: "user",
-    };
-
     mockWorkosUser = {
       id: "user_workos_789",
       email: "complete@example.com",
@@ -181,10 +205,16 @@ describe("AuthContext", () => {
       lastName: "User",
     };
 
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ user: backendUser }),
-    });
+    mockUpsertPersonFromWorkos.mockResolvedValueOnce(
+      personRow({
+        id: "usr-complete",
+        workos_user_id: "user_workos_789",
+        email: "complete@example.com",
+        name: "Complete User",
+        address: { addressLocality: "Harare" },
+        knowsabout: ["music"],
+      }),
+    );
 
     render(
       <AuthProvider>
@@ -201,15 +231,6 @@ describe("AuthContext", () => {
   });
 
   it("marks profileCompleteness as incomplete when fields are missing", async () => {
-    const backendUser: NhimbeUser = {
-      id: "usr-incomplete",
-      email: "incomplete@example.com",
-      name: "User",
-      personId: "usr-incomplete",
-      workosUserId: "user_workos_incomplete",
-      role: "user",
-    };
-
     mockWorkosUser = {
       id: "user_workos_incomplete",
       email: "incomplete@example.com",
@@ -217,10 +238,14 @@ describe("AuthContext", () => {
       lastName: null,
     };
 
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ user: backendUser }),
-    });
+    mockUpsertPersonFromWorkos.mockResolvedValueOnce(
+      personRow({
+        id: "usr-incomplete",
+        workos_user_id: "user_workos_incomplete",
+        email: "incomplete@example.com",
+        name: "User",
+      }),
+    );
 
     render(
       <AuthProvider>
@@ -257,17 +282,6 @@ describe("AuthContext", () => {
   });
 
   it("signOut calls AuthKit signOut and clears local state", async () => {
-    const backendUser: NhimbeUser = {
-      id: "usr-123",
-      email: "test@example.com",
-      name: "Test",
-      addressLocality: "Harare",
-      interests: ["music", "tech"],
-      personId: "usr-123",
-      workosUserId: "user_workos_123",
-      role: "user",
-    };
-
     mockWorkosUser = {
       id: "user_workos_123",
       email: "test@example.com",
@@ -275,10 +289,16 @@ describe("AuthContext", () => {
       lastName: null,
     };
 
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ user: backendUser }),
-    });
+    mockUpsertPersonFromWorkos.mockResolvedValueOnce(
+      personRow({
+        id: "usr-123",
+        workos_user_id: "user_workos_123",
+        email: "test@example.com",
+        name: "Test",
+        address: { addressLocality: "Harare" },
+        knowsabout: ["music", "tech"],
+      }),
+    );
 
     render(
       <AuthProvider>

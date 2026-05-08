@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { useAuth } from "@/components/auth/auth-context";
 import { updateProfile } from "@/lib/api";
 import { Loader2 } from "lucide-react";
@@ -17,8 +16,7 @@ export function NamePrompt({ onComplete }: NamePromptProps) {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { refreshUser } = useAuth();
-  const { accessToken, getAccessToken } = useAccessToken();
+  const { user, refreshUser } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,15 +24,16 @@ export function NamePrompt({ onComplete }: NamePromptProps) {
       setError("Name must be at least 2 characters");
       return;
     }
+    if (!user?.personId) {
+      setError("Please sign in again");
+      return;
+    }
 
     setLoading(true);
     setError(null);
 
     try {
-      const token = accessToken ?? (await getAccessToken().catch(() => null));
-      if (!token) throw new Error("No session found");
-
-      await updateProfile(token, { name: name.trim() });
+      await updateProfile(user.personId, { name: name.trim() });
       await refreshUser();
       onComplete();
     } catch (err) {

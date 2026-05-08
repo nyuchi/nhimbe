@@ -348,27 +348,37 @@ export async function createUser(data: {
   });
 }
 
-// Update authenticated user's profile
+// Update authenticated user's profile.
+//
+// Goes Supabase-direct (identity.person) — no longer hits the worker
+// /api/auth/profile route. The Supabase client already has the WorkOS
+// access token wired in via auth-context, so RLS resolves us to the
+// signed-in person.
 export async function updateProfile(
-  sessionJwt: string,
+  personId: string,
   fields: Partial<{ name: string; addressLocality: string; addressCountry: string; interests: string[] }>
 ): Promise<{ user: User }> {
-  const response = await fetch(`${API_URL}/api/auth/profile`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${sessionJwt}`,
-    },
-    body: JSON.stringify(fields),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({})) as { error?: string; reason?: string };
-    console.error("[nhimbe] updateProfile failed:", response.status, errorData);
-    throw new Error(errorData.error || "Failed to update profile");
+  const { updatePersonProfile } = await import("@/lib/supabase/api");
+  const row = await updatePersonProfile(personId, fields);
+  if (!row) {
+    throw new Error("Failed to update profile");
   }
-
-  return response.json();
+  // Map identity.person row → legacy User shape so callers don't have to change.
+  const user: User = {
+    _id: row.id,
+    email: row.email ?? "",
+    name: row.name ?? "",
+    alternateName: row.alternatename ?? undefined,
+    image: row.image ?? undefined,
+    description: row.description ?? undefined,
+    addressLocality: row.address?.addressLocality ?? undefined,
+    addressCountry: row.address?.addressCountry ?? undefined,
+    interests: row.knowsabout ?? [],
+    eventsAttended: 0,
+    eventsHosted: 0,
+    dateCreated: row.created_at ?? new Date().toISOString(),
+  };
+  return { user };
 }
 
 // ============================================

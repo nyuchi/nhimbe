@@ -15,9 +15,171 @@ import type {
   EventRow,
   InterestCategoryRow,
   OrganizationRow,
+  PersonAddress,
   PersonRow,
   PlaceRow,
 } from "./types";
+
+// ─── Identity (replaces D1 worker /api/auth/sync, /me, PATCH /profile) ──
+// The frontend talks directly to identity.person. The worker no longer
+// owns user state — it only enforces JWT validity for endpoints that
+// still need a Cloudflare-side capability (AI, R2, kiosk pairing, queues).
+
+const PERSON_COLUMNS =
+  "id, workos_user_id, name, givenname, familyname, alternatename, email, image, bio, description, address, knowsabout, role, onboarding_completed, profile_completed, email_verified, last_login_at, created_at, updated_at";
+
+export async function getPersonByWorkosId(workosUserId: string): Promise<PersonRow | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .schema("identity")
+    .from("person")
+    .select(PERSON_COLUMNS)
+    .eq("workos_user_id", workosUserId)
+    .maybeSingle();
+  if (error) {
+    console.warn("[mukoko] getPersonByWorkosId failed:", error.message);
+    return null;
+  }
+  return (data as PersonRow | null) ?? null;
+}
+
+export async function getPersonByEmail(email: string): Promise<PersonRow | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .schema("identity")
+    .from("person")
+    .select(PERSON_COLUMNS)
+    .eq("email", email)
+    .maybeSingle();
+  if (error) {
+    console.warn("[mukoko] getPersonByEmail failed:", error.message);
+    return null;
+  }
+  return (data as PersonRow | null) ?? null;
+}
+
+// Upsert the identity.person row for the signed-in WorkOS user. Mirrors the
+// /api/auth/sync semantics from the worker but goes Supabase-direct so we
+// don't need the D1 round-trip. Returns the canonical row.
+export async function upsertPersonFromWorkos(input: {
+  workosUserId: string;
+  email: string;
+  name: string;
+  givenname?: string | null;
+  familyname?: string | null;
+}): Promise<PersonRow | null> {
+  const supabase = getSupabaseBrowserClient();
+
+  // Try to find an existing row by workos_user_id, then by email (handles
+  // legacy users that were created before WorkOS was wired up).
+  let existing = await getPersonByWorkosId(input.workosUserId);
+  if (!existing && input.email) {
+    existing = await getPersonByEmail(input.email);
+  }
+
+  const nowIso = new Date().toISOString();
+
+  if (existing) {
+    const updates: Partial<PersonRow> = {
+      workos_user_id: input.workosUserId,
+      last_login_at: nowIso,
+    };
+    // Backfill name only when missing — never overwrite a person's edits.
+    if (!existing.name && input.name) updates.name = input.name;
+    if (!existing.givenname && input.givenname) updates.givenname = input.givenname;
+    if (!existing.familyname && input.familyname) updates.familyname = input.familyname;
+    const { data, error } = await supabase
+      .schema("identity")
+      .from("person")
+      .update(updates)
+      .eq("id", existing.id)
+      .select(PERSON_COLUMNS)
+      .single();
+    if (error) {
+      console.warn("[mukoko] upsertPersonFromWorkos update failed:", error.message);
+      return existing;
+    }
+    return data as PersonRow;
+  }
+
+  // First-time sign-in — insert a new identity.person row.
+  const insertRow: Partial<PersonRow> = {
+    workos_user_id: input.workosUserId,
+    email: input.email,
+    name: input.name || null,
+    givenname: input.givenname ?? null,
+    familyname: input.familyname ?? null,
+    last_login_at: nowIso,
+    onboarding_completed: false,
+    role: "user",
+  };
+  const { data, error } = await supabase
+    .schema("identity")
+    .from("person")
+    .insert(insertRow)
+    .select(PERSON_COLUMNS)
+    .single();
+  if (error) {
+    console.warn("[mukoko] upsertPersonFromWorkos insert failed:", error.message);
+    return null;
+  }
+  return data as PersonRow;
+}
+
+export async function updatePersonProfile(
+  personId: string,
+  patch: {
+    name?: string;
+    addressLocality?: string;
+    addressCountry?: string;
+    interests?: string[];
+  },
+): Promise<PersonRow | null> {
+  const supabase = getSupabaseBrowserClient();
+
+  const updates: Partial<PersonRow> = {};
+  if (patch.name !== undefined) updates.name = patch.name;
+  if (patch.interests !== undefined) updates.knowsabout = patch.interests;
+
+  if (patch.addressLocality !== undefined || patch.addressCountry !== undefined) {
+    // Need the existing address blob first so we don't clobber other keys.
+    const { data: row } = await supabase
+      .schema("identity")
+      .from("person")
+      .select("address")
+      .eq("id", personId)
+      .maybeSingle();
+    const existingAddr = ((row as { address: PersonAddress | null } | null)?.address ?? {}) as PersonAddress;
+    const merged: PersonAddress = { ...existingAddr };
+    if (patch.addressLocality !== undefined) merged.addressLocality = patch.addressLocality;
+    if (patch.addressCountry !== undefined) merged.addressCountry = patch.addressCountry;
+    updates.address = merged;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    // No-op patch — return the current row so callers can refresh state.
+    const { data } = await supabase
+      .schema("identity")
+      .from("person")
+      .select(PERSON_COLUMNS)
+      .eq("id", personId)
+      .maybeSingle();
+    return (data as PersonRow | null) ?? null;
+  }
+
+  const { data, error } = await supabase
+    .schema("identity")
+    .from("person")
+    .update(updates)
+    .eq("id", personId)
+    .select(PERSON_COLUMNS)
+    .single();
+  if (error) {
+    console.warn("[mukoko] updatePersonProfile failed:", error.message);
+    return null;
+  }
+  return data as PersonRow;
+}
 
 // ─── Categories ───────────────────────────────────────────────────────────
 // 40 canonical categories live in engagement.interest_category. They're
@@ -161,15 +323,15 @@ export async function getEventHostInfo(eventId: string): Promise<EventHostInfo |
     const { data: person, error } = await supabase
       .schema("identity")
       .from("person")
-      .select("id, display_name, given_name, family_name, image")
+      .select("id, name, givenname, familyname, image")
       .eq("id", ownerId)
       .maybeSingle();
     if (error || !person) return null;
-    const p = person as Pick<PersonRow, "id" | "display_name" | "given_name" | "family_name" | "image">;
+    const p = person as Pick<PersonRow, "id" | "name" | "givenname" | "familyname" | "image">;
     return {
       ownerType: "person",
       id: p.id,
-      name: p.display_name || `${p.given_name ?? ""} ${p.family_name ?? ""}`.trim() || "Unknown",
+      name: p.name || `${p.givenname ?? ""} ${p.familyname ?? ""}`.trim() || "Unknown",
       description: null,
       avatar: p.image,
       slug: null,
@@ -329,7 +491,7 @@ export async function getCircle(circleId: string): Promise<CircleRow | null> {
 }
 
 export type KraalPostWithAuthor = CirclePostRow & {
-  author: Pick<PersonRow, "id" | "display_name" | "given_name" | "family_name" | "image"> | null;
+  author: Pick<PersonRow, "id" | "name" | "givenname" | "familyname" | "image"> | null;
 };
 
 export async function getCirclePosts(circleId: string, limit = 20, archived = false): Promise<KraalPostWithAuthor[]> {
@@ -337,7 +499,7 @@ export async function getCirclePosts(circleId: string, limit = 20, archived = fa
   const query = supabase
     .schema("circles")
     .from("post")
-    .select("*, author:author_id(id, display_name, given_name, family_name, image)")
+    .select("*, author:author_id(id, name, givenname, familyname, image)")
     .eq("circle_id", circleId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -355,7 +517,7 @@ export async function getCirclePosts(circleId: string, limit = 20, archived = fa
 }
 
 export type KraalMember = CircleMembershipRow & {
-  person: Pick<PersonRow, "id" | "display_name" | "given_name" | "family_name" | "image"> | null;
+  person: Pick<PersonRow, "id" | "name" | "givenname" | "familyname" | "image"> | null;
 };
 
 export async function getCircleMembers(circleId: string, limit = 50): Promise<KraalMember[]> {
@@ -363,7 +525,7 @@ export async function getCircleMembers(circleId: string, limit = 50): Promise<Kr
   const { data, error } = await supabase
     .schema("circles")
     .from("circle_membership")
-    .select("circle_id, person_id, role, status, joined_at, notification_pref, person:person_id(id, display_name, given_name, family_name, image)")
+    .select("circle_id, person_id, role, status, joined_at, notification_pref, person:person_id(id, name, givenname, familyname, image)")
     .eq("circle_id", circleId)
     .eq("status", "active")
     .order("joined_at", { ascending: true })
@@ -400,20 +562,23 @@ export async function createCirclePost(input: {
   return data as CirclePostRow;
 }
 
+// circles.post_reaction column is `reaction_type`, not `reaction`. Audited
+// against the live DB via Supabase MCP — the previous code path silently
+// failed because PostgREST returned 400 on the unknown column.
 export async function togglePostReaction(input: {
   postId: string;
   personId: string;
   reaction?: string;
 }): Promise<"added" | "removed"> {
   const supabase = getSupabaseBrowserClient();
-  const reaction = input.reaction ?? "like";
+  const reaction_type = input.reaction ?? "like";
   const { data: existing } = await supabase
     .schema("circles")
     .from("post_reaction")
     .select("post_id")
     .eq("post_id", input.postId)
     .eq("person_id", input.personId)
-    .eq("reaction", reaction)
+    .eq("reaction_type", reaction_type)
     .maybeSingle();
 
   if (existing) {
@@ -423,7 +588,7 @@ export async function togglePostReaction(input: {
       .delete()
       .eq("post_id", input.postId)
       .eq("person_id", input.personId)
-      .eq("reaction", reaction);
+      .eq("reaction_type", reaction_type);
     if (error) throw new Error(`[mukoko] togglePostReaction remove failed: ${error.message}`);
     return "removed";
   }
@@ -431,7 +596,7 @@ export async function togglePostReaction(input: {
   const { error } = await supabase
     .schema("circles")
     .from("post_reaction")
-    .insert({ post_id: input.postId, person_id: input.personId, reaction });
+    .insert({ post_id: input.postId, person_id: input.personId, reaction_type });
   if (error) throw new Error(`[mukoko] togglePostReaction add failed: ${error.message}`);
   return "added";
 }

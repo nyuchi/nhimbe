@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { useAuth } from "@/components/auth/auth-context";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { Button } from "@/components/ui/button";
@@ -19,7 +18,6 @@ import Link from "next/link";
 
 function ProfileEditContent() {
   const router = useRouter();
-  const { accessToken, getAccessToken } = useAccessToken();
   const { user, refreshUser } = useAuth();
 
   const [name, setName] = useState("");
@@ -72,8 +70,7 @@ function ProfileEditContent() {
     setError(null);
 
     try {
-      const token = accessToken ?? (await getAccessToken().catch(() => null));
-      if (!token) {
+      if (!user?.personId) {
         throw new Error("No session found. Please sign in again.");
       }
 
@@ -91,7 +88,7 @@ function ProfileEditContent() {
         return;
       }
 
-      await updateProfile(token, changedFields);
+      await updateProfile(user.personId, changedFields);
       await refreshUser();
       router.push("/profile");
     } catch (err) {

@@ -308,15 +308,36 @@ export type EntityMembershipRow = {
   is_primary: boolean | null;
 };
 
+// identity.person — column names match actual DB (schema.org-aligned, lowercase
+// no-underscore for given/family, with `name` as display name).
 export type PersonRow = {
   id: string;
-  given_name: string | null;
-  family_name: string | null;
-  display_name: string | null;
-  username: string | null;
+  workos_user_id: string | null;
+  name: string | null;            // display name
+  givenname: string | null;
+  familyname: string | null;
+  alternatename: string | null;   // username/handle
   email: string | null;
   image: string | null;
   bio: string | null;
+  description: string | null;
+  address: PersonAddress | null;  // jsonb { addressLocality, addressCountry, … }
+  knowsabout: string[] | null;    // interests
+  role: string | null;            // user / moderator / admin / super_admin
+  onboarding_completed: boolean | null;
+  profile_completed: boolean | null;
+  email_verified: boolean | null;
+  last_login_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type PersonAddress = {
+  addressLocality?: string | null;
+  addressRegion?: string | null;
+  addressCountry?: string | null;
+  postalCode?: string | null;
+  streetAddress?: string | null;
 };
 
 export type OrganizationRow = {
