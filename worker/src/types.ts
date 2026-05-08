@@ -344,13 +344,15 @@ export interface Env {
   // key via `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
-  // Supabase nyuchi_pay_db — API-only. The worker never touches the pay DB
-  // directly; it calls the `payments-intents` Edge Function with the
-  // signed-in user's WorkOS access token forwarded as Authorization Bearer.
-  // The Edge Function validates the JWT against WorkOS's JWKS independently
-  // — no shared secret on the user-context path. Webhooks (Paynow) hit a
-  // separate function with HMAC verification.
-  SUPABASE_PAY_URL?: string;
+  // api.mukoko.com — public API gateway (FastAPI on fly.io). The worker is
+  // one consumer among many (third-party apps also hit it). It owns API-key
+  // management and brokers access to private back-end stores (pay-db,
+  // platform-db). Auth is dual: MUKOKO_API_KEY identifies the worker as a
+  // calling system; user-context calls also forward the signed-in user's
+  // WorkOS access token. MUKOKO_API_URL is a public var; MUKOKO_API_KEY is a
+  // wrangler secret.
+  MUKOKO_API_URL?: string;
+  MUKOKO_API_KEY?: string;
   // Cloudflare bindings
   AI: Ai;
   VECTORIZE: VectorizeIndex;

@@ -15,9 +15,10 @@ WORKOS_CLIENT_ID = "REPLACE_WITH_WORKOS_CLIENT_ID"
 # Supabase nyuchi_platform_db — REST root for identity / events / etc. reads.
 # Service-role key is a secret (set via `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`).
 SUPABASE_URL = "https://tdcpuzqyoodrdsxldgsh.supabase.co"
-# Supabase nyuchi_pay_db — API-only via the `payments-intents` Edge Function.
-# Auth is pure WorkOS access-token pass-through; no shared secret on this side.
-SUPABASE_PAY_URL = "https://naqcjejomizwthgdzomp.supabase.co"
+# api.mukoko.com — public API gateway (FastAPI on fly.io). Worker calls it
+# with X-Api-Key (machine identity) and optionally a forwarded WorkOS access
+# token for user-context calls. MUKOKO_API_KEY is a wrangler secret.
+MUKOKO_API_URL = "https://api.mukoko.com"
 
 # Development settings
 [dev]
@@ -125,7 +126,7 @@ simple = { limit = 100, period = 60 }  # 100 requests per minute
 # ============================================
 [env.production]
 name = "mukoko-nhimbe-api"
-vars = { ENVIRONMENT = "production", ALLOWED_ORIGINS = "https://nhimbe.com,https://www.nhimbe.com,https://mukoko.com,https://www.mukoko.com", WORKOS_CLIENT_ID = "REPLACE_WITH_WORKOS_CLIENT_ID", SUPABASE_URL = "https://tdcpuzqyoodrdsxldgsh.supabase.co", SUPABASE_PAY_URL = "https://naqcjejomizwthgdzomp.supabase.co" }
+vars = { ENVIRONMENT = "production", ALLOWED_ORIGINS = "https://nhimbe.com,https://www.nhimbe.com,https://mukoko.com,https://www.mukoko.com", WORKOS_CLIENT_ID = "REPLACE_WITH_WORKOS_CLIENT_ID", SUPABASE_URL = "https://tdcpuzqyoodrdsxldgsh.supabase.co", MUKOKO_API_URL = "https://api.mukoko.com" }
 routes = [
   { pattern = "events-api.mukoko.com", custom_domain = true }
 ]
@@ -190,7 +191,7 @@ simple = { limit = 100, period = 60 }
 # ============================================
 [env.staging]
 name = "mukoko-nhimbe-api-staging"
-vars = { ENVIRONMENT = "staging", ALLOWED_ORIGINS = "https://staging.nhimbe.com", WORKOS_CLIENT_ID = "REPLACE_WITH_WORKOS_CLIENT_ID", SUPABASE_URL = "https://tdcpuzqyoodrdsxldgsh.supabase.co", SUPABASE_PAY_URL = "https://naqcjejomizwthgdzomp.supabase.co" }
+vars = { ENVIRONMENT = "staging", ALLOWED_ORIGINS = "https://staging.nhimbe.com", WORKOS_CLIENT_ID = "REPLACE_WITH_WORKOS_CLIENT_ID", SUPABASE_URL = "https://tdcpuzqyoodrdsxldgsh.supabase.co", MUKOKO_API_URL = "https://api.mukoko.com" }
 
 [env.staging.ai]
 binding = "AI"

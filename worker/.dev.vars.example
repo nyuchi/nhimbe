@@ -17,10 +17,9 @@ WORKOS_CLIENT_ID=REPLACE_WITH_WORKOS_CLIENT_ID
 # In production: `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
 SUPABASE_SERVICE_ROLE_KEY=REPLACE_WITH_SERVICE_ROLE_KEY
 
-# Supabase nyuchi_pay_db — auth is pure WorkOS access-token pass-through, so
-# no shared secret is needed on the worker side. The pay-db Edge Functions
-# (`payments-intents`, `payments-webhooks-paynow`) validate the JWT
-# independently against WorkOS's JWKS. Set these on the pay-db project
-# (Supabase Dashboard → Settings → Edge Functions → Secrets):
-#   WORKOS_CLIENT_ID, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-# (no values needed here — the pay-db reads them at runtime).
+# api.mukoko.com — public API gateway (FastAPI on fly.io). The worker calls
+# it as a machine-context client with X-Api-Key, optionally forwarding the
+# signed-in user's WorkOS access token for user-context calls. Generate the
+# API key via api.mukoko.com's API-key management UI; set it as a wrangler
+# secret in production: `wrangler secret put MUKOKO_API_KEY`.
+MUKOKO_API_KEY=REPLACE_WITH_MUKOKO_API_KEY
