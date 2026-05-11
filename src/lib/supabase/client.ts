@@ -1,9 +1,11 @@
 /**
  * Browser Supabase client for the nyuchi_platform_db.
  *
- * The Stytch session is the source of truth — the worker mints a bridge
- * Supabase JWT which we set with `setSession()`. Schemas are accessed via
- * `supabase.schema('events' | 'circles' | 'identity' | 'places' | ...)`.
+ * The WorkOS session is the source of truth — the access token from
+ * `useAccessToken()` is forwarded as the Authorization header on every
+ * Supabase request, so RLS policies that read `auth.jwt()` see the same
+ * `sub` (= person_id) the worker sees. Schemas are accessed via
+ * `supabase.schema('events' | 'circles' | 'identity' | 'places' | …)`.
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -12,6 +14,15 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 let cached: SupabaseClient | null = null;
+
+// Module-level token holder. Updated by setSupabaseAccessToken() from the
+// auth-context provider so subsequent Supabase calls authenticate as the
+// signed-in person without re-creating the client.
+let accessToken: string | null = null;
+
+export function setSupabaseAccessToken(token: string | null): void {
+  accessToken = token;
+}
 
 export function getSupabaseBrowserClient(): SupabaseClient {
   if (cached) return cached;
@@ -22,13 +33,21 @@ export function getSupabaseBrowserClient(): SupabaseClient {
   }
   cached = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
-      persistSession: true,
-      autoRefreshToken: true,
+      persistSession: false,
+      autoRefreshToken: false,
       detectSessionInUrl: false,
       storageKey: "nhimbe.supabase.auth",
     },
     global: {
       headers: { "x-client-info": "nhimbe-web" },
+      fetch: (input, init) => {
+        const headers = new Headers(init?.headers);
+        if (accessToken) {
+          headers.set("Authorization", `Bearer ${accessToken}`);
+          headers.set("apikey", SUPABASE_ANON_KEY);
+        }
+        return fetch(input, { ...init, headers });
+      },
     },
   });
   return cached;
