@@ -1,5 +1,5 @@
 import type { Env } from "../types";
-import { generateId } from "./ids";
+import { supabaseFetch } from "../db/supabase";
 
 export type AuditAction =
   | "event.created"
@@ -17,6 +17,10 @@ export type AuditAction =
   | "registration.status_changed"
   | "admin.index_events";
 
+/**
+ * Append an audit entry to system.activity_logs on platform-db.
+ * Failures are swallowed — audit must never break the calling flow.
+ */
 export async function logAudit(
   env: Env,
   params: {
@@ -26,23 +30,23 @@ export async function logAudit(
     resourceId: string;
     details?: Record<string, unknown>;
     ipAddress?: string;
-  }
+  },
 ): Promise<void> {
   try {
-    await env.DB.prepare(`
-      INSERT INTO audit_logs (id, actor_id, action, resource_type, resource_id, details, ip_address)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      generateId(),
-      params.actorId || null,
-      params.action,
-      params.resourceType,
-      params.resourceId,
-      params.details ? JSON.stringify(params.details) : null,
-      params.ipAddress || null
-    ).run();
+    await supabaseFetch(env, {
+      schema: "system",
+      path: "activity_logs",
+      method: "POST",
+      body: {
+        user_id: params.actorId ?? null,
+        action: params.action,
+        entity_type: params.resourceType,
+        entity_id: params.resourceId,
+        metadata: params.details ?? null,
+        ip_address: params.ipAddress ?? null,
+      },
+    });
   } catch (error) {
-    // Audit logging should never break the main flow
     console.error("[mukoko:audit] Failed to log audit event:", error);
   }
 }

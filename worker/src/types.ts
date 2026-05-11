@@ -353,10 +353,9 @@ export interface Env {
   // wrangler secret.
   MUKOKO_API_URL?: string;
   MUKOKO_API_KEY?: string;
-  // Cloudflare bindings
+  // Cloudflare bindings (D1 removed — Supabase platform-db is the system of record).
   AI: Ai;
   VECTORIZE: VectorizeIndex;
-  DB: D1Database; // Edge processing — fast reads, caching
   CACHE: KVNamespace;
   MEDIA: R2Bucket;
   IMAGES: ImagesBinding;

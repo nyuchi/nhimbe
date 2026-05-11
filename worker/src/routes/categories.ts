@@ -1,10 +1,12 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
+import { supabaseFetch } from "../db/supabase";
 
 export const categories = new Hono<{ Bindings: Env }>();
 
-// Hardcoded fallback ensures the events form is usable even if the
-// categories table is missing/migrating or the query fails.
+// Hardcoded fallback ensures the events form is usable if the categories
+// query fails (auth / connectivity). engagement.interest_category is the
+// real source of truth on platform-db.
 const FALLBACK_CATEGORIES = [
   { id: "tech", name: "Technology", group: "Technology & Innovation", sort_order: 0 },
   { id: "ai-ml", name: "AI & Machine Learning", group: "Technology & Innovation", sort_order: 1 },
@@ -20,37 +22,75 @@ const FALLBACK_CATEGORIES = [
   { id: "comedy", name: "Comedy", group: "Creative Arts", sort_order: 30 },
 ];
 
-// GET /api/categories — DB with hardcoded fallback when the query fails
-// (missing table, schema drift, etc.) so event creation never breaks.
+interface InterestCategoryRow {
+  id: string;
+  name: string;
+  group_name: string | null;
+  sort_order: number | null;
+}
+
+// GET /api/categories — engagement.interest_category with hardcoded fallback.
 categories.get("/categories", async (c) => {
   try {
-    const dbResult = await c.env.DB.prepare(
-      "SELECT id, name, group_name as 'group', sort_order FROM categories ORDER BY sort_order, name"
-    ).all();
-    return c.json({ categories: dbResult.results || [] });
+    const rows = await supabaseFetch<InterestCategoryRow[]>(c.env, {
+      schema: "engagement",
+      path: "interest_category",
+      query: "select=id,name,group_name,sort_order&is_active=eq.true&order=sort_order.asc,name.asc",
+    });
+    return c.json({
+      categories: (rows ?? []).map((r) => ({
+        id: r.id,
+        name: r.name,
+        group: r.group_name,
+        sort_order: r.sort_order ?? 0,
+      })),
+    });
   } catch (err) {
     console.error(JSON.stringify({
       level: "error",
       module: "categories",
-      message: "Failed to load categories from DB, returning fallback",
+      message: "Failed to load categories from Supabase, returning fallback",
       error: err instanceof Error ? err.message : String(err),
     }));
     return c.json({ categories: FALLBACK_CATEGORIES });
   }
 });
 
-// GET /api/cities — derived from actual event data in DB (empty array on failure)
+interface PlacesGeoRow {
+  name: string;
+  country_id: string;
+}
+interface CountryRow {
+  id: string;
+  name: string;
+}
+
+// GET /api/cities — places.places_geo joined to countries for the country label.
 categories.get("/cities", async (c) => {
   try {
-    const dbResult = await c.env.DB.prepare(
-      "SELECT DISTINCT location_locality as addressLocality, location_country as addressCountry FROM events WHERE location_locality IS NOT NULL AND is_published = TRUE ORDER BY location_country, location_locality"
-    ).all();
-    return c.json({ cities: dbResult.results || [] });
+    const [places, countries] = await Promise.all([
+      supabaseFetch<PlacesGeoRow[]>(c.env, {
+        schema: "places",
+        path: "places_geo",
+        query: "select=name,country_id&order=country_id.asc,name.asc",
+      }),
+      supabaseFetch<CountryRow[]>(c.env, {
+        schema: "places",
+        path: "countries",
+        query: "select=id,name",
+      }),
+    ]);
+    const countryById = new Map((countries ?? []).map((c) => [c.id, c.name]));
+    const cities = (places ?? []).map((p) => ({
+      addressLocality: p.name,
+      addressCountry: countryById.get(p.country_id) ?? null,
+    }));
+    return c.json({ cities });
   } catch (err) {
     console.error(JSON.stringify({
       level: "error",
       module: "cities",
-      message: "Failed to load cities from DB",
+      message: "Failed to load cities from Supabase",
       error: err instanceof Error ? err.message : String(err),
     }));
     return c.json({ cities: [] });

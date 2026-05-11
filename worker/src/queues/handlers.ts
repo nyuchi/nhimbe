@@ -1,6 +1,7 @@
 import type { Env, AnalyticsQueueMessage, EmailQueueMessage } from "../types";
 import { sendEmail } from "../email/resend";
 import * as templates from "../email/templates";
+import { supabaseFetch } from "../db/supabase";
 
 export async function processAnalyticsMessage(message: AnalyticsQueueMessage, env: Env): Promise<void> {
   console.log(`[mukoko:queue] Processing analytics: ${message.type} for event ${message.eventId}`);
@@ -14,16 +15,35 @@ export async function processAnalyticsMessage(message: AnalyticsQueueMessage, en
   }
 
   switch (message.type) {
-    case "view":
-      await env.DB.prepare(
-        `UPDATE events SET view_count = COALESCE(view_count, 0) + 1 WHERE id = ?`
-      ).bind(message.eventId).run();
+    case "view": {
+      // Increment events.event.view_count. Read-then-write — acceptable race
+      // for analytics counters; precision is best-effort.
+      try {
+        const event = await supabaseFetch<{ view_count: number | null }>(env, {
+          schema: "events",
+          path: "event",
+          query: `id=eq.${encodeURIComponent(message.eventId)}&select=view_count`,
+          single: true,
+        });
+        if (event) {
+          await supabaseFetch(env, {
+            schema: "events",
+            path: "event",
+            query: `id=eq.${encodeURIComponent(message.eventId)}`,
+            method: "PATCH",
+            body: { view_count: (event.view_count ?? 0) + 1 },
+          });
+        }
+      } catch (err) {
+        console.error("[mukoko:queue] Failed to bump view_count:", err);
+      }
       break;
+    }
     case "rsvp":
-      break;
     case "referral":
-      break;
     case "review":
+      // Counters for these flows are bumped at write-time inside their route
+      // handlers; nothing additional to do on the analytics bus yet.
       break;
   }
 }
@@ -51,7 +71,6 @@ export async function processEmailMessage(message: EmailQueueMessage, env: Env):
         eventUrl: `${SITE_URL}/events/${data.eventId}`,
       });
       break;
-
     case "event_reminder":
       template = templates.eventReminder({
         userName: (data.userName as string) || "there",
@@ -61,7 +80,6 @@ export async function processEmailMessage(message: EmailQueueMessage, env: Env):
         eventUrl: `${SITE_URL}/events/${data.eventId}`,
       });
       break;
-
     case "event_cancelled":
       template = templates.eventCancelled({
         userName: (data.userName as string) || "there",
@@ -69,7 +87,6 @@ export async function processEmailMessage(message: EmailQueueMessage, env: Env):
         eventDate: (data.eventDate as string) || "",
       });
       break;
-
     case "host_new_registration":
       template = templates.hostNewRegistration({
         hostName: (data.hostName as string) || "Host",
@@ -79,7 +96,6 @@ export async function processEmailMessage(message: EmailQueueMessage, env: Env):
         eventUrl: `${SITE_URL}/events/${data.eventId}`,
       });
       break;
-
     case "registration_cancelled":
       template = templates.registrationCancelled({
         userName: (data.userName as string) || "there",
@@ -87,7 +103,6 @@ export async function processEmailMessage(message: EmailQueueMessage, env: Env):
         eventDate: (data.eventDate as string) || "",
       });
       break;
-
     default:
       console.warn(`[mukoko:queue] Unknown email type: ${message.type}`);
       return;

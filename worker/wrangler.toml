@@ -50,12 +50,6 @@ binding = "AI"
 binding = "VECTORIZE"
 index_name = "mukoko-nhimbe-events"
 
-# D1 Database
-[[d1_databases]]
-binding = "DB"
-database_name = "mukoko-nhimbe-db"
-database_id = "039aa68b-2f13-4c16-9c39-f6ed85283174"
-
 # KV Namespace for caching
 [[kv_namespaces]]
 binding = "CACHE"
@@ -101,14 +95,6 @@ max_batch_size = 10
 max_batch_timeout = 60
 
 # ============================================
-# HYPERDRIVE - Database connection pooling
-# For faster D1 connections (optional)
-# ============================================
-# [[hyperdrive]]
-# binding = "HYPERDRIVE"
-# id = "your-hyperdrive-id"
-
-# ============================================
 # RATE LIMITING
 # Protect API from abuse
 # ============================================
@@ -137,11 +123,6 @@ binding = "AI"
 [[env.production.vectorize]]
 binding = "VECTORIZE"
 index_name = "mukoko-nhimbe-events"
-
-[[env.production.d1_databases]]
-binding = "DB"
-database_name = "mukoko-nhimbe-db"
-database_id = "039aa68b-2f13-4c16-9c39-f6ed85283174"
 
 [[env.production.kv_namespaces]]
 binding = "CACHE"
@@ -199,11 +180,6 @@ binding = "AI"
 [[env.staging.vectorize]]
 binding = "VECTORIZE"
 index_name = "mukoko-nhimbe-events"
-
-[[env.staging.d1_databases]]
-binding = "DB"
-database_name = "mukoko-nhimbe-db"
-database_id = "039aa68b-2f13-4c16-9c39-f6ed85283174"
 
 [[env.staging.kv_namespaces]]
 binding = "CACHE"

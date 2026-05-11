@@ -1,201 +1,173 @@
 import { Hono } from "hono";
 import type { Env, Event } from "../types";
 import { safeParseInt, slugify, getInitials } from "../utils/validation";
-import { generateId, generateShortCode } from "../utils/ids";
-import { dbRowToEvent } from "../utils/db";
 import { writeAuth } from "../middleware/auth";
 import { getAuthenticatedUser } from "../auth/workos";
 import { indexEvent, removeEventFromIndex } from "../ai/embeddings";
 import { toCsv } from "../utils/export";
 import { logAudit } from "../utils/audit";
+import { supabaseFetch } from "../db/supabase";
+import { fetchEventsByIds, mapSupabaseEventToApi, EVENT_COLUMNS, type SupabaseEventRow } from "../db/event_mapper";
 
 export const events = new Hono<{ Bindings: Env }>();
-
-// Write operations require API key or allowed origin
 events.use("*", writeAuth);
 
-// GET /api/events
+// GET /api/events?city=&category=&limit=&offset=
 events.get("/", async (c) => {
   const city = c.req.query("city");
   const category = c.req.query("category");
   const limit = safeParseInt(c.req.query("limit") || null, 20, 1, 100);
   const offset = safeParseInt(c.req.query("offset") || null, 0, 0, 10000);
 
-  let whereClause = "WHERE is_published = TRUE AND event_status = 'EventScheduled'";
-  const params: unknown[] = [];
-  const countParams: unknown[] = [];
+  const filters = [
+    "visibility=eq.public",
+    "eventstatus=eq.EventScheduled",
+  ];
+  if (city) filters.push(`location->>addresslocality=eq.${encodeURIComponent(city)}`);
+  if (category) filters.push(`category=eq.${encodeURIComponent(category)}`);
 
-  if (city) {
-    whereClause += " AND location_locality = ?";
-    params.push(city);
-    countParams.push(city);
-  }
-  if (category) {
-    whereClause += " AND category = ?";
-    params.push(category);
-    countParams.push(category);
-  }
+  const rows = await supabaseFetch<SupabaseEventRow[]>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `${filters.join("&")}&select=${EVENT_COLUMNS}&order=startdate.asc&limit=${limit}&offset=${offset}`,
+  }) ?? [];
 
-  // Get total count for accurate pagination
-  const countResult = await c.env.DB.prepare(
-    `SELECT COUNT(*) as total FROM events ${whereClause}`
-  ).bind(...countParams).first() as { total: number } | null;
-  const total = countResult?.total || 0;
-
-  const query = `SELECT * FROM events ${whereClause} ORDER BY start_date ASC LIMIT ? OFFSET ?`;
-  params.push(limit, offset);
-
-  const result = await c.env.DB.prepare(query).bind(...params).all();
-  const eventsList = result.results.map((row) => dbRowToEvent(row as Record<string, unknown>));
-
+  // No exact-count helper without a SQL function; we return rows.length for
+  // the page and let the frontend infer "more" by checking whether the page
+  // is full. This is good-enough until usage demands precise pagination.
   return c.json({
-    events: eventsList,
-    pagination: { limit, offset, total },
+    events: rows.map(mapSupabaseEventToApi),
+    pagination: { limit, offset, total: rows.length },
   });
 });
 
-// GET /api/events/trending (MUST be before /:id)
+// GET /api/events/trending — must precede /:id
 events.get("/trending", async (c) => {
   const city = c.req.query("city");
   const limit = safeParseInt(c.req.query("limit") || null, 10, 1, 50);
 
-  let query = `
-    SELECT e.*,
-      (SELECT COUNT(*) FROM event_views WHERE event_id = e._id) as views,
-      (SELECT COUNT(*) FROM event_views WHERE event_id = e._id AND viewed_at >= datetime('now', '-7 days')) as recent_views
-    FROM events e
-    WHERE e.is_published = TRUE AND e.event_status = 'EventScheduled'
-    AND e.start_date >= datetime('now')
-  `;
-  const params: (string | number)[] = [];
+  const filters = [
+    "visibility=eq.public",
+    "eventstatus=eq.EventScheduled",
+    `startdate=gte.${encodeURIComponent(new Date().toISOString())}`,
+  ];
+  if (city) filters.push(`location->>addresslocality=eq.${encodeURIComponent(city)}`);
 
-  if (city) {
-    query += " AND e.location_locality = ?";
-    params.push(city);
-  }
+  const rows = await supabaseFetch<(SupabaseEventRow & { view_count: number | null })[]>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `${filters.join("&")}&select=${EVENT_COLUMNS},view_count&order=view_count.desc.nullslast&limit=${limit}`,
+  }) ?? [];
 
-  query += " ORDER BY recent_views DESC, views DESC LIMIT ?";
-  params.push(limit);
-
-  const result = await c.env.DB.prepare(query).bind(...params).all();
-
-  interface EventRow extends Record<string, unknown> {
-    views: number;
-    recent_views: number;
-  }
-
-  const eventsList = (result.results as EventRow[]).map((row) => {
-    const event = dbRowToEvent(row);
+  const eventsList = rows.map((row) => {
+    const event = mapSupabaseEventToApi(row);
+    const views = row.view_count ?? 0;
     return {
       ...event,
-      views: row.views,
-      trend: row.views > 10 ? Math.round((row.recent_views / row.views) * 100) : 0,
-      isHot: row.recent_views > 20,
+      views,
+      trend: views > 10 ? 100 : 0,
+      isHot: views > 50,
     };
   });
 
   return c.json({ events: eventsList });
 });
 
-// GET /api/events/:id
+// GET /api/events/:id — accepts uuid or slug.
 events.get("/:id", async (c) => {
-  const eventId = c.req.param("id");
+  const id = c.req.param("id");
 
-  const result = await c.env.DB.prepare(
-    "SELECT * FROM events WHERE _id = ? OR slug = ? OR short_code = ?"
-  )
-    .bind(eventId, eventId, eventId)
-    .first();
+  // Try uuid first.
+  let row = await supabaseFetch<SupabaseEventRow>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(id)}&select=${EVENT_COLUMNS}`,
+    single: true,
+  });
 
-  if (!result) {
+  if (!row) {
+    row = await supabaseFetch<SupabaseEventRow>(c.env, {
+      schema: "events",
+      path: "event",
+      query: `slug=eq.${encodeURIComponent(id)}&select=${EVENT_COLUMNS}`,
+      single: true,
+    });
+  }
+
+  if (!row) {
     return c.json({ error: "Event not found" }, 404);
   }
 
-  return c.json({ event: dbRowToEvent(result as Record<string, unknown>) });
+  return c.json({ event: mapSupabaseEventToApi(row) });
 });
 
-// POST /api/events
+// POST /api/events — Create an event on Supabase events.event.
 events.post("/", async (c) => {
-  const body = await c.req.json() as Partial<Event>;
+  const body = await c.req.json() as Partial<Event> & { organizerPersonId?: string };
 
-  const id = body.id || generateId();
-  const shortCode = body.shortCode || generateShortCode();
   const slug = body.slug || slugify(body.name || "");
+  const organizerPersonId = body.organizerPersonId || body.organizer?.identifier;
+  if (!organizerPersonId) {
+    return c.json({ error: "organizerPersonId or organizer.identifier required" }, 400);
+  }
 
-  await c.env.DB.prepare(`
-    INSERT INTO events (
-      _id, short_code, slug, name, description,
-      start_date, end_date,
-      date_display_day, date_display_month, date_display_full, date_display_time,
-      location_name, location_street_address, location_locality, location_country, location_url,
-      category, keywords, image, cover_gradient,
-      attendee_count, maximum_attendee_capacity,
-      event_attendance_mode, event_status,
-      meeting_url, meeting_platform,
-      organizer_name, organizer_alternate_name, organizer_initials, organizer_identifier, organizer_event_count,
-      offer_price, offer_price_currency, offer_url, offer_availability
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    id,
-    shortCode,
+  const insertBody: Record<string, unknown> = {
+    name: body.name,
+    description: body.description ?? null,
+    eventtype: "Event",
+    eventstatus: body.eventStatus || "EventScheduled",
+    eventattendancemode: body.eventAttendanceMode || "OfflineEventAttendanceMode",
+    startdate: body.startDate,
+    enddate: body.endDate ?? null,
+    timezone: "UTC",
+    visibility: body.isPublished === false ? "private" : "public",
+    calendar_type: "events",
+    owner_type: "person",
+    owner_id: organizerPersonId,
+    organizer_person_id: organizerPersonId,
+    organizer: {
+      name: body.organizer?.name,
+      alternatename: body.organizer?.alternateName,
+      initials: body.organizer?.initials || getInitials(body.organizer?.name || ""),
+      eventcount: body.organizer?.eventCount ?? 0,
+    },
+    location: {
+      "@type": body.location?.type ?? "Place",
+      name: body.location?.name,
+      streetaddress: body.location?.streetAddress,
+      addresslocality: body.location?.addressLocality,
+      addresscountry: body.location?.addressCountry,
+      url: body.location?.url,
+    },
+    offers: body.offers
+      ? {
+          price: body.offers.price,
+          pricecurrency: body.offers.priceCurrency,
+          url: body.offers.url,
+          availability: body.offers.availability || (body.offers.price ? "InStock" : "Free"),
+        }
+      : null,
+    category: body.category ?? null,
+    keywords: body.keywords ?? [],
+    image: body.image ? [body.image] : null,
+    attendee_count: body.attendeeCount ?? 0,
+    maximumattendeecapacity: body.maximumAttendeeCapacity ?? null,
     slug,
-    body.name,
-    body.description,
-    body.startDate,
-    body.endDate || null,
-    body.date?.day,
-    body.date?.month,
-    body.date?.full,
-    body.date?.time,
-    body.location?.name,
-    body.location?.streetAddress || null,
-    body.location?.addressLocality,
-    body.location?.addressCountry,
-    body.location?.url || null,
-    body.category,
-    JSON.stringify(body.keywords || []),
-    body.image || null,
-    body.coverGradient || null,
-    body.attendeeCount || 0,
-    body.maximumAttendeeCapacity || null,
-    body.eventAttendanceMode || "OfflineEventAttendanceMode",
-    body.eventStatus || "EventScheduled",
-    body.meetingUrl || null,
-    body.meetingPlatform || null,
-    body.organizer?.name,
-    body.organizer?.alternateName || null,
-    body.organizer?.initials || getInitials(body.organizer?.name || ""),
-    body.organizer?.identifier || null,
-    body.organizer?.eventCount || 0,
-    body.offers?.price || null,
-    body.offers?.priceCurrency || null,
-    body.offers?.url || null,
-    body.offers?.availability || (body.offers?.price ? "InStock" : "Free"),
-  ).run();
-
-  const event: Event = {
-    id,
-    shortCode,
-    slug,
-    name: body.name || "",
-    description: body.description || "",
-    startDate: body.startDate || "",
-    endDate: body.endDate,
-    date: body.date!,
-    location: body.location!,
-    category: body.category || "",
-    keywords: body.keywords || [],
-    image: body.image,
-    coverGradient: body.coverGradient,
-    attendeeCount: body.attendeeCount || 0,
-    maximumAttendeeCapacity: body.maximumAttendeeCapacity,
-    eventAttendanceMode: body.eventAttendanceMode || "OfflineEventAttendanceMode",
-    eventStatus: body.eventStatus || "EventScheduled",
-    meetingUrl: body.meetingUrl,
-    meetingPlatform: body.meetingPlatform,
-    organizer: body.organizer!,
-    offers: body.offers,
+    sync_version: 1,
   };
+
+  const inserted = await supabaseFetch<SupabaseEventRow[]>(c.env, {
+    schema: "events",
+    path: "event",
+    method: "POST",
+    body: insertBody,
+  });
+
+  const newRow = inserted?.[0];
+  if (!newRow) {
+    return c.json({ error: "Failed to create event" }, 500);
+  }
+  const event = mapSupabaseEventToApi(newRow);
 
   await indexEvent(c.env.AI, c.env.VECTORIZE, event);
 
@@ -207,52 +179,51 @@ events.put("/:id", async (c) => {
   const eventId = c.req.param("id");
   const body = await c.req.json() as Partial<Event>;
 
-  const updates: string[] = [];
-  const params: unknown[] = [];
+  const patch: Record<string, unknown> = {};
+  if (body.name) patch.name = body.name;
+  if (body.description) patch.description = body.description;
+  if (body.category) patch.category = body.category;
+  if (body.keywords) patch.keywords = body.keywords;
+  if (body.eventStatus) patch.eventstatus = body.eventStatus;
 
-  if (body.name) { updates.push("name = ?"); params.push(body.name); }
-  if (body.description) { updates.push("description = ?"); params.push(body.description); }
-  if (body.category) { updates.push("category = ?"); params.push(body.category); }
-  if (body.keywords) { updates.push("keywords = ?"); params.push(JSON.stringify(body.keywords)); }
-  if (body.eventStatus) { updates.push("event_status = ?"); params.push(body.eventStatus); }
+  const updated = await supabaseFetch<SupabaseEventRow[]>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(eventId)}&select=${EVENT_COLUMNS}`,
+    method: "PATCH",
+    body: patch,
+  });
 
-  updates.push("date_modified = datetime('now')");
-  params.push(eventId);
-
-  await c.env.DB.prepare(
-    `UPDATE events SET ${updates.join(", ")} WHERE _id = ?`
-  ).bind(...params).run();
-
-  const result = await c.env.DB.prepare("SELECT * FROM events WHERE _id = ?")
-    .bind(eventId)
-    .first();
-
-  if (result) {
-    await indexEvent(c.env.AI, c.env.VECTORIZE, dbRowToEvent(result as Record<string, unknown>));
+  if (updated && updated[0]) {
+    await indexEvent(c.env.AI, c.env.VECTORIZE, mapSupabaseEventToApi(updated[0]));
   }
 
   return c.json({ message: "Event updated successfully" });
 });
 
-// POST /api/events/:id/cancel — Cancel an event (does NOT delete)
+// POST /api/events/:id/cancel
 events.post("/:id/cancel", async (c) => {
   const eventId = c.req.param("id");
 
-  const existing = await c.env.DB.prepare(
-    "SELECT _id, event_status FROM events WHERE _id = ?"
-  ).bind(eventId).first() as { _id: string; event_status: string } | null;
+  const existing = await supabaseFetch<{ id: string; eventstatus: string }>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(eventId)}&select=id,eventstatus`,
+    single: true,
+  });
 
-  if (!existing) {
-    return c.json({ error: "Event not found" }, 404);
-  }
-
-  if (existing.event_status === "EventCancelled") {
+  if (!existing) return c.json({ error: "Event not found" }, 404);
+  if (existing.eventstatus === "EventCancelled") {
     return c.json({ error: "Event is already cancelled" }, 400);
   }
 
-  await c.env.DB.prepare(
-    "UPDATE events SET event_status = 'EventCancelled', date_modified = datetime('now') WHERE _id = ?"
-  ).bind(eventId).run();
+  await supabaseFetch(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(eventId)}`,
+    method: "PATCH",
+    body: { eventstatus: "EventCancelled" },
+  });
 
   await logAudit(c.env, { action: "event.cancelled", resourceType: "event", resourceId: eventId });
 
@@ -263,23 +234,37 @@ events.post("/:id/cancel", async (c) => {
 events.delete("/:id", async (c) => {
   const eventId = c.req.param("id");
 
-  await c.env.DB.prepare("DELETE FROM events WHERE _id = ?").bind(eventId).run();
+  await supabaseFetch(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(eventId)}`,
+    method: "DELETE",
+  });
   await removeEventFromIndex(c.env.VECTORIZE, eventId);
   await logAudit(c.env, { action: "event.deleted", resourceType: "event", resourceId: eventId });
 
   return c.json({ message: "Event deleted successfully" });
 });
 
-// POST /api/events/:id/view
+// POST /api/events/:id/view — bump view_count on the row.
 events.post("/:id/view", async (c) => {
   const eventId = c.req.param("id");
   try {
-    const body = await c.req.json() as { user_id?: string; source?: string };
-
-    await c.env.DB.prepare(
-      "INSERT INTO event_views (event_id, user_id, source) VALUES (?, ?, ?)"
-    ).bind(eventId, body.user_id || null, body.source || "web").run();
-
+    const event = await supabaseFetch<{ view_count: number | null }>(c.env, {
+      schema: "events",
+      path: "event",
+      query: `id=eq.${encodeURIComponent(eventId)}&select=view_count`,
+      single: true,
+    });
+    if (event) {
+      await supabaseFetch(c.env, {
+        schema: "events",
+        path: "event",
+        query: `id=eq.${encodeURIComponent(eventId)}`,
+        method: "PATCH",
+        body: { view_count: (event.view_count ?? 0) + 1 },
+      });
+    }
     return c.json({ message: "View tracked" });
   } catch (error) {
     console.error("Failed to track view:", error);
@@ -287,83 +272,64 @@ events.post("/:id/view", async (c) => {
   }
 });
 
-// GET /api/events/:id/reviews
+// GET /api/events/:id/reviews — list + aggregate stats.
 events.get("/:id/reviews", async (c) => {
   const eventId = c.req.param("id");
 
   interface ReviewRow {
     id: string;
-    event_id: string;
-    user_id: string;
-    rating: number;
-    review_body: string | null;
-    helpful_count: number;
-    is_verified_attendee: number;
-    date_created: string;
-    user_name: string | null;
+    author: string;
+    rating_value: number;
+    review_body: string;
+    helpful_count: number | null;
+    created_at: string | null;
   }
 
-  const reviewsResult = await c.env.DB.prepare(`
-    SELECT r.*, u.name as user_name
-    FROM event_reviews r
-    LEFT JOIN users u ON r.user_id = u._id
-    WHERE r.event_id = ?
-    ORDER BY r.helpful_count DESC, r.date_created DESC
-    LIMIT 50
-  `).bind(eventId).all();
+  const rowsRaw = await supabaseFetch<ReviewRow[]>(c.env, {
+    schema: "engagement",
+    path: "review",
+    query: `item_reviewed_id=eq.${encodeURIComponent(eventId)}&item_reviewed_type=eq.events.event&select=id,author,rating_value,review_body,helpful_count,created_at&order=helpful_count.desc.nullslast,created_at.desc&limit=50`,
+  }) ?? [];
 
-  const reviews = (reviewsResult.results as ReviewRow[]).map((row) => ({
+  // Author names via batched person lookup.
+  const authorIds = Array.from(new Set(rowsRaw.map((r) => r.author)));
+  interface PersonNameRow { id: string; name: string }
+  const persons = authorIds.length
+    ? (await supabaseFetch<PersonNameRow[]>(c.env, {
+        schema: "identity",
+        path: "person",
+        query: `id=in.(${authorIds.map(encodeURIComponent).join(",")})&select=id,name`,
+      })) ?? []
+    : [];
+  const personById = new Map(persons.map((p) => [p.id, p.name]));
+
+  const reviews = rowsRaw.map((row) => ({
     id: row.id,
-    eventId: row.event_id,
-    userId: row.user_id,
-    userName: row.user_name || "Anonymous",
-    userInitials: getInitials(row.user_name || "Anonymous"),
-    rating: row.rating,
+    eventId,
+    userId: row.author,
+    userName: personById.get(row.author) || "Anonymous",
+    userInitials: getInitials(personById.get(row.author) || "Anonymous"),
+    rating: row.rating_value,
     reviewBody: row.review_body || undefined,
-    helpfulCount: row.helpful_count,
-    isVerifiedAttendee: !!row.is_verified_attendee,
-    dateCreated: row.date_created,
+    helpfulCount: row.helpful_count ?? 0,
+    isVerifiedAttendee: false,
+    dateCreated: row.created_at,
   }));
 
-  interface StatsRow {
-    avg_rating: number;
-    total_reviews: number;
-    rating_1: number;
-    rating_2: number;
-    rating_3: number;
-    rating_4: number;
-    rating_5: number;
-  }
+  const totalReviews = reviews.length;
+  const averageRating = totalReviews
+    ? reviews.reduce((s, r) => s + r.rating, 0) / totalReviews
+    : 0;
+  const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const r of reviews) distribution[r.rating] = (distribution[r.rating] || 0) + 1;
 
-  const statsResult = await c.env.DB.prepare(`
-    SELECT
-      AVG(rating) as avg_rating,
-      COUNT(*) as total_reviews,
-      SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as rating_1,
-      SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as rating_2,
-      SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as rating_3,
-      SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as rating_4,
-      SUM(CASE WHEN rating = 5 THEN 1 ELSE 0 END) as rating_5
-    FROM event_reviews
-    WHERE event_id = ?
-  `).bind(eventId).first() as StatsRow | null;
-
-  const stats = {
-    averageRating: statsResult?.avg_rating || 0,
-    totalReviews: statsResult?.total_reviews || 0,
-    distribution: {
-      1: statsResult?.rating_1 || 0,
-      2: statsResult?.rating_2 || 0,
-      3: statsResult?.rating_3 || 0,
-      4: statsResult?.rating_4 || 0,
-      5: statsResult?.rating_5 || 0,
-    },
-  };
-
-  return c.json({ reviews, stats });
+  return c.json({
+    reviews,
+    stats: { averageRating, totalReviews, distribution },
+  });
 });
 
-// POST /api/events/:id/reviews
+// POST /api/events/:id/reviews — Create a review row.
 events.post("/:id/reviews", async (c) => {
   const eventId = c.req.param("id");
   const body = await c.req.json() as {
@@ -376,24 +342,22 @@ events.post("/:id/reviews", async (c) => {
     return c.json({ error: "userId and rating (1-5) required" }, 400);
   }
 
-  const registration = await c.env.DB.prepare(
-    "SELECT id FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('registered', 'approved', 'checked_in')"
-  ).bind(eventId, body.userId).first();
-
-  const id = generateId();
-
   try {
-    await c.env.DB.prepare(`
-      INSERT INTO event_reviews (id, event_id, user_id, rating, review_body, is_verified_attendee)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(
-      id,
-      eventId,
-      body.userId,
-      body.rating,
-      body.reviewBody || null,
-      registration ? 1 : 0
-    ).run();
+    const inserted = await supabaseFetch<{ id: string }[]>(c.env, {
+      schema: "engagement",
+      path: "review",
+      method: "POST",
+      body: {
+        schema_type: "Review",
+        author: body.userId,
+        item_reviewed_type: "events.event",
+        item_reviewed_id: eventId,
+        item_reviewed_schema: "events",
+        review_rating: { ratingValue: body.rating, bestRating: 5, worstRating: 1 },
+        rating_value: body.rating,
+        review_body: body.reviewBody || "",
+      },
+    });
 
     if (c.env.ANALYTICS_QUEUE) {
       await c.env.ANALYTICS_QUEUE.send({
@@ -405,54 +369,56 @@ events.post("/:id/reviews", async (c) => {
       });
     }
 
-    return c.json({ id, message: "Review submitted successfully" }, 201);
+    return c.json({ id: inserted?.[0]?.id, message: "Review submitted successfully" }, 201);
   } catch {
     return c.json({ error: "You have already reviewed this event" }, 409);
   }
 });
 
-// GET /api/events/:id/stats
+// GET /api/events/:id/stats — Per-event analytics.
 events.get("/:id/stats", async (c) => {
   const eventId = c.req.param("id");
 
-  interface StatsRow {
-    views: number;
-    unique_views: number;
-    rsvps: number;
-    checkins: number;
-    referrals: number;
-    views_7_days_ago: number;
-  }
+  const [event, rsvps, checkins, refs] = await Promise.all([
+    supabaseFetch<{ view_count: number | null }>(c.env, {
+      schema: "events",
+      path: "event",
+      query: `id=eq.${encodeURIComponent(eventId)}&select=view_count`,
+      single: true,
+    }),
+    supabaseFetch<{ id: string }[]>(c.env, {
+      schema: "events",
+      path: "rsvp_action",
+      query: `event_id=eq.${encodeURIComponent(eventId)}&rsvpresponse=neq.rsvpNo&select=id`,
+    }),
+    supabaseFetch<{ id: string }[]>(c.env, {
+      schema: "events",
+      path: "check_in",
+      query: `event_id=eq.${encodeURIComponent(eventId)}&select=id`,
+    }),
+    supabaseFetch<{ id: string }[]>(c.env, {
+      schema: "engagement",
+      path: "referral",
+      query: `target_entity_id=eq.${encodeURIComponent(eventId)}&status=eq.converted&select=id`,
+    }),
+  ]);
 
-  const stats = await c.env.DB.prepare(`
-    SELECT
-      (SELECT COUNT(*) FROM event_views WHERE event_id = ?) as views,
-      (SELECT COUNT(DISTINCT COALESCE(user_id, source)) FROM event_views WHERE event_id = ?) as unique_views,
-      (SELECT COUNT(*) FROM registrations WHERE event_id = ? AND status != 'cancelled') as rsvps,
-      (SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL) as checkins,
-      (SELECT COUNT(*) FROM referrals WHERE event_id = ? AND status = 'converted') as referrals,
-      (SELECT COUNT(*) FROM event_views WHERE event_id = ? AND viewed_at < datetime('now', '-7 days')) as views_7_days_ago
-  `).bind(eventId, eventId, eventId, eventId, eventId, eventId).first() as StatsRow | null;
-
-  const currentViews = stats?.views || 0;
-  const lastWeekViews = stats?.views_7_days_ago || 0;
-  const recentViews = currentViews - lastWeekViews;
-  const trend = lastWeekViews > 0 ? Math.round(((recentViews - lastWeekViews) / lastWeekViews) * 100) : 0;
-  const isHot = trend > 50 || (currentViews > 100 && trend > 20);
+  const views = event?.view_count ?? 0;
+  const recentViews = 0; // view-windowed stats moved to service_bus.events (TBD).
 
   return c.json({
     eventId,
-    views: currentViews,
-    uniqueViews: stats?.unique_views || 0,
-    rsvps: stats?.rsvps || 0,
-    checkins: stats?.checkins || 0,
-    referrals: stats?.referrals || 0,
-    trend,
-    isHot,
+    views,
+    uniqueViews: views, // distinct viewer tracking moved to service_bus.events.
+    rsvps: rsvps?.length ?? 0,
+    checkins: checkins?.length ?? 0,
+    referrals: refs?.length ?? 0,
+    trend: recentViews > views * 0.5 ? 100 : 0,
+    isHot: views > 50,
   });
 });
 
-// GET /api/events/:id/registrations/export — Export registrations as CSV
+// GET /api/events/:id/registrations/export — Host-only CSV export.
 events.get("/:id/registrations/export", async (c) => {
   const eventId = c.req.param("id");
   const format = c.req.query("format") || "csv";
@@ -466,29 +432,64 @@ events.get("/:id/registrations/export", async (c) => {
     return c.json({ error: "Authentication required" }, 401);
   }
 
-  const event = await c.env.DB.prepare(
-    "SELECT organizer_identifier FROM events WHERE _id = ?"
-  ).bind(eventId).first() as { organizer_identifier: string } | null;
+  const event = await supabaseFetch<{ id: string; organizer_person_id: string | null }>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(eventId)}&select=id,organizer_person_id`,
+    single: true,
+  });
 
-  if (!event) {
-    return c.json({ error: "Event not found" }, 404);
-  }
+  if (!event) return c.json({ error: "Event not found" }, 404);
 
-  if (event.organizer_identifier !== authResult.user.userId) {
+  const requester = await supabaseFetch<{ id: string }>(c.env, {
+    schema: "identity",
+    path: "person",
+    query: `workos_user_id=eq.${encodeURIComponent(authResult.user.userId)}&select=id`,
+    single: true,
+  });
+
+  if (!requester || event.organizer_person_id !== requester.id) {
     return c.json({ error: "Only the event host can export registrations" }, 403);
   }
 
-  const result = await c.env.DB.prepare(`
-    SELECT r.id, r.user_id, r.status, r.registered_at, r.checked_in_at,
-           u.name as user_name, u.email as user_email
-    FROM registrations r
-    LEFT JOIN users u ON r.user_id = u._id
-    WHERE r.event_id = ?
-    ORDER BY r.registered_at ASC
-  `).bind(eventId).all();
+  interface RsvpRow {
+    id: string;
+    agent_person_id: string;
+    rsvpresponse: string;
+    created_at: string | null;
+    confirmation_status: string | null;
+  }
 
-  const rows = result.results as Record<string, unknown>[];
-  const csv = toCsv(rows, ["id", "user_id", "user_name", "user_email", "status", "registered_at", "checked_in_at"]);
+  const rsvps = await supabaseFetch<RsvpRow[]>(c.env, {
+    schema: "events",
+    path: "rsvp_action",
+    query: `event_id=eq.${encodeURIComponent(eventId)}&select=id,agent_person_id,rsvpresponse,created_at,confirmation_status&order=created_at.asc`,
+  }) ?? [];
+
+  const personIds = Array.from(new Set(rsvps.map((r) => r.agent_person_id)));
+  interface PersonRow { id: string; name: string; email: string | null }
+  const persons = personIds.length
+    ? (await supabaseFetch<PersonRow[]>(c.env, {
+        schema: "identity",
+        path: "person",
+        query: `id=in.(${personIds.map(encodeURIComponent).join(",")})&select=id,name,email`,
+      })) ?? []
+    : [];
+  const personById = new Map(persons.map((p) => [p.id, p]));
+
+  const rows = rsvps.map((r) => ({
+    id: r.id,
+    user_id: r.agent_person_id,
+    user_name: personById.get(r.agent_person_id)?.name ?? null,
+    user_email: personById.get(r.agent_person_id)?.email ?? null,
+    status: r.confirmation_status || (r.rsvpresponse === "rsvpNo" ? "cancelled" : "registered"),
+    registered_at: r.created_at,
+    checked_in_at: null,
+  }));
+
+  const csv = toCsv(rows as unknown as Record<string, unknown>[], [
+    "id", "user_id", "user_name", "user_email", "status", "registered_at", "checked_in_at",
+  ]);
 
   return new Response(csv, {
     headers: {
@@ -497,3 +498,15 @@ events.get("/:id/registrations/export", async (c) => {
     },
   });
 });
+
+// Side-export used by admin routes for re-indexing.
+export async function fetchPublishedEvents(env: Env): Promise<Event[]> {
+  const rows = await supabaseFetch<SupabaseEventRow[]>(env, {
+    schema: "events",
+    path: "event",
+    query: `visibility=eq.public&select=${EVENT_COLUMNS}&limit=2000`,
+  }) ?? [];
+  return rows.map(mapSupabaseEventToApi);
+}
+
+export { fetchEventsByIds };

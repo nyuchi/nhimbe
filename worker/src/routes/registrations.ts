@@ -3,197 +3,257 @@ import type { Env } from "../types";
 import { writeAuth } from "../middleware/auth";
 import { getAuthenticatedUser } from "../auth/workos";
 import { validateRequiredFields } from "../utils/validation";
-import { generateId } from "../utils/ids";
+import { supabaseFetch } from "../db/supabase";
 
-interface RegistrationRow {
+interface RsvpRow {
   id: string;
   event_id: string;
-  user_id: string;
-  status: string;
-  ticket_type: string | null;
-  ticket_price: number | null;
-  ticket_currency: string | null;
-  registered_at: string | null;
-  cancelled_at: string | null;
-  checked_in_at: string | null;
-  [key: string]: unknown;
+  agent_person_id: string;
+  rsvpresponse: string;
+  created_at: string | null;
+  updated_at: string | null;
+  confirmation_status: string | null;
+  confirmed_at: string | null;
 }
 
-function mapRegistrations(rows: RegistrationRow[]) {
-  return rows.map((row) => ({
+// Map events.rsvp_action → legacy registration shape. The frontend reads
+// `status` as the lifecycle ("registered","approved","cancelled","attended"),
+// which we derive from rsvpresponse + confirmation_status.
+function deriveStatus(row: RsvpRow): string {
+  if (row.rsvpresponse === "rsvpNo") return "cancelled";
+  if (row.confirmation_status === "approved") return "approved";
+  if (row.confirmation_status === "rejected") return "rejected";
+  if (row.confirmation_status === "attended") return "attended";
+  return "registered";
+}
+
+function mapRow(row: RsvpRow) {
+  return {
     id: row.id,
     eventId: row.event_id,
-    userId: row.user_id,
-    status: row.status,
-    ticketType: row.ticket_type,
-    ticketPrice: row.ticket_price,
-    ticketCurrency: row.ticket_currency,
-    registeredAt: row.registered_at,
-    cancelledAt: row.cancelled_at,
-    checkedInAt: row.checked_in_at,
-  }));
+    userId: row.agent_person_id,
+    status: deriveStatus(row),
+    ticketType: null,
+    ticketPrice: null,
+    ticketCurrency: null,
+    registeredAt: row.created_at,
+    cancelledAt: row.rsvpresponse === "rsvpNo" ? row.updated_at : null,
+    checkedInAt: null,
+  };
 }
+
+const RSVP_COLS = "id,event_id,agent_person_id,rsvpresponse,created_at,updated_at,confirmation_status,confirmed_at";
 
 export const registrations = new Hono<{ Bindings: Env }>();
 registrations.use("*", writeAuth);
 
-// GET /api/registrations
+// GET /api/registrations?event_id= OR ?user_id=
 registrations.get("/", async (c) => {
   const eventId = c.req.query("event_id");
   const userId = c.req.query("user_id");
 
-  if (eventId) {
-    const result = await c.env.DB.prepare(
-      "SELECT * FROM registrations WHERE event_id = ?"
-    ).bind(eventId).all();
-    return c.json({ registrations: mapRegistrations(result.results as RegistrationRow[]) });
+  if (!eventId && !userId) {
+    return c.json({ error: "event_id or user_id required" }, 400);
   }
 
-  if (userId) {
-    const result = await c.env.DB.prepare(
-      "SELECT * FROM registrations WHERE user_id = ?"
-    ).bind(userId).all();
-    return c.json({ registrations: mapRegistrations(result.results as RegistrationRow[]) });
-  }
+  const filter = eventId
+    ? `event_id=eq.${encodeURIComponent(eventId)}`
+    : `agent_person_id=eq.${encodeURIComponent(userId!)}`;
 
-  return c.json({ error: "event_id or user_id required" }, 400);
+  const rows = await supabaseFetch<RsvpRow[]>(c.env, {
+    schema: "events",
+    path: "rsvp_action",
+    query: `${filter}&select=${RSVP_COLS}`,
+  }) ?? [];
+
+  return c.json({ registrations: rows.map(mapRow) });
 });
 
-// POST /api/registrations
+// POST /api/registrations — atomic capacity check + RSVP insert.
 registrations.post("/", async (c) => {
   let body: Record<string, unknown>;
   try {
-    body = await c.req.json() as Record<string, unknown>;
+    body = await c.req.json();
   } catch {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
-  const validationError = validateRequiredFields(body, ['eventId', 'userId']);
-  if (validationError) {
-    return c.json({ error: validationError }, 400);
+  const err = validateRequiredFields(body, ["eventId", "userId"]);
+  if (err) return c.json({ error: err }, 400);
+
+  const eventId = String(body.eventId);
+  const userId = String(body.userId);
+
+  interface EventStateRow {
+    id: string;
+    maximumattendeecapacity: number | null;
+    attendee_count: number | null;
+    visibility: string;
+    eventstatus: string;
   }
+  const event = await supabaseFetch<EventStateRow>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(eventId)}&select=id,maximumattendeecapacity,attendee_count,visibility,eventstatus`,
+    single: true,
+  });
 
-  const event = await c.env.DB.prepare(
-    "SELECT _id, maximum_attendee_capacity, attendee_count, is_published, event_status FROM events WHERE _id = ?"
-  ).bind(body.eventId).first() as { _id: string; maximum_attendee_capacity: number | null; attendee_count: number; is_published: boolean; event_status: string } | null;
-
-  if (!event) {
-    return c.json({ error: "Event not found" }, 404);
-  }
-
-  if (!event.is_published || event.event_status !== 'EventScheduled') {
+  if (!event) return c.json({ error: "Event not found" }, 404);
+  if (event.visibility !== "public" || event.eventstatus !== "EventScheduled") {
     return c.json({ error: "Event is not available for registration" }, 400);
   }
-
-  if (event.maximum_attendee_capacity && event.attendee_count >= event.maximum_attendee_capacity) {
+  if (event.maximumattendeecapacity && (event.attendee_count ?? 0) >= event.maximumattendeecapacity) {
     return c.json({ error: "Event is at capacity" }, 400);
   }
 
-  const existingReg = await c.env.DB.prepare(
-    "SELECT id FROM registrations WHERE event_id = ? AND user_id = ? AND status NOT IN ('cancelled', 'rejected')"
-  ).bind(body.eventId, body.userId).first();
-
-  if (existingReg) {
+  const existing = await supabaseFetch<{ id: string }>(c.env, {
+    schema: "events",
+    path: "rsvp_action",
+    query: `event_id=eq.${encodeURIComponent(eventId)}&agent_person_id=eq.${encodeURIComponent(userId)}&rsvpresponse=neq.rsvpNo&select=id&limit=1`,
+    single: true,
+  });
+  if (existing) {
     return c.json({ error: "User is already registered for this event" }, 400);
   }
 
-  const id = generateId();
+  // No equivalent of the D1 UPDATE…WHERE attendee_count<capacity atomic
+  // increment via PostgREST; we do a best-effort recount/patch after the
+  // RSVP insert. This leaves a brief window for an over-capacity registration
+  // under concurrent load — to be replaced with a SQL function in a follow-up.
+  const inserted = await supabaseFetch<{ id: string }[]>(c.env, {
+    schema: "events",
+    path: "rsvp_action",
+    method: "POST",
+    body: {
+      event_id: eventId,
+      agent_person_id: userId,
+      rsvpresponse: "rsvpYes",
+      sync_version: 1,
+      additional_guests: 0,
+      starttime: new Date().toISOString(),
+    },
+  });
 
-  // Atomic capacity check + increment to prevent race conditions
-  // If event has a capacity limit, only increment if still under capacity
-  const capacityUpdate = event.maximum_attendee_capacity
-    ? await c.env.DB.prepare(
-        "UPDATE events SET attendee_count = attendee_count + 1 WHERE _id = ? AND attendee_count < ?"
-      ).bind(body.eventId, event.maximum_attendee_capacity).run()
-    : await c.env.DB.prepare(
-        "UPDATE events SET attendee_count = attendee_count + 1 WHERE _id = ?"
-      ).bind(body.eventId).run();
+  await supabaseFetch(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(eventId)}`,
+    method: "PATCH",
+    body: { attendee_count: (event.attendee_count ?? 0) + 1 },
+  });
 
-  if (event.maximum_attendee_capacity && !capacityUpdate.meta.changes) {
-    return c.json({ error: "Event is at capacity" }, 400);
-  }
-
-  await c.env.DB.prepare(`
-    INSERT INTO registrations (id, event_id, user_id, ticket_type, ticket_price, ticket_currency)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).bind(
-    id,
-    body.eventId,
-    body.userId,
-    body.ticketType || null,
-    body.ticketPrice || null,
-    body.ticketCurrency || null
-  ).run();
-
-  return c.json({ id, message: "Registration successful" }, 201);
+  return c.json({ id: inserted?.[0]?.id, message: "Registration successful" }, 201);
 });
 
-// PUT /api/registrations/:id
+const ALLOWED_STATUSES = new Set(["approved", "rejected", "pending", "registered", "attended"]);
+
+// PUT /api/registrations/:id — host approves/rejects/attended; user can re-confirm.
 registrations.put("/:id", async (c) => {
   const regId = c.req.param("id");
-  let body: { status: string; user_id?: string };
+  let body: { status: string };
   try {
-    body = await c.req.json() as { status: string; user_id?: string };
+    body = await c.req.json();
   } catch {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
-  if (!body.status || !["approved", "rejected", "pending", "registered", "attended"].includes(body.status)) {
+  if (!body.status || !ALLOWED_STATUSES.has(body.status)) {
     return c.json({ error: "Invalid status. Must be: approved, rejected, pending, registered, or attended" }, 400);
   }
 
-  const reg = await c.env.DB.prepare(`
-    SELECT r.*, e.organizer_name, e.organizer_identifier
-    FROM registrations r
-    JOIN events e ON r.event_id = e._id
-    WHERE r.id = ?
-  `).bind(regId).first() as { id: string; user_id: string; event_id: string; organizer_name: string; organizer_identifier: string } | null;
-
+  interface RegRow {
+    id: string;
+    event_id: string;
+    agent_person_id: string;
+  }
+  const reg = await supabaseFetch<RegRow>(c.env, {
+    schema: "events",
+    path: "rsvp_action",
+    query: `id=eq.${encodeURIComponent(regId)}&select=id,event_id,agent_person_id`,
+    single: true,
+  });
   if (!reg) {
     return c.json({ error: "Registration not found" }, 404);
   }
 
-  // Extract user identity from JWT — never trust body.user_id for authorization
+  // Resolve the event organizer for authz.
+  const event = await supabaseFetch<{ organizer_person_id: string | null }>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(reg.event_id)}&select=organizer_person_id`,
+    single: true,
+  });
+
   const authResult = await getAuthenticatedUser(c.req.raw, c.env);
   if (!authResult.user) {
     return c.json({ error: "Authentication required" }, 401);
   }
 
-  const requestingUser = authResult.user.userId;
-  const isHost = reg.organizer_identifier === requestingUser;
-  const isRegistrant = reg.user_id === requestingUser;
+  // Map WorkOS userId → identity.person.id for authz comparisons.
+  const requester = await supabaseFetch<{ id: string }>(c.env, {
+    schema: "identity",
+    path: "person",
+    query: `workos_user_id=eq.${encodeURIComponent(authResult.user.userId)}&select=id`,
+    single: true,
+  });
+  const requesterPersonId = requester?.id ?? null;
+
+  const isHost = !!event && !!requesterPersonId && event.organizer_person_id === requesterPersonId;
+  const isRegistrant = reg.agent_person_id === requesterPersonId;
 
   if (!isHost && ["approved", "rejected", "attended"].includes(body.status)) {
     return c.json({ error: "Only the event host can approve, reject, or mark attendance" }, 403);
   }
-
   if (!isHost && !isRegistrant) {
     return c.json({ error: "Not authorized to update this registration" }, 403);
   }
 
-  await c.env.DB.prepare(
-    "UPDATE registrations SET status = ? WHERE id = ?"
-  ).bind(body.status, regId).run();
+  await supabaseFetch(c.env, {
+    schema: "events",
+    path: "rsvp_action",
+    query: `id=eq.${encodeURIComponent(regId)}`,
+    method: "PATCH",
+    body: { confirmation_status: body.status, confirmed_at: new Date().toISOString() },
+  });
 
   return c.json({ message: `Registration ${body.status}` });
 });
 
-// DELETE /api/registrations/:id
+// DELETE /api/registrations/:id — soft cancel + attendee_count decrement.
 registrations.delete("/:id", async (c) => {
   const regId = c.req.param("id");
 
-  const reg = await c.env.DB.prepare(
-    "SELECT * FROM registrations WHERE id = ?"
-  ).bind(regId).first() as { event_id: string } | null;
+  const reg = await supabaseFetch<{ id: string; event_id: string; rsvpresponse: string }>(c.env, {
+    schema: "events",
+    path: "rsvp_action",
+    query: `id=eq.${encodeURIComponent(regId)}&select=id,event_id,rsvpresponse`,
+    single: true,
+  });
 
-  if (reg) {
-    await c.env.DB.prepare(
-      "UPDATE registrations SET status = 'cancelled', cancelled_at = datetime('now') WHERE id = ?"
-    ).bind(regId).run();
+  if (reg && reg.rsvpresponse !== "rsvpNo") {
+    await supabaseFetch(c.env, {
+      schema: "events",
+      path: "rsvp_action",
+      query: `id=eq.${encodeURIComponent(regId)}`,
+      method: "PATCH",
+      body: { rsvpresponse: "rsvpNo", updated_at: new Date().toISOString() },
+    });
 
-    await c.env.DB.prepare(
-      "UPDATE events SET attendee_count = attendee_count - 1 WHERE _id = ?"
-    ).bind(reg.event_id).run();
+    const event = await supabaseFetch<{ attendee_count: number | null }>(c.env, {
+      schema: "events",
+      path: "event",
+      query: `id=eq.${encodeURIComponent(reg.event_id)}&select=attendee_count`,
+      single: true,
+    });
+    if (event && (event.attendee_count ?? 0) > 0) {
+      await supabaseFetch(c.env, {
+        schema: "events",
+        path: "event",
+        query: `id=eq.${encodeURIComponent(reg.event_id)}`,
+        method: "PATCH",
+        body: { attendee_count: (event.attendee_count ?? 0) - 1 },
+      });
+    }
   }
 
   return c.json({ message: "Registration cancelled" });

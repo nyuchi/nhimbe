@@ -8,13 +8,11 @@
  * - slugify: URL slug generation
  * - getInitials: name → initials extraction
  * - generateShortCode / generateReferralCode: format correctness
- * - dbRowToEvent: database row → Event object transformation
  */
 
 import { describe, it, expect } from 'vitest';
 import { safeParseInt, validateRequiredFields, safeParseJSON, slugify, getInitials } from '../utils/validation';
 import { generateShortCode, generateReferralCode } from '../utils/ids';
-import { dbRowToEvent } from '../utils/db';
 
 // ============================================
 // safeParseInt
@@ -266,122 +264,3 @@ describe('generateReferralCode', () => {
     expect(code).toMatch(/^[A-Z0-9]+$/);
   });
 });
-
-// ============================================
-// dbRowToEvent
-// ============================================
-
-describe('dbRowToEvent', () => {
-  it('transforms complete database row to Event', () => {
-    const row = {
-      _id: 'evt-1',
-      short_code: 'abc123',
-      slug: 'test-event',
-      name: 'Test Event',
-      description: 'A test',
-      start_date: '2026-03-15T14:00:00Z',
-      date_display_day: '15',
-      date_display_month: 'Mar',
-      date_display_full: 'Sat, Mar 15',
-      date_display_time: '2:00 PM',
-      location_name: 'Venue',
-      location_street_address: '123 St',
-      location_locality: 'Harare',
-      location_country: 'Zimbabwe',
-      category: 'Tech',
-      keywords: '["a","b"]',
-      image: 'img.jpg',
-      cover_gradient: 'gradient-1',
-      attendee_count: 42,
-      friends_count: 5,
-      maximum_attendee_capacity: 100,
-      event_attendance_mode: 'OfflineEventAttendanceMode',
-      event_status: 'EventScheduled',
-      is_published: 1,
-      meeting_url: null,
-      meeting_platform: null,
-      organizer_name: 'Host',
-      organizer_identifier: 'host',
-      organizer_initials: 'H',
-      organizer_alternate_name: null,
-      organizer_event_count: 3,
-      offer_price: null,
-      offer_price_currency: null,
-      offer_url: null,
-      offer_availability: null,
-      date_created: '2026-01-01',
-      date_modified: '2026-01-02',
-    };
-
-    const event = dbRowToEvent(row);
-
-    expect(event.id).toBe('evt-1');
-    expect(event.shortCode).toBe('abc123');
-    expect(event.slug).toBe('test-event');
-    expect(event.name).toBe('Test Event');
-    expect(event.startDate).toBe('2026-03-15T14:00:00Z');
-    expect(event.date.day).toBe('15');
-    expect(event.date.month).toBe('Mar');
-    expect(event.location.addressLocality).toBe('Harare');
-    expect(event.category).toBe('Tech');
-    expect(event.keywords).toEqual(['a', 'b']);
-    expect(event.attendeeCount).toBe(42);
-    expect(event.maximumAttendeeCapacity).toBe(100);
-    expect(event.organizer.name).toBe('Host');
-    expect(event.offers).toBeUndefined();
-  });
-
-  it('parses keywords from JSON string', () => {
-    const row = { keywords: '["music","tech"]' } as Record<string, unknown>;
-    const event = dbRowToEvent({ ...createMinimalRow(), ...row });
-    expect(event.keywords).toEqual(['music', 'tech']);
-  });
-
-  it('handles malformed keywords JSON gracefully', () => {
-    const event = dbRowToEvent({ ...createMinimalRow(), keywords: 'not-json' });
-    expect(event.keywords).toEqual([]);
-  });
-
-  it('handles null keywords', () => {
-    const event = dbRowToEvent({ ...createMinimalRow(), keywords: null });
-    expect(event.keywords).toEqual([]);
-  });
-
-  it('correctly handles isPublished boolean coercion', () => {
-    expect(dbRowToEvent({ ...createMinimalRow(), is_published: 1 }).isPublished).toBe(true);
-    expect(dbRowToEvent({ ...createMinimalRow(), is_published: 0 }).isPublished).toBe(false);
-    expect(dbRowToEvent({ ...createMinimalRow(), is_published: null }).isPublished).toBe(false);
-  });
-
-  it('includes offers when offer_price exists', () => {
-    const event = dbRowToEvent({
-      ...createMinimalRow(),
-      offer_price: 25,
-      offer_price_currency: 'USD',
-      offer_availability: 'InStock',
-    });
-    expect(event.offers).toMatchObject({ price: 25, priceCurrency: 'USD', availability: 'InStock' });
-  });
-
-  it('omits offers when offer_price is null and offer_url is absent', () => {
-    const event = dbRowToEvent({ ...createMinimalRow(), offer_price: null, offer_url: null });
-    expect(event.offers).toBeUndefined();
-  });
-});
-
-// Helper to create a minimal valid row
-function createMinimalRow(): Record<string, unknown> {
-  return {
-    _id: 'evt-1', short_code: 'x', slug: 'x', name: 'x', description: 'x',
-    start_date: '2026-01-01T00:00:00Z',
-    date_display_day: '1', date_display_month: 'Jan', date_display_full: 'x', date_display_time: 'x',
-    location_name: 'x', location_street_address: 'x', location_locality: 'x', location_country: 'x',
-    category: 'x', keywords: '[]', image: null, cover_gradient: null,
-    attendee_count: 0, friends_count: null, maximum_attendee_capacity: null,
-    event_attendance_mode: 'OfflineEventAttendanceMode', event_status: 'EventScheduled', is_published: 1,
-    meeting_url: null, meeting_platform: null,
-    organizer_name: 'x', organizer_identifier: 'x', organizer_initials: 'X', organizer_alternate_name: null, organizer_event_count: 0,
-    offer_price: null, offer_price_currency: null, offer_url: null, offer_availability: null,
-    date_created: '2026-01-01', date_modified: '2026-01-01',
-  };
-}

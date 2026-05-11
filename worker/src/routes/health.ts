@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
+import { supabaseFetch } from "../db/supabase";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 export const health = new Hono<{ Bindings: Env }>();
 
@@ -24,10 +25,10 @@ health.get("/", (c) => {
 health.get("/api/health", async (c) => {
   const probes: Record<string, { ok: boolean; latencyMs: number }> = {};
 
-  // Probe D1
+  // Probe Supabase (platform-db) via the lightweight currency table.
   const dbStart = Date.now();
   try {
-    await c.env.DB.prepare("SELECT 1").first();
+    await supabaseFetch(c.env, { schema: "places", path: "countries", query: "limit=1&select=id" });
     probes.database = { ok: true, latencyMs: Date.now() - dbStart };
   } catch {
     probes.database = { ok: false, latencyMs: Date.now() - dbStart };
@@ -59,7 +60,7 @@ function statusPage(env: Env): Response {
   const services = [
     { name: "Workers AI", status: !!env.AI, description: "LLM & Embeddings" },
     { name: "Vectorize", status: !!env.VECTORIZE, description: "Vector Search" },
-    { name: "D1 Database", status: !!env.DB, description: "SQLite Storage" },
+    { name: "Supabase", status: !!env.SUPABASE_URL, description: "Platform DB" },
     { name: "KV Cache", status: !!env.CACHE, description: "Edge Caching" },
     { name: "R2 Storage", status: !!env.MEDIA, description: "Media Files" },
     { name: "Images", status: !!env.IMAGES, description: "Image Processing" },

@@ -66,7 +66,8 @@ app.use("*", async (c, next) => {
     const missing: string[] = [];
     if (!c.env.API_KEY) missing.push("API_KEY");
     if (!c.env.WORKOS_CLIENT_ID) missing.push("WORKOS_CLIENT_ID");
-    if (!c.env.DB) missing.push("DB (D1 binding)");
+    if (!c.env.SUPABASE_URL) missing.push("SUPABASE_URL");
+    if (!c.env.SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
     if (!c.env.CACHE) missing.push("CACHE (KV binding)");
     if (!c.env.RATE_LIMITER) missing.push("RATE_LIMITER binding");
     if (missing.length > 0) {

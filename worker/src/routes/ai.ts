@@ -17,7 +17,7 @@ ai.post("/assistant", async (c) => {
     return c.json({ error: "Message is required" }, 400);
   }
 
-  const response = await chat(c.env.AI, c.env.VECTORIZE, c.env.DB, body);
+  const response = await chat(c.env, body);
 
   return c.json(response);
 });

@@ -1,8 +1,10 @@
 /**
- * Tracked Links — short URL redirect with click analytics
+ * Tracked links — short URL redirect with click analytics.
  *
- * Every external link (meeting URLs, venue directions, tickets) goes through
- * /api/links/:code which records the click then 302-redirects to the target.
+ * Backed by engagement.tracked_link + engagement.link_click on platform-db.
+ * Cross-schema via context_* edges (every tracked link knows what entity it
+ * redirects on behalf of — events.event for nhimbe, places.places for the
+ * places app, etc.).
  *
  * POST /api/links — create a tracked link
  * GET  /api/links/:code — redirect + record click
@@ -10,108 +12,119 @@
  */
 import { Hono } from "hono";
 import type { Env, AppVariables } from "../types";
-import { generateId, generateShortCode } from "../utils/ids";
+import { generateShortCode } from "../utils/ids";
+import { supabaseFetch } from "../db/supabase";
 
 const links = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
-// Create a tracked link
 links.post("/", async (c) => {
   const body = await c.req.json<{
     targetUrl: string;
     eventId: string;
-    linkType: string; // meeting_url, directions, ticket, website
+    linkType: string;
     createdBy?: string;
   }>();
 
   if (!body.targetUrl || !body.eventId || !body.linkType) {
     return c.json({ error: "targetUrl, eventId, and linkType are required" }, 400);
   }
+  try { new URL(body.targetUrl); } catch { return c.json({ error: "Invalid target URL" }, 400); }
 
-  // Validate URL
-  try {
-    new URL(body.targetUrl);
-  } catch {
-    return c.json({ error: "Invalid target URL" }, 400);
-  }
-
-  const db = c.env.DB;
-
-  // Check if we already have a tracked link for this exact URL + event + type
-  const existing = await db
-    .prepare("SELECT code FROM tracked_links WHERE event_id = ? AND target_url = ? AND link_type = ?")
-    .bind(body.eventId, body.targetUrl, body.linkType)
-    .first<{ code: string }>();
-
+  // Idempotent: existing (event,url,type) tuple wins.
+  const existing = await supabaseFetch<{ code: string }>(c.env, {
+    schema: "engagement",
+    path: "tracked_link",
+    query: `context_entity_id=eq.${encodeURIComponent(body.eventId)}&target_url=eq.${encodeURIComponent(body.targetUrl)}&link_type=eq.${encodeURIComponent(body.linkType)}&select=code&limit=1`,
+    single: true,
+  });
   if (existing) {
     return c.json({ code: existing.code, url: `/r/${existing.code}` });
   }
 
-  const id = generateId();
   const code = generateShortCode();
-
-  await db
-    .prepare(
-      "INSERT INTO tracked_links (id, code, event_id, target_url, link_type, created_by) VALUES (?, ?, ?, ?, ?, ?)"
-    )
-    .bind(id, code, body.eventId, body.targetUrl, body.linkType, body.createdBy || null)
-    .run();
+  await supabaseFetch(c.env, {
+    schema: "engagement",
+    path: "tracked_link",
+    method: "POST",
+    body: {
+      code,
+      target_url: body.targetUrl,
+      link_type: body.linkType,
+      context_schema: "events",
+      context_entity_type: "events.event",
+      context_entity_id: body.eventId,
+      created_by: body.createdBy ?? null,
+    },
+  });
 
   return c.json({ code, url: `/r/${code}` }, 201);
 });
 
-// Redirect a tracked link + record click
 links.get("/:code", async (c) => {
   const code = c.req.param("code");
-  const db = c.env.DB;
 
-  const link = await db
-    .prepare("SELECT id, target_url, event_id FROM tracked_links WHERE code = ?")
-    .bind(code)
-    .first<{ id: string; target_url: string; event_id: string }>();
-
+  interface LinkRow { id: string; target_url: string; context_entity_id: string | null; click_count: number | null }
+  const link = await supabaseFetch<LinkRow>(c.env, {
+    schema: "engagement",
+    path: "tracked_link",
+    query: `code=eq.${encodeURIComponent(code)}&select=id,target_url,context_entity_id,click_count`,
+    single: true,
+  });
   if (!link) {
     return c.json({ error: "Link not found" }, 404);
   }
 
-  // Record click asynchronously (don't block redirect)
   c.executionCtx.waitUntil(
     (async () => {
       try {
         const userAgent = c.req.header("user-agent") || "";
         const referrer = c.req.header("referer") || "";
-
-        await db.batch([
-          db
-            .prepare(
-              "INSERT INTO link_clicks (link_id, event_id, referrer_url, user_agent) VALUES (?, ?, ?, ?)"
-            )
-            .bind(link.id, link.event_id, referrer, userAgent),
-          db
-            .prepare("UPDATE tracked_links SET click_count = click_count + 1 WHERE id = ?")
-            .bind(link.id),
+        await Promise.all([
+          supabaseFetch(c.env, {
+            schema: "engagement",
+            path: "link_click",
+            method: "POST",
+            body: {
+              link_id: link.id,
+              context_entity_id: link.context_entity_id,
+              referrer_url: referrer,
+              user_agent: userAgent,
+            },
+          }),
+          supabaseFetch(c.env, {
+            schema: "engagement",
+            path: "tracked_link",
+            query: `id=eq.${encodeURIComponent(link.id)}`,
+            method: "PATCH",
+            body: { click_count: (link.click_count ?? 0) + 1 },
+          }),
         ]);
       } catch (err) {
         console.error("[mukoko] link click tracking failed:", err);
       }
-    })()
+    })(),
   );
 
   return c.redirect(link.target_url, 302);
 });
 
-// List tracked links for an event
 links.get("/event/:eventId", async (c) => {
   const eventId = c.req.param("eventId");
-  const db = c.env.DB;
 
-  const result = await db
-    .prepare(
-      "SELECT code, target_url, link_type, click_count, date_created FROM tracked_links WHERE event_id = ? ORDER BY date_created DESC"
-    )
-    .bind(eventId)
-    .all();
+  interface LinkRow {
+    code: string;
+    target_url: string;
+    link_type: string;
+    click_count: number | null;
+    created_at: string | null;
+  }
+  const rows = await supabaseFetch<LinkRow[]>(c.env, {
+    schema: "engagement",
+    path: "tracked_link",
+    query: `context_entity_id=eq.${encodeURIComponent(eventId)}&select=code,target_url,link_type,click_count,created_at&order=created_at.desc`,
+  }) ?? [];
 
-  return c.json({ links: result.results });
+  return c.json({ links: rows });
 });
 
 export { links };
