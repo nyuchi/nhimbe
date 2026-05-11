@@ -11,11 +11,24 @@
  */
 
 import type { Env } from "../types";
+import { withRetry } from "../utils/retry";
 
 export class SupabaseConfigError extends Error {
   constructor() {
     super("[mukoko] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing on env");
     this.name = "SupabaseConfigError";
+  }
+}
+
+/**
+ * Thrown by supabaseFetch when the upstream returns a transient error
+ * (502/503/504) or the fetch itself fails. Distinct from generic Error so
+ * the retry layer can decide what to retry without inspecting strings.
+ */
+export class SupabaseTransientError extends Error {
+  constructor(message: string, public readonly status?: number) {
+    super(message);
+    this.name = "SupabaseTransientError";
   }
 }
 
@@ -43,7 +56,8 @@ export async function supabaseFetch<T>(env: Env, opts: SupabaseFetchOptions): Pr
     "Content-Type": "application/json",
   });
 
-  const isWrite = opts.method && opts.method !== "GET";
+  const method = opts.method ?? "GET";
+  const isWrite = method !== "GET";
   if (isWrite) {
     headers.set("Content-Profile", opts.schema);
     headers.set("Prefer", "return=representation");
@@ -56,21 +70,49 @@ export async function supabaseFetch<T>(env: Env, opts: SupabaseFetchOptions): Pr
 
   const fullUrl = `${url.replace(/\/$/, "")}/rest/v1/${opts.path}${opts.query ? `?${opts.query}` : ""}`;
 
-  const response = await fetch(fullUrl, {
-    method: opts.method ?? "GET",
-    headers,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  const doFetch = async (): Promise<T | null> => {
+    let response: Response;
+    try {
+      response = await fetch(fullUrl, {
+        method,
+        headers,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+    } catch (err) {
+      // Network-level failure (DNS, TLS, connection reset). Always transient.
+      throw new SupabaseTransientError(
+        `[mukoko] Supabase ${method} ${opts.path} network error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    if (response.status === 406 && opts.single) {
+      // PostgREST returns 406 from `single=true` when no rows match. Treat as null.
+      return null;
+    }
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      const msg = `[mukoko] Supabase ${method} ${opts.path} failed (${response.status}): ${text.slice(0, 200)}`;
+      // 502/503/504 from PostgREST or Supabase edge are worth retrying.
+      // 4xx and other 5xx (e.g. 500 = malformed query) are not.
+      if (response.status === 502 || response.status === 503 || response.status === 504) {
+        throw new SupabaseTransientError(msg, response.status);
+      }
+      throw new Error(msg);
+    }
+
+    if (response.status === 204) return null;
+    return (await response.json()) as T;
+  };
+
+  // Retry the idempotent GET path only. Writes go through unchanged to avoid
+  // duplicate POST/PATCH/DELETE side effects if the request actually succeeded
+  // server-side but the response was lost in transit.
+  if (isWrite) return doFetch();
+
+  return withRetry(doFetch, {
+    maxRetries: 2,
+    baseDelayMs: 200,
+    maxDelayMs: 2_000,
+    shouldRetry: (err) => err instanceof SupabaseTransientError,
   });
-
-  if (response.status === 406 && opts.single) {
-    // PostgREST returns 406 from `single=true` when no rows match. Treat as null.
-    return null;
-  }
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`[mukoko] Supabase ${opts.method ?? "GET"} ${opts.path} failed (${response.status}): ${text.slice(0, 200)}`);
-  }
-
-  if (response.status === 204) return null;
-  return (await response.json()) as T;
 }

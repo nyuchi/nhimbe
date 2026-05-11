@@ -96,7 +96,7 @@ Global middleware applied in `index.ts`: CORS (restricted to trusted origins), e
 - `validation.ts` — Input validation schemas
 - `timeout.ts` — Request timeout handling
 - `circuit-breaker.ts` — Netflix Hystrix-inspired circuit breaker (CLOSED→OPEN→HALF_OPEN). Currently only wired into `ai/search.ts` (Vectorize + Workers AI); Supabase calls are uncovered.
-- `retry.ts` — Exponential backoff with jitter (currently unused — flagged for either wiring into `supabaseFetch` or removal)
+- `retry.ts` — Exponential backoff with jitter. Wired into `supabaseFetch()` for the GET path only (writes are not retried to avoid duplicate POST/PATCH/DELETE side effects). Retries 502/503/504 and network failures up to 2 attempts.
 - `observability.ts` — Backend structured logging with `[mukoko]` prefix
 - `audit.ts` — Audit logging to the `audit_logs` table on Supabase
 - `export.ts` — CSV export with proper escaping
@@ -152,7 +152,7 @@ Trusted domains are hardcoded in the worker: `nyuchi.com`, `mukoko.com`, `nhimbe
 ### Resilience Patterns (Mukoko Registry — Nyuchi architecture L5 / L8)
 
 - **Circuit Breaker** (`worker/src/utils/circuit-breaker.ts`) — Per-provider configs for vectorize, ai, r2. **Note**: Supabase REST calls are not yet wrapped.
-- **Retry with Backoff** (`worker/src/utils/retry.ts`) — Exponential backoff with jitter. **Note**: currently shelf-stocked — not imported anywhere outside its own file.
+- **Retry with Backoff** (`worker/src/utils/retry.ts`) — Exponential backoff with jitter. Wraps `supabaseFetch()` GET calls; retries `SupabaseTransientError` (502/503/504 + network failures) up to 2 attempts. Writes deliberately skip retry to avoid duplicate side effects.
 - **Structured Logging** — `[mukoko]` prefix on all log output (frontend: `src/lib/observability.ts`, backend: `worker/src/utils/observability.ts`)
 - **Section Error Boundary** (`src/components/error/section-error-boundary.tsx`) — 3-layer error boundary with retry
 
