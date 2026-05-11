@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../types";
 import { writeAuth } from "../middleware/auth";
 import { getAuthenticatedUser } from "../auth/workos";
+import { unauthorized, notFound, badRequest, conflict } from "../utils/response";
 import { supabaseFetch } from "../db/supabase";
 
 export const waitlist = new Hono<{ Bindings: Env }>();
@@ -13,7 +14,7 @@ waitlist.post("/events/:eventId/waitlist", async (c) => {
   const body = await c.req.json() as { userId: string };
 
   if (!body.userId) {
-    return c.json({ error: "userId is required" }, 400);
+    return badRequest(c, "userId is required");
   }
 
   interface EventRow { id: string; maximumattendeecapacity: number | null }
@@ -25,10 +26,10 @@ waitlist.post("/events/:eventId/waitlist", async (c) => {
   });
 
   if (!event) {
-    return c.json({ error: "Event not found" }, 404);
+    return notFound(c, "Event");
   }
   if (!event.maximumattendeecapacity) {
-    return c.json({ error: "Event has no capacity limit — no waitlist needed" }, 400);
+    return badRequest(c, "Event has no capacity limit — no waitlist needed");
   }
 
   const rsvps = await supabaseFetch<{ id: string }[]>(c.env, {
@@ -37,7 +38,7 @@ waitlist.post("/events/:eventId/waitlist", async (c) => {
     query: `event_id=eq.${encodeURIComponent(eventId)}&rsvpresponse=neq.rsvpNo&select=id`,
   });
   if ((rsvps?.length ?? 0) < event.maximumattendeecapacity) {
-    return c.json({ error: "Event is not at capacity — register directly instead" }, 400);
+    return badRequest(c, "Event is not at capacity — register directly instead");
   }
 
   const existing = await supabaseFetch<{ id: string }>(c.env, {
@@ -47,7 +48,7 @@ waitlist.post("/events/:eventId/waitlist", async (c) => {
     single: true,
   });
   if (existing) {
-    return c.json({ error: "User is already on the waitlist" }, 409);
+    return conflict(c, "User is already on the waitlist");
   }
 
   const positions = await supabaseFetch<{ position: number }[]>(c.env, {
@@ -80,7 +81,7 @@ waitlist.delete("/events/:eventId/waitlist", async (c) => {
   const body = await c.req.json() as { userId: string };
 
   if (!body.userId) {
-    return c.json({ error: "userId is required" }, 400);
+    return badRequest(c, "userId is required");
   }
 
   const existing = await supabaseFetch<{ id: string }>(c.env, {
@@ -90,7 +91,7 @@ waitlist.delete("/events/:eventId/waitlist", async (c) => {
     single: true,
   });
   if (!existing) {
-    return c.json({ error: "User not found on waitlist" }, 404);
+    return notFound(c, "User on waitlist");
   }
 
   await supabaseFetch(c.env, {
@@ -107,7 +108,7 @@ waitlist.delete("/events/:eventId/waitlist", async (c) => {
 waitlist.get("/events/:eventId/waitlist", async (c) => {
   const authResult = await getAuthenticatedUser(c.req.raw, c.env);
   if (!authResult.user) {
-    return c.json({ error: "Authentication required" }, 401);
+    return unauthorized(c);
   }
 
   const eventId = c.req.param("eventId");

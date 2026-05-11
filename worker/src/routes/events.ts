@@ -6,6 +6,7 @@ import { getAuthenticatedUser } from "../auth/workos";
 import { indexEvent, removeEventFromIndex } from "../ai/embeddings";
 import { toCsv } from "../utils/export";
 import { logAudit } from "../utils/audit";
+import { unauthorized, notFound, badRequest, forbidden, conflict } from "../utils/response";
 import { supabaseFetch } from "../db/supabase";
 import { fetchEventsByIds, mapSupabaseEventToApi, EVENT_COLUMNS, type SupabaseEventRow } from "../db/event_mapper";
 
@@ -95,7 +96,7 @@ events.get("/:id", async (c) => {
   }
 
   if (!row) {
-    return c.json({ error: "Event not found" }, 404);
+    return notFound(c, "Event");
   }
 
   return c.json({ event: mapSupabaseEventToApi(row) });
@@ -108,7 +109,7 @@ events.post("/", async (c) => {
   const slug = body.slug || slugify(body.name || "");
   const organizerPersonId = body.organizerPersonId || body.organizer?.identifier;
   if (!organizerPersonId) {
-    return c.json({ error: "organizerPersonId or organizer.identifier required" }, 400);
+    return badRequest(c, "organizerPersonId or organizer.identifier required");
   }
 
   const insertBody: Record<string, unknown> = {
@@ -212,9 +213,9 @@ events.post("/:id/cancel", async (c) => {
     single: true,
   });
 
-  if (!existing) return c.json({ error: "Event not found" }, 404);
+  if (!existing) return notFound(c, "Event");
   if (existing.eventstatus === "EventCancelled") {
-    return c.json({ error: "Event is already cancelled" }, 400);
+    return badRequest(c, "Event is already cancelled");
   }
 
   await supabaseFetch(c.env, {
@@ -339,7 +340,7 @@ events.post("/:id/reviews", async (c) => {
   };
 
   if (!body.userId || !body.rating || body.rating < 1 || body.rating > 5) {
-    return c.json({ error: "userId and rating (1-5) required" }, 400);
+    return badRequest(c, "userId and rating (1-5) required");
   }
 
   try {
@@ -371,7 +372,7 @@ events.post("/:id/reviews", async (c) => {
 
     return c.json({ id: inserted?.[0]?.id, message: "Review submitted successfully" }, 201);
   } catch {
-    return c.json({ error: "You have already reviewed this event" }, 409);
+    return conflict(c, "You have already reviewed this event");
   }
 });
 
@@ -424,12 +425,12 @@ events.get("/:id/registrations/export", async (c) => {
   const format = c.req.query("format") || "csv";
 
   if (format !== "csv") {
-    return c.json({ error: "Only CSV format is currently supported" }, 400);
+    return badRequest(c, "Only CSV format is currently supported");
   }
 
   const authResult = await getAuthenticatedUser(c.req.raw, c.env);
   if (!authResult.user) {
-    return c.json({ error: "Authentication required" }, 401);
+    return unauthorized(c);
   }
 
   const event = await supabaseFetch<{ id: string; organizer_person_id: string | null }>(c.env, {
@@ -439,7 +440,7 @@ events.get("/:id/registrations/export", async (c) => {
     single: true,
   });
 
-  if (!event) return c.json({ error: "Event not found" }, 404);
+  if (!event) return notFound(c, "Event");
 
   const requester = await supabaseFetch<{ id: string }>(c.env, {
     schema: "identity",
@@ -449,7 +450,7 @@ events.get("/:id/registrations/export", async (c) => {
   });
 
   if (!requester || event.organizer_person_id !== requester.id) {
-    return c.json({ error: "Only the event host can export registrations" }, 403);
+    return forbidden(c, "Only the event host can export registrations");
   }
 
   interface RsvpRow {

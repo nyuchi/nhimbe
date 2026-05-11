@@ -3,6 +3,7 @@ import type { Env } from "../types";
 import { writeAuth } from "../middleware/auth";
 import { getAuthenticatedUser } from "../auth/workos";
 import { validateRequiredFields } from "../utils/validation";
+import { unauthorized, notFound, badRequest, forbidden } from "../utils/response";
 import { supabaseFetch } from "../db/supabase";
 
 interface RsvpRow {
@@ -53,7 +54,7 @@ registrations.get("/", async (c) => {
   const userId = c.req.query("user_id");
 
   if (!eventId && !userId) {
-    return c.json({ error: "event_id or user_id required" }, 400);
+    return badRequest(c, "event_id or user_id required");
   }
 
   const filter = eventId
@@ -75,11 +76,11 @@ registrations.post("/", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
+    return badRequest(c, "Invalid JSON body");
   }
 
   const err = validateRequiredFields(body, ["eventId", "userId"]);
-  if (err) return c.json({ error: err }, 400);
+  if (err) return badRequest(c, err);
 
   const eventId = String(body.eventId);
   const userId = String(body.userId);
@@ -98,12 +99,12 @@ registrations.post("/", async (c) => {
     single: true,
   });
 
-  if (!event) return c.json({ error: "Event not found" }, 404);
+  if (!event) return notFound(c, "Event");
   if (event.visibility !== "public" || event.eventstatus !== "EventScheduled") {
-    return c.json({ error: "Event is not available for registration" }, 400);
+    return badRequest(c, "Event is not available for registration");
   }
   if (event.maximumattendeecapacity && (event.attendee_count ?? 0) >= event.maximumattendeecapacity) {
-    return c.json({ error: "Event is at capacity" }, 400);
+    return badRequest(c, "Event is at capacity");
   }
 
   const existing = await supabaseFetch<{ id: string }>(c.env, {
@@ -113,7 +114,7 @@ registrations.post("/", async (c) => {
     single: true,
   });
   if (existing) {
-    return c.json({ error: "User is already registered for this event" }, 400);
+    return badRequest(c, "User is already registered for this event");
   }
 
   // No equivalent of the D1 UPDATE…WHERE attendee_count<capacity atomic
@@ -154,11 +155,11 @@ registrations.put("/:id", async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
+    return badRequest(c, "Invalid JSON body");
   }
 
   if (!body.status || !ALLOWED_STATUSES.has(body.status)) {
-    return c.json({ error: "Invalid status. Must be: approved, rejected, pending, registered, or attended" }, 400);
+    return badRequest(c, "Invalid status. Must be: approved, rejected, pending, registered, or attended");
   }
 
   interface RegRow {
@@ -173,7 +174,7 @@ registrations.put("/:id", async (c) => {
     single: true,
   });
   if (!reg) {
-    return c.json({ error: "Registration not found" }, 404);
+    return notFound(c, "Registration");
   }
 
   // Resolve the event organizer for authz.
@@ -186,7 +187,7 @@ registrations.put("/:id", async (c) => {
 
   const authResult = await getAuthenticatedUser(c.req.raw, c.env);
   if (!authResult.user) {
-    return c.json({ error: "Authentication required" }, 401);
+    return unauthorized(c);
   }
 
   // Map WorkOS userId → identity.person.id for authz comparisons.
@@ -202,10 +203,10 @@ registrations.put("/:id", async (c) => {
   const isRegistrant = reg.agent_person_id === requesterPersonId;
 
   if (!isHost && ["approved", "rejected", "attended"].includes(body.status)) {
-    return c.json({ error: "Only the event host can approve, reject, or mark attendance" }, 403);
+    return forbidden(c, "Only the event host can approve, reject, or mark attendance");
   }
   if (!isHost && !isRegistrant) {
-    return c.json({ error: "Not authorized to update this registration" }, 403);
+    return forbidden(c, "Not authorized to update this registration");
   }
 
   await supabaseFetch(c.env, {

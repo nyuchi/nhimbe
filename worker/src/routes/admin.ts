@@ -5,6 +5,7 @@ import { getAdminUser } from "../middleware/auth";
 import { safeParseInt } from "../utils/validation";
 import { removeEventFromIndex } from "../ai/embeddings";
 import { logAudit } from "../utils/audit";
+import { unauthorized, notFound, badRequest, forbidden } from "../utils/response";
 import { supabaseFetch } from "../db/supabase";
 import { mapSupabaseEventToApi, type SupabaseEventRow, EVENT_COLUMNS } from "../db/event_mapper";
 
@@ -30,7 +31,7 @@ async function fetchCount(
 admin.get("/stats", async (c) => {
   const adminUser = await getAdminUser(c.req.raw, c.env, "moderator");
   if (!adminUser) {
-    return c.json({ error: "Unauthorized - moderator access required" }, 401);
+    return unauthorized(c, "moderator");
   }
 
   const now = new Date();
@@ -116,7 +117,7 @@ admin.get("/stats", async (c) => {
 admin.get("/users", async (c) => {
   const adminUser = await getAdminUser(c.req.raw, c.env, "admin");
   if (!adminUser) {
-    return c.json({ error: "Unauthorized - admin access required" }, 401);
+    return unauthorized(c, "admin");
   }
 
   const limit = safeParseInt(c.req.query("limit") || null, 20, 1, 100);
@@ -176,11 +177,11 @@ async function handleAdminUserAction(
   const requiredRole: UserRole = action === "role" ? "super_admin" : "admin";
   const adminUser = await getAdminUser(c.req.raw, c.env, requiredRole);
   if (!adminUser) {
-    return c.json({ error: `Unauthorized - ${requiredRole} access required` }, 401);
+    return unauthorized(c, requiredRole);
   }
 
   if (userId === adminUser.id && (action === "suspend" || action === "role")) {
-    return c.json({ error: "Cannot modify your own account" }, 400);
+    return badRequest(c, "Cannot modify your own account");
   }
 
   const target = await supabaseFetch<{ id: string; role: string }>(c.env, {
@@ -191,7 +192,7 @@ async function handleAdminUserAction(
   });
 
   if (!target) {
-    return c.json({ error: "User not found" }, 404);
+    return notFound(c, "User");
   }
 
   switch (action) {
@@ -221,10 +222,10 @@ async function handleAdminUserAction(
       const body = await c.req.json() as { role?: string };
       const newRole = body.role as UserRole;
       if (!["user", "moderator", "admin", "super_admin"].includes(newRole)) {
-        return c.json({ error: "Invalid role" }, 400);
+        return badRequest(c, "Invalid role");
       }
       if (newRole === "super_admin" && adminUser.role !== "super_admin") {
-        return c.json({ error: "Only super_admin can assign super_admin role" }, 403);
+        return forbidden(c, "Only super_admin can assign super_admin role");
       }
       await supabaseFetch(c.env, {
         schema: "identity",
@@ -237,7 +238,7 @@ async function handleAdminUserAction(
       return c.json({ message: `User role updated to ${newRole}` });
     }
     default:
-      return c.json({ error: "Unknown action" }, 400);
+      return badRequest(c, "Unknown action");
   }
 }
 
@@ -245,7 +246,7 @@ async function handleAdminUserAction(
 admin.get("/events", async (c) => {
   const adminUser = await getAdminUser(c.req.raw, c.env, "moderator");
   if (!adminUser) {
-    return c.json({ error: "Unauthorized - moderator access required" }, 401);
+    return unauthorized(c, "moderator");
   }
 
   const limit = safeParseInt(c.req.query("limit") || null, 20, 1, 100);
@@ -303,7 +304,7 @@ admin.delete("/events/:id", async (c) => {
   const eventId = c.req.param("id");
   const adminUser = await getAdminUser(c.req.raw, c.env, "moderator");
   if (!adminUser) {
-    return c.json({ error: "Unauthorized - moderator access required" }, 401);
+    return unauthorized(c, "moderator");
   }
 
   const event = await supabaseFetch<{ id: string; name: string }>(c.env, {
@@ -313,7 +314,7 @@ admin.delete("/events/:id", async (c) => {
     single: true,
   });
   if (!event) {
-    return c.json({ error: "Event not found" }, 404);
+    return notFound(c, "Event");
   }
 
   await supabaseFetch(c.env, {
@@ -336,7 +337,7 @@ admin.delete("/events/:id", async (c) => {
 admin.post("/index-events", async (c) => {
   const { validateApiKey } = await import("../middleware/auth");
   if (!validateApiKey(c.req.raw, c.env)) {
-    return c.json({ error: "Unauthorized - API key required" }, 401);
+    return unauthorized(c, "API key");
   }
 
   const { fetchPublishedEvents } = await import("./events");
@@ -358,19 +359,19 @@ admin.post("/index-events", async (c) => {
 admin.get("/support", async (c) => {
   const adminUser = await getAdminUser(c.req.raw, c.env, "admin");
   if (!adminUser) {
-    return c.json({ error: "Unauthorized - admin access required" }, 401);
+    return unauthorized(c, "admin");
   }
   return c.json({ tickets: [], total: 0 });
 });
 
 admin.put("/support/:id/status", async (c) => {
   const adminUser = await getAdminUser(c.req.raw, c.env, "admin");
-  if (!adminUser) return c.json({ error: "Unauthorized - admin access required" }, 401);
+  if (!adminUser) return unauthorized(c, "admin");
   return c.json({ message: "Ticket status updated" });
 });
 
 admin.post("/support/:id/reply", async (c) => {
   const adminUser = await getAdminUser(c.req.raw, c.env, "admin");
-  if (!adminUser) return c.json({ error: "Unauthorized - admin access required" }, 401);
+  if (!adminUser) return unauthorized(c, "admin");
   return c.json({ message: "Reply sent", messageId: crypto.randomUUID() });
 });

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { writeAuth } from "../middleware/auth";
+import { notFound, badRequest } from "../utils/response";
 import { PaynowProvider } from "../payments/paynow";
 import { supabaseFetch } from "../db/supabase";
 
@@ -35,13 +36,13 @@ payments.post("/create", writeAuth, async (c) => {
   };
 
   if (!body.registrationId || !body.eventId || !body.amount || !body.returnUrl) {
-    return c.json({ error: "registrationId, eventId, amount, and returnUrl are required" }, 400);
+    return badRequest(c, "registrationId, eventId, amount, and returnUrl are required");
   }
   if (typeof body.amount !== "number" || body.amount <= 0 || body.amount > 1_000_000) {
-    return c.json({ error: "Invalid amount" }, 400);
+    return badRequest(c, "Invalid amount");
   }
   if (!returnUrlIsAllowed(body.returnUrl)) {
-    return c.json({ error: "Invalid returnUrl" }, 400);
+    return badRequest(c, "Invalid returnUrl");
   }
 
   // Look up the RSVP — payer identity comes from rsvp_action.agent_person_id;
@@ -55,7 +56,7 @@ payments.post("/create", writeAuth, async (c) => {
   });
 
   if (!rsvp) {
-    return c.json({ error: "Registration not found" }, 404);
+    return notFound(c, "Registration");
   }
 
   interface EventRow { id: string; organizer_person_id: string | null }
@@ -138,12 +139,12 @@ payments.post("/webhook", async (c) => {
   );
   const result = await provider.handleWebhook(payload);
   if (!result.valid || !result.reference || !result.status) {
-    return c.json({ error: "Invalid webhook payload" }, 400);
+    return badRequest(c, "Invalid webhook payload");
   }
 
   const VALID_STATUSES = ["completed", "refunded", "pending", "failed", "cancelled"];
   if (!VALID_STATUSES.includes(result.status)) {
-    return c.json({ error: "Invalid payment status" }, 400);
+    return badRequest(c, "Invalid payment status");
   }
 
   const patch: Record<string, unknown> = { status: result.status };
@@ -180,7 +181,7 @@ payments.get("/:id/status", writeAuth, async (c) => {
   });
 
   if (!payment) {
-    return c.json({ error: "Payment not found" }, 404);
+    return notFound(c, "Payment");
   }
 
   return c.json({
