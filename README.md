@@ -10,12 +10,13 @@
 |-------|-----------|------------|
 | Frontend | Next.js 16, React 19, Tailwind CSS v4 | Vercel |
 | Backend | Hono on Cloudflare Workers | Cloudflare |
-| Database | Cloudflare D1 (SQLite) | Cloudflare |
+| Database | Supabase Postgres (via PostgREST) | Supabase |
+| API Gateway | FastAPI (api.mukoko.com) | fly.io |
 | AI | Workers AI (BGE embeddings, Llama 3.1, Qwen 3) | Cloudflare |
 | Search | Cloudflare Vectorize (RAG) | Cloudflare |
 | Storage | Cloudflare R2 | Cloudflare |
 | Cache | Cloudflare KV | Cloudflare |
-| Auth | Stytch (magic links + OTP, JWT/JWKS) | Stytch |
+| Auth | WorkOS AuthKit (`@workos-inc/authkit-nextjs`, JWT/JWKS) | WorkOS |
 | Payments | Paynow (Zimbabwe mobile money) | Paynow |
 | Email | Resend (transactional) | Resend |
 
@@ -24,7 +25,7 @@
 - **Event Management** -- Create, edit, manage, and cancel events with rich details
 - **AI-Powered Search** -- Semantic search using vector embeddings (RAG)
 - **AI Description Wizard** -- Generate event descriptions with AI assistance
-- **Authentication** -- Passwordless login via magic links and OTP (Stytch)
+- **Authentication** -- WorkOS AuthKit (magic links, OTP, SSO)
 - **Registrations** -- RSVP with atomic capacity checks and waitlist support
 - **Payments** -- Mobile money payments via Paynow (EcoCash, OneMoney, Telecash)
 - **QR Check-in** -- QR code-based attendance tracking
@@ -65,12 +66,20 @@ npm run dev           # http://localhost:8787
 ```bash
 # Frontend (.env.local)
 NEXT_PUBLIC_API_URL=http://localhost:8787
-NEXT_PUBLIC_STYTCH_PUBLIC_TOKEN=your-token
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_WORKOS_CLIENT_ID=client_xxx
+WORKOS_API_KEY=sk_xxx                          # server-only
+WORKOS_COOKIE_PASSWORD=at-least-32-chars       # server-only
+WORKOS_REDIRECT_URI=http://localhost:3000/callback
+NEXT_PUBLIC_SUPABASE_URL=https://....supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your-key
 
 # Backend (worker/.dev.vars)
 API_KEY=your-api-key
+WORKOS_CLIENT_ID=client_xxx                    # overrides wrangler placeholder
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+MUKOKO_API_KEY=your-mukoko-api-key
 RESEND_API_KEY=your-resend-key
 ```
 
@@ -81,25 +90,27 @@ See [CLAUDE.md](./CLAUDE.md) for the full environment variable reference.
 ```
 nhimbe/
 ├── src/                          # Next.js frontend
-│   ├── app/                      # App Router pages (23 routes)
+│   ├── app/                      # App Router pages
 │   ├── components/               # React components
 │   │   ├── ui/                   # 34 shadcn/Radix primitives + composites
-│   │   ├── auth/                 # Auth context, guards, Stytch provider
+│   │   ├── auth/                 # Auth context, guards, WorkOS provider
 │   │   ├── modals/               # Responsive modal sheets
 │   │   ├── layout/               # Header, footer
 │   │   └── error/                # Error boundaries
-│   └── lib/                      # API client, i18n, utils, observability
+│   ├── hooks/                    # use-mobile, use-toast, use-memory-pressure
+│   └── lib/                      # API client, Supabase client, i18n, utils
+├── proxy.ts                      # Next.js 16 AuthKit session-cookie proxy
 ├── worker/                       # Cloudflare Workers backend (Hono)
 │   └── src/
-│       ├── routes/               # 17 route modules
+│       ├── routes/               # 18 route modules
 │       ├── ai/                   # RAG search, assistant, description wizard
-│       ├── auth/                 # Stytch JWT/JWKS validation
+│       ├── auth/                 # WorkOS JWT/JWKS validation
 │       ├── middleware/           # Auth, rate limit, AI safety, observability
-│       ├── payments/             # Paynow provider (HMAC-SHA512 webhooks)
+│       ├── payments/             # Paynow + Mukoko API gateway client
 │       ├── email/                # Resend client, templates, queue triggers
 │       ├── utils/                # Circuit breaker, retry, validation, audit
-│       ├── db/                   # Schema and migrations (8 files)
-│       └── __tests__/            # 283 tests across 10 files
+│       ├── db/                   # PostgREST helper + row-to-API mapper
+│       └── __tests__/            # 124 tests across 5 files
 ├── .github/                      # CI workflows, issue/PR templates
 ├── CLAUDE.md                     # Architecture guide
 ├── CONTRIBUTING.md               # Contribution guidelines
@@ -113,7 +124,7 @@ nhimbe/
 # Frontend (160 tests)
 npx vitest run
 
-# Backend (283 tests)
+# Backend (124 tests)
 cd worker && npx vitest run
 
 # Type check backend
@@ -125,15 +136,14 @@ npm run lint
 
 ## CI/CD
 
-GitHub Actions runs 5 parallel jobs on every push:
+GitHub Actions runs 4 parallel jobs on every push:
 
 1. **Lint & Build** -- ESLint + Next.js production build
 2. **Frontend Tests** -- 160 Vitest tests
-3. **Worker Tests** -- 283 Vitest tests
+3. **Worker Tests** -- 124 Vitest tests
 4. **Worker Type Check** -- TypeScript strict mode
-5. **Validate Migrations** -- SQL file integrity
 
-All 5 must pass before merge.
+All 4 must pass before merge. (The migration-validation job retired with the D1→Supabase migration; schema now lives in `nyuchi_platform_db`.)
 
 ## Documentation
 

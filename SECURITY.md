@@ -25,7 +25,7 @@ We will acknowledge receipt within 48 hours and provide a detailed response with
 nhimbe implements the following security controls:
 
 ### Authentication & Authorization
-- JWT validation via Stytch JWKS (no API secrets stored in client)
+- JWT validation via WorkOS JWKS (issuer + audience + signature + expiry checks; no API secrets stored in client)
 - Timing-safe API key comparison to prevent timing attacks
 - Suspended user enforcement (403 on all authenticated routes)
 - writeAuth middleware for all mutating operations (origin check + API key)
@@ -34,7 +34,7 @@ nhimbe implements the following security controls:
 ### Input Validation & Sanitization
 - AI safety middleware with prompt injection detection on all AI routes
 - Input length enforcement and content sanitization
-- Parameterized SQL queries (no string concatenation)
+- All database access via PostgREST (`supabaseFetch()`) with typed query params — no raw SQL string concatenation in the worker
 - File upload validation (type whitelist, 10MB size limit)
 
 ### Transport & Headers
@@ -57,9 +57,9 @@ nhimbe implements the following security controls:
 
 ### Resilience
 - Rate limiting on all API endpoints (100 req/min)
-- Circuit breaker pattern for external service calls (Stytch, Vectorize, AI, R2)
+- Circuit breaker pattern for external service calls (Vectorize, Workers AI, R2 — Supabase REST not yet wrapped)
 - Request timeout handling
-- Atomic database operations for race condition prevention (e.g., registration capacity)
+- Capacity-gate logic prevents over-registration; counter columns are flagged for migration to Postgres functions when concurrency demands stricter atomicity
 
 ## Dependency Management
 
@@ -81,4 +81,4 @@ The following are in scope for security reports:
 Out of scope:
 - Denial of service (handled by Cloudflare)
 - Social engineering
-- Issues in third-party services (Stytch, Cloudflare, Vercel)
+- Issues in third-party services (WorkOS, Supabase, Cloudflare, Vercel)

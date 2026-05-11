@@ -49,10 +49,10 @@ See [CLAUDE.md](./CLAUDE.md) for the full list of required environment variables
    npm run build                         # Next.js build
    npx vitest run                        # Frontend tests (160 tests)
    cd worker && npx tsc --noEmit         # Worker type check
-   cd worker && npx vitest run           # Worker tests (283 tests)
+   cd worker && npx vitest run           # Worker tests (124 tests)
    ```
 
-4. **Push and open a pull request** against `main`. CI runs 5 parallel jobs that must all pass.
+4. **Push and open a pull request** against `main`. CI runs 4 parallel jobs that must all pass. Per Nyuchi house style: **big PR, multiple commits** — group related work into one PR as a sequence of focused commits, rather than chaining tiny PRs.
 
 ## Code Conventions
 
@@ -69,9 +69,9 @@ See [CLAUDE.md](./CLAUDE.md) for the full list of required environment variables
 ## Architecture
 
 See [CLAUDE.md](./CLAUDE.md) for the complete architecture guide including:
-- Backend routing (17 Hono route modules)
-- Authentication flow (Stytch JWT)
-- Database schema (D1/SQLite)
+- Backend routing (18 Hono route modules)
+- Authentication flow (WorkOS AuthKit + JWKS validation)
+- Database (Supabase Postgres via PostgREST — schema owned by `nyuchi_platform_db`)
 - AI features (RAG search, description wizard)
 - Resilience patterns (circuit breaker, retry with backoff)
 
@@ -93,7 +93,7 @@ cd worker && npx vitest run                              # All worker tests
 cd worker && npx vitest run src/__tests__/auth.test.ts   # Single file
 ```
 
-Tests use Vitest with a 4-layer mock architecture. Config: `worker/vitest.config.ts`.
+Tests use Vitest with a 3-layer mock architecture (D1 mock was retired with the Supabase migration). Config: `worker/vitest.config.ts`. Stub global `fetch` to test `supabaseFetch()`-based routes.
 
 ### Writing Tests
 
@@ -104,28 +104,17 @@ Tests use Vitest with a 4-layer mock architecture. Config: `worker/vitest.config
 
 ## Database Migrations
 
-Migrations are plain SQL files in `worker/src/db/migrations/`. D1 is SQLite.
+The schema lives in the `nyuchi_platform_db` Supabase project, **not in this repo**. Apply migrations from there using either the Supabase MCP (`apply_migration`) or `supabase db push`. This repo only consumes the schema via `worker/src/db/supabase.ts` (PostgREST) and `src/lib/supabase/`.
 
-```bash
-# Run a migration
-cd worker && wrangler d1 execute mukoko-nhimbe-db --file=./src/db/migrations/NNN_description.sql
-```
-
-Naming: `NNN_description.sql` where NNN is the next sequential number (currently at 008).
-
-Conventions:
-- Use `IF NOT EXISTS` / `IF EXISTS` guards for idempotency
-- IDs are `TEXT PRIMARY KEY` (application-generated)
-- Timestamps are `TEXT DEFAULT (datetime('now'))` (ISO 8601)
-- Index naming: `idx_tableName_field`
+If your change requires a schema modification, open a separate PR against `nyuchi_platform_db` first, then update consumer code in this repo to use the new columns/tables.
 
 ## Pull Request Guidelines
 
-- Keep PRs focused -- one feature or fix per PR
+- **Big PR, multiple commits** — the Nyuchi house style. Group related work into one PR as a sequence of focused commits. Each commit is independently reviewable; the PR groups them by intent. Don't open a second PR for "just one more cleanup" — append a commit.
 - Write a clear description of what changed and why
 - Include test coverage for new functionality
 - Update `CLAUDE.md` if the architecture changes
-- All 5 CI checks must pass before merge
+- All 4 CI checks must pass before merge
 
 ## Reporting Issues
 

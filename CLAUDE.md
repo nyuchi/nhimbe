@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**nhimbe** (pronounced /ˈnhimbɛ/) — community events discovery and management platform, part of the Mukoko ecosystem. Full-stack monorepo: Next.js 16 frontend (Vercel) + Cloudflare Workers backend (Hono, D1, Vectorize, Workers AI, R2, KV).
+**nhimbe** (pronounced /ˈnhimbɛ/) — community events discovery and management platform, part of the Mukoko ecosystem. Full-stack monorepo: Next.js 16 frontend (Vercel) + Cloudflare Workers backend (Hono, Vectorize, Workers AI, R2, KV) backed by Supabase Postgres (via PostgREST) and the api.mukoko.com FastAPI gateway. Auth is WorkOS AuthKit end-to-end.
 
 ## Build & Dev Commands
 
@@ -26,19 +26,20 @@ cd worker && npx vitest run         # Backend tests
 cd worker && npx vitest run src/__tests__/auth.test.ts  # Single backend test file
 
 # Database migrations
-cd worker && wrangler d1 execute mukoko-nhimbe-db --file=./src/db/migrations/your-migration.sql
+# Owned by the nyuchi_platform_db Supabase project, not nhimbe — apply via
+# the Supabase MCP (`apply_migration`) or `supabase db push` from that repo.
+# This repo only reads/writes via PostgREST in `worker/src/db/supabase.ts`.
 ```
 
 ## CI Pipeline
 
-GitHub Actions (`.github/workflows/ci.yml`) runs 5 parallel jobs on every push to any branch:
+GitHub Actions (`.github/workflows/ci.yml`) runs 4 parallel jobs on every push to any branch:
 1. **Lint & Build** — `npm run lint` + `npm run build` (placeholder env vars)
 2. **Frontend Tests** — `npm run test:run`
 3. **Worker Tests** — `cd worker && npx vitest run`
 4. **Worker Type Check** — `cd worker && npx tsc --noEmit`
-5. **Validate Migrations** — checks migration SQL files exist and are non-empty
 
-All 5 must pass. The build uses placeholder env vars so `NEXT_PUBLIC_*` values don't need real secrets.
+All 4 must pass. The build uses placeholder env vars so `NEXT_PUBLIC_*` values don't need real secrets. (The migration-validation job was retired when D1 migrations moved out of this repo to nyuchi_platform_db.)
 
 ## Architecture
 
@@ -51,7 +52,7 @@ All frontend API calls go through `src/lib/api.ts` (centralized client) → Clou
 `worker/src/index.ts` (~186 lines) is the entry point using the **Hono** framework with modular route mounting:
 ```ts
 app.route("/api/events", events);
-app.route("/api/auth", auth);
+app.route("/api/users", users);
 app.route("/api/payments", payments);
 ```
 
@@ -63,9 +64,9 @@ Global middleware applied in `index.ts`: CORS (restricted to trusted origins), e
 |-------------|-----------|
 | `events.ts` | Event CRUD, list, filtering, cancel, CSV export |
 | `admin.ts` | Admin dashboard, user suspend/activate, growth metrics |
-| `health.ts` | Health checks, system probes for D1/Vectorize/R2/KV |
-| `auth.ts` | `/api/auth/sync` JWT validation, user sync, suspended user enforcement |
-| `users.ts` | Profile management, onboarding, account deletion (soft delete) |
+| `health.ts` | Health checks, system probes for Supabase/Vectorize/R2/KV |
+| `users.ts` | User sync (WorkOS → identity.person), profile management, onboarding, account deletion (soft delete via `role='deleted'`) |
+| `links.ts` | Short-link resolver (`/api/links/:shortCode` → event/series target) |
 | `registrations.ts` | Event registrations (atomic capacity checks, race condition prevention) |
 | `stats.ts` | Community stats, peak time calculation, event analytics |
 | `media.ts` | Image upload to R2 (10MB limit) |
@@ -90,17 +91,21 @@ Global middleware applied in `index.ts`: CORS (restricted to trusted origins), e
 
 ### Utils (`worker/src/utils/`)
 
-- `db.ts` — Database query helpers
 - `ids.ts` — ID generation (short codes, slugs)
 - `response.ts` — Consistent JSON response formatting
 - `validation.ts` — Input validation schemas
 - `timeout.ts` — Request timeout handling
-- `circuit-breaker.ts` — Netflix Hystrix-inspired circuit breaker (CLOSED→OPEN→HALF_OPEN)
-- `retry.ts` — Exponential backoff with jitter
+- `circuit-breaker.ts` — Netflix Hystrix-inspired circuit breaker (CLOSED→OPEN→HALF_OPEN). Currently only wired into `ai/search.ts` (Vectorize + Workers AI); Supabase calls are uncovered.
+- `retry.ts` — Exponential backoff with jitter (currently unused — flagged for either wiring into `supabaseFetch` or removal)
 - `observability.ts` — Backend structured logging with `[mukoko]` prefix
-- `audit.ts` — Audit logging to `audit_logs` table
+- `audit.ts` — Audit logging to the `audit_logs` table on Supabase
 - `export.ts` — CSV export with proper escaping
 - `index.ts` — Barrel export for common utilities
+
+### Database adapter (`worker/src/db/`)
+
+- `supabase.ts` — Thin `supabaseFetch()` helper that wraps PostgREST calls with the service-role key, request ID propagation, and consistent error handling. All route modules use this instead of a raw fetch.
+- `event_mapper.ts` — Maps Postgres row shapes (snake_case) to the schema.org-aligned API shapes (`Event`, etc.) consumed by the frontend.
 
 ### Queues (`worker/src/queues/`)
 
@@ -119,14 +124,14 @@ Global middleware applied in `index.ts`: CORS (restricted to trusted origins), e
 
 ### Authentication Flow
 
-1. Frontend uses **Stytch Consumer SDK** (magic links + OTP) — session managed client-side via `StytchProvider` (`src/components/auth/stytch-provider.tsx`)
-2. On login, `AuthProvider` (`src/components/auth/auth-context.tsx`) calls `/api/auth/sync` with the Stytch session JWT
-3. Backend validates JWT locally using Stytch's JWKS endpoint (`worker/src/auth/stytch.ts`) — no Stytch API secret needed
-4. `getAuthenticatedUser()` returns `AuthResult` with structured `failureReason` (e.g., `token_expired`, `issuer_mismatch`, `jwks_fetch_failed`, `invalid_signature`)
-5. If `/api/auth/sync` fails, user stays logged out (no fallback user creation)
-6. **Suspended user enforcement**: `/api/auth/sync` and `/api/auth/me` check `deleted_at` — suspended users get 403 with `reason: "account_suspended"`
+1. Frontend uses **WorkOS AuthKit** (`@workos-inc/authkit-nextjs`). Session cookies are managed by the AuthKit proxy at `proxy.ts` (Next.js 16+ proxy, was middleware in <=15). The provider component lives at `src/components/auth/workos-provider.tsx`.
+2. After sign-in, AuthKit returns the user to `/callback`, which exchanges the auth code for a session. `AuthProvider` (`src/components/auth/auth-context.tsx`) then calls the worker's `/api/users/me/sync` endpoint with the WorkOS access token.
+3. Backend validates the access token locally using WorkOS's public JWKS at `https://api.workos.com/sso/jwks/{WORKOS_CLIENT_ID}` (`worker/src/auth/workos.ts`). The issuer must be `https://api.workos.com` and the audience must contain `WORKOS_CLIENT_ID`. No WorkOS API secret is needed for the per-request path; the JWKS is cached for 1 hour.
+4. `getAuthenticatedUser()` returns `AuthResult` with structured `failureReason` (e.g., `token_expired`, `issuer_mismatch`, `audience_mismatch`, `jwks_fetch_failed`, `invalid_signature`).
+5. If user-sync fails, the user stays logged out (no fallback user creation).
+6. **Suspended user enforcement**: user-sync checks `identity.person.role` — suspended/deleted users get 403 with `reason: "account_suspended"`.
 
-Authentication page: `src/app/authenticate/page.tsx`. Stytch theme overrides: `src/app/stytch-overrides.css`.
+`src/app/authenticate/page.tsx` is a compatibility redirect for old magic-link emails that pointed at the Stytch flow — it now sends users to `/`. The canonical post-auth landing is `/callback`.
 
 ### Write Operation Authorization
 
@@ -144,10 +149,10 @@ Trusted domains are hardcoded in the worker: `nyuchi.com`, `mukoko.com`, `nhimbe
 - **Embeddings** (`embeddings.ts`): Shared embedding utilities
 - **AI Safety** (`middleware/ai-safety.ts`): Prompt injection detection on all AI routes
 
-### Resilience Patterns (Mukoko Registry)
+### Resilience Patterns (Mukoko Registry — Nyuchi architecture L5 / L8)
 
-- **Circuit Breaker** (`worker/src/utils/circuit-breaker.ts`) — Per-provider configs for stytch, vectorize, ai, r2
-- **Retry with Backoff** (`worker/src/utils/retry.ts`) — Exponential backoff with jitter for transient failures
+- **Circuit Breaker** (`worker/src/utils/circuit-breaker.ts`) — Per-provider configs for vectorize, ai, r2. **Note**: Supabase REST calls are not yet wrapped.
+- **Retry with Backoff** (`worker/src/utils/retry.ts`) — Exponential backoff with jitter. **Note**: currently shelf-stocked — not imported anywhere outside its own file.
 - **Structured Logging** — `[mukoko]` prefix on all log output (frontend: `src/lib/observability.ts`, backend: `worker/src/utils/observability.ts`)
 - **Section Error Boundary** (`src/components/error/section-error-boundary.tsx`) — 3-layer error boundary with retry
 
@@ -155,9 +160,10 @@ Trusted domains are hardcoded in the worker: `nyuchi.com`, `mukoko.com`, `nhimbe
 
 ### Pages (`src/app/`)
 - Home, events (create/detail/manage), my-events, profile, admin (events/users/settings/signage/support)
-- Auth: `/authenticate`, `/auth/signin`, `/auth/error`
+- Auth: `/auth/signin`, `/auth/error`, `/callback` (WorkOS post-auth landing), `/authenticate` (legacy Stytch redirect → `/`)
 - Info: search, calendar, about, help, privacy, terms
-- Short links: `/e/[shortCode]`
+- Short links: `/e/[shortCode]` (events), `/r/[code]` (referral tracking)
+- Kraal (community circles linked to events): `/kraal`, `/kraal/[id]`
 - Signage: `/signage` (TV/kiosk display mode)
 - Event sub-pages: `/events/[id]/kiosk` (on-site check-in), `/events/[id]/signage` (digital signage display)
 - SEO: `robots.ts`, `sitemap.ts` for search engine optimization
@@ -178,12 +184,13 @@ Trusted domains are hardcoded in the worker: `nyuchi.com`, `mukoko.com`, `nhimbe
 
 ### Components (`src/components/`)
 - `ui/` — 34 shadcn primitives + domain-specific composites (ratings, reputation, referrals, AI wizard)
-- `auth/` — `auth-context.tsx`, `stytch-provider.tsx`, `auth-guard.tsx` + tests
+- `auth/` — `auth-context.tsx`, `workos-provider.tsx`, `auth-guard.tsx` + tests
 - `modals/` — ResponsiveModal-based sheets for category, date, location, capacity, description, ticketing
 - `prompts/` — Onboarding: name, location, interests
 - `layout/` — Header, footer
 - `error/` — `section-error-boundary.tsx` (Mukoko 3-layer pattern)
 - `pwa/` — Service worker registration
+- `theme-provider.tsx` (top-level) — Dark/light mode context provider
 
 ### Event Form Decomposition (`src/app/events/create/`)
 - `create-event-form.tsx` — Main form (~377 lines)
@@ -208,14 +215,22 @@ Trusted domains are hardcoded in the worker: `nyuchi.com`, `mukoko.com`, `nhimbe
 
 ### Frontend Libraries (`src/lib/`)
 
-- `api.ts` — Centralized API client for all backend calls
+- `api.ts` — Centralized worker REST client (calls `NEXT_PUBLIC_API_URL` with the WorkOS access token as a Bearer header for writes)
+- `supabase/` — Direct Supabase access for read paths the worker doesn't proxy. `client.ts` (browser anon-key client), `server.ts` (RSC client), `api.ts` (typed read helpers — Kraal, person, etc.), `types.ts` (generated row types).
 - `calendar.ts` — Calendar/date utilities (with `calendar.test.ts`)
 - `timezone.ts` — Timezone handling utilities (with `timezone.test.ts`)
 - `fallback-chain.ts` — Fallback chain pattern for resilient data loading
 - `use-focus-trap.ts` — Focus trap hook for modal accessibility
+- `use-tracked-link.ts` — Hook to wrap `<a>` with analytics-event tracking
 - `themes.ts` — Mineral theme definitions
 - `observability.ts` — Frontend structured logging (`[mukoko]` prefix)
 - `utils.ts` — Shared utilities including `cn()` class merger (with `utils.test.ts`)
+
+### Hooks (`src/hooks/`)
+
+- `use-mobile.ts` — Viewport-based mobile detection
+- `use-toast.ts` — Toast notification dispatcher (wraps sonner)
+- `use-memory-pressure.ts` — Hint memory pressure to drop heavy renders (Lazy-section, etc.)
 
 ### i18n (`src/lib/i18n/`)
 
@@ -244,71 +259,71 @@ Tests colocate with modules (e.g., `src/lib/api.test.ts`) or live in `src/__test
 - `src/__tests__/seo.test.ts` — SEO metadata tests (25 tests)
 - `src/__tests__/accessibility.test.ts` — Accessibility compliance tests (18 tests)
 
-### Backend Tests (10 files, 283 tests)
+### Backend Tests (5 files, 124 tests)
 
 All backend tests live in `worker/src/__tests__/`. Config: `worker/vitest.config.ts` with `globals: true`.
 
-- `auth.test.ts` — JWT validation, JWKS caching, failure reasons
-- `auth-profile.test.ts` — User sync and profile management
-- `events.test.ts` — Event CRUD, pagination, cancellation, CSV export
-- `registrations.test.ts` — Registration flow, atomic capacity checks, waitlist auto-promotion
-- `users.test.ts` — User management, soft delete, PII anonymization
+- `auth.test.ts` — Bearer extraction, WorkOS JWT structure validation, JWKS cache logic, issuer/audience checks
+- `mukoko-api.test.ts` — `mukokoApiFetch` client: machine API-key forwarding, optional user-token forwarding, error propagation
 - `validation.test.ts` — Input validation, security checks
-- `ai-layers.test.ts` — AI feature testing
 - `security.test.ts` — Authorization, origin checks, API key validation
-- `observability.test.ts` — Logging, request IDs
-- `routes-coverage.test.ts` — Health, categories, cities, checkin, media, payments, referrals, reviews, series, waitlist, admin, stats, security headers, AI safety, Paynow HMAC
+- `observability.test.ts` — Logging, request IDs, cache-key namespacing
 
-**Mock architecture** (`worker/src/__tests__/mocks.ts`) — 4 layers:
-- **L1: Primitives** — `createMockD1()`, `createMockKV()`, `createMockR2()`, `createMockVectorize()`, `createMockAI()`
+**Mock architecture** (`worker/src/__tests__/mocks.ts`) — 3 layers:
+- **L1: Primitives** — `createMockKV()`, `createMockR2()`, `createMockVectorize()`, `createMockAI()` (D1 mock retired with the migration)
 - **L2: Env Factory** — `createMockEnv()` combines all bindings
 - **L3: Request Builders** — `createRequest()`, `createAuthenticatedRequest()`, `createApiKeyRequest()`
-- **L4: Domain Fixtures** — `createEventFixture()`, `createEventDbRow()`
+
+**Coverage debt**: PR #34 deleted `events.test.ts`, `registrations.test.ts`, `users.test.ts`, `auth-profile.test.ts`, `routes-coverage.test.ts`, `ai-layers.test.ts` because they mocked D1 internals. Rebuilding them against `supabaseFetch` (by stubbing global `fetch`) is the highest-priority post-migration testing task — priority order: registrations → users → events → payments → kiosk.
 
 **Note:** Worker test files (`__tests__/**`, `*.test.ts`, `*.spec.ts`) are excluded from `worker/tsconfig.json` so `tsc --noEmit` only checks production code.
 
 ## Database
 
-**Primary: Cloudflare D1 (SQLite).** Schema: `worker/src/db/schema.sql`. Migrations: `worker/src/db/migrations/`.
+**Primary: Supabase Postgres** (project `nyuchi_platform_db`, hosted at `https://tdcpuzqyoodrdsxldgsh.supabase.co`). All read/write is via PostgREST through `worker/src/db/supabase.ts` (`supabaseFetch()` helper, service-role key). The frontend can also read directly via `src/lib/supabase/` clients using the anon key (RLS-protected paths only).
 
-**Planned future: MongoDB Atlas.** Connected via `MONGODB_URI` secret. Not yet active — D1 is the current primary database.
+The schema is owned by the `nyuchi_platform_db` repo — not this one. Apply migrations via the Supabase MCP (`apply_migration`) or `supabase db push` from that repo. This repo only consumes the schema.
 
-### Core Tables
-`events` (schema.org Event), `users` (schema.org Person with roles), `registrations`, `follows`, `themes`
+### Schemas used by nhimbe
 
-### Features Tables
-`event_reviews`, `referrals`, `user_referral_codes`, `event_series`, `waitlists`, `payments`
+- **identity** — `person` (WorkOS user mirror; primary key includes `workos_user_id`), roles, suspended-user flags
+- **events** — `event`, `event_series`, `category`, `event_view`, `event_circle` (Kraal linkage)
+- **engagement** — `registration`, `review`, `referral`, `waitlist`, `kiosk_pairing`
+- **payments** — `payment`, Paynow transaction state
+- **audit** — `audit_logs` for destructive operations
+- **search** — `search_query` (analytics), AI conversation logs
 
-### Analytics Tables
-`event_views`, `search_queries`, `ai_conversations`, `audit_logs`
+### Counter-column hot spots
 
-### Kiosk/Signage Tables
-`kiosk_pairings` (TV-style pairing codes for on-site devices)
-
-### Migrations (11 files)
-`add_stytch_auth.sql`, `add_meeting_fields.sql`, `add_ticketing_fields.sql`, `add_reviews_referrals.sql`, `004_add_user_roles.sql`, `005_backend_hardening.sql` (soft deletes, audit logs, categories table, FTS5), `006_event_series.sql`, `007_waitlists_payments.sql`, `008_seed_categories.sql` (seeds 32 categories into DB), `009_schema_org_alignment.sql` (renames columns to match schema.org vocabulary — `review_body`, `date_created`/`date_modified`, `address_locality`/`address_country`), `010_kiosk_sessions.sql` (kiosk pairing codes and session tables)
+Three counters are read-then-written through PostgREST and are race-prone under concurrency. When traffic warrants it, migrate each to a Postgres function called via `/rest/v1/rpc/`:
+- `events.event.attendee_count` (in `routes/registrations.ts`)
+- `events.event.view_count` (in `queues/handlers.ts`)
+- `engagement.review.helpful_count` (in `routes/reviews.ts`)
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `worker/src/index.ts` | Hono app entry, routing, middleware setup |
-| `worker/src/types.ts` | Backend type definitions (Cloudflare bindings, DB models) |
-| `worker/src/auth/stytch.ts` | JWT validation with JWKS, `AuthResult` type |
+| `worker/src/index.ts` | Hono app entry, routing, middleware setup, env validator |
+| `worker/src/types.ts` | Backend type definitions (Cloudflare bindings, Env, queue messages) |
+| `worker/src/auth/workos.ts` | WorkOS JWT validation with JWKS caching, `AuthResult` type |
 | `worker/src/middleware/auth.ts` | Auth middleware, timing-safe API key validation |
 | `worker/src/middleware/ai-safety.ts` | Prompt injection detection |
 | `worker/src/utils/circuit-breaker.ts` | Circuit breaker for external services |
 | `worker/src/email/` | Resend email client, templates, triggers |
-| `worker/src/payments/` | Payment provider abstraction (Paynow) |
-| `worker/src/db/schema.sql` | D1 database schema |
-| `worker/src/db/migrations/` | SQL migration files |
-| `src/lib/api.ts` | All frontend API client functions |
+| `worker/src/payments/` | Payment provider abstraction (Paynow) + Mukoko API gateway client |
+| `worker/src/db/supabase.ts` | PostgREST helper (`supabaseFetch()`) used by every route |
+| `worker/src/db/event_mapper.ts` | Postgres row → API shape (schema.org) mapper |
+| `src/lib/api.ts` | Worker REST client (events, registrations, etc.) |
+| `src/lib/supabase/api.ts` | Direct Supabase reads (Kraal, person profile lookups) |
 | `src/lib/observability.ts` | Frontend structured logging (`[mukoko]` prefix) |
 | `src/lib/i18n/index.ts` | i18n translations (English + Shona) |
 | `src/lib/themes.ts` | Mineral theme definitions |
-| `src/components/auth/auth-context.tsx` | Auth state management, Stytch sync |
+| `src/components/auth/auth-context.tsx` | Auth state management, WorkOS sync via `/api/users/me/sync` |
+| `src/components/auth/workos-provider.tsx` | AuthKit provider wrapping the app |
 | `src/components/error/section-error-boundary.tsx` | Mukoko 3-layer error boundary |
 | `src/components/ui/share-button.tsx` | WhatsApp-first social sharing |
+| `proxy.ts` | Next.js 16 AuthKit proxy (session cookie management) |
 | `worker/src/routes/kiosk.ts` | Kiosk pairing, session management |
 | `worker/src/queues/handlers.ts` | Queue message processors (analytics, email) |
 | `worker/wrangler.toml` | Cloudflare bindings and env config |
@@ -341,12 +356,25 @@ All backend tests live in `worker/src/__tests__/`. Config: `worker/vitest.config
 
 ## Environment Variables
 
-Frontend (`.env.local`): `NEXT_PUBLIC_STYTCH_PUBLIC_TOKEN`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
+Frontend (`.env.local`):
+- `NEXT_PUBLIC_WORKOS_CLIENT_ID` — WorkOS Client ID (public)
+- `WORKOS_API_KEY` — server-only, used by the AuthKit proxy
+- `WORKOS_COOKIE_PASSWORD` — server-only, session-cookie encryption key (≥32 chars)
+- `WORKOS_REDIRECT_URI` — usually `${NEXT_PUBLIC_SITE_URL}/callback`
+- `NEXT_PUBLIC_API_URL` — worker base URL (e.g. `http://localhost:8787`)
+- `NEXT_PUBLIC_SITE_URL` — public site URL
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — for direct browser/RSC reads via `src/lib/supabase/`
 
-Backend (`worker/.dev.vars`): `API_KEY`, `MONGODB_URI`, `RESEND_API_KEY`
+Backend (`worker/.dev.vars`):
+- `API_KEY` — internal machine-context key for `writeAuth` middleware
+- `WORKOS_CLIENT_ID` — overrides the wrangler.toml placeholder for local dev
+- `SUPABASE_SERVICE_ROLE_KEY` — bearer for `supabaseFetch()`
+- `MUKOKO_API_KEY` — bearer for `mukokoApiFetch()` (api.mukoko.com gateway)
+- `RESEND_API_KEY` — Resend transactional email
 
-Backend (`worker/wrangler.toml` vars): `ENVIRONMENT`, `ALLOWED_ORIGINS`, `STYTCH_PROJECT_ID` (public value for JWKS validation — different per environment)
+Backend (`worker/wrangler.toml` vars): `ENVIRONMENT`, `ALLOWED_ORIGINS`, `WORKOS_CLIENT_ID` (dev only — production/staging must set via `wrangler secret put`), `SUPABASE_URL`, `MUKOKO_API_URL`
 
-Backend secrets: `PAYNOW_INTEGRATION_ID`, `PAYNOW_INTEGRATION_KEY` (set via `wrangler secret put`)
+Backend secrets (set via `wrangler secret put --env <env>`): `API_KEY`, `WORKOS_CLIENT_ID` (production/staging), `SUPABASE_SERVICE_ROLE_KEY`, `MUKOKO_API_KEY`, `RESEND_API_KEY`, `PAYNOW_INTEGRATION_ID`, `PAYNOW_INTEGRATION_KEY`
 
-Cloudflare bindings: `AI` (Workers AI), `VECTORIZE`, `DB` (D1), `CACHE` (KV), `MEDIA` (R2), `IMAGES`, `ANALYTICS`, `ANALYTICS_QUEUE`, `EMAIL_QUEUE`, `RATE_LIMITER`
+Cloudflare bindings: `AI` (Workers AI), `VECTORIZE`, `CACHE` (KV), `MEDIA` (R2), `IMAGES`, `ANALYTICS`, `ANALYTICS_QUEUE`, `EMAIL_QUEUE`, `RATE_LIMITER` (no D1 binding post-migration)

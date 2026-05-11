@@ -1,107 +1,35 @@
 ---
 name: create-migration
-description: Create a new database migration for the nhimbe backend (D1/SQLite or MongoDB)
+description: Pointer skill — schema migrations now live in the nyuchi_platform_db repo, not this one
 disable-model-invocation: true
-allowed-tools: Read, Write, Bash, Grep, Glob
+allowed-tools: Read
 ---
 
-Create a database migration for: $ARGUMENTS
+Schema migrations are no longer authored in this repository.
 
-## Current State
-- Existing migrations: !`ls worker/src/db/migrations/`
-- Total migration count: !`ls worker/src/db/migrations/ | wc -l`
-- Schema: !`head -50 worker/src/db/schema.sql`
+## Where they live now
 
-## Determine Database Target
+All database schema for the Mukoko platform — including the tables nhimbe reads/writes — is owned by the **`nyuchi_platform_db`** Supabase project. Migrations are SQL files in that repo, applied via:
 
-nhimbe currently uses **Cloudflare D1 (SQLite)** as the primary database. A future migration is planned:
+- **Supabase MCP** — call `apply_migration` from a session that has the Supabase MCP enabled, OR
+- **Supabase CLI** — `supabase db push` from inside the `nyuchi_platform_db` repo
 
-- **D1 (SQLite)** — current primary database, will become edge caching layer
-- **Supabase (PostgreSQL)** — future primary for all relational queries (part of larger Mukoko platform)
-- **ScyllaDB** — future document storage
-- **MongoDB Atlas** — deprecated, not active
+## What this repo does
 
-**Default to D1** for all migrations unless explicitly told otherwise.
+This repo (`nhimbe`) is a pure consumer of the platform DB:
+- **Worker side**: `worker/src/db/supabase.ts` (`supabaseFetch()` helper) uses PostgREST + the service-role key.
+- **Frontend side**: `src/lib/supabase/` clients use the anon key for RLS-protected reads.
+- Row → API mapping for events lives in `worker/src/db/event_mapper.ts`.
 
-## Steps — D1 (SQLite) Migration
+## If you really need a schema change
 
-1. **Determine the next migration number.** List all files in `worker/src/db/migrations/`. Count total files (both numbered and unnumbered legacy files). The next number is total count + 1, zero-padded to 3 digits. Format: `NNN_description.sql` (e.g., `006_add_notifications.sql`).
+1. Open a PR against `nyuchi_platform_db` with the new migration file (use the create-migration skill in that repo).
+2. Once merged + applied, return to this repo and update the consumer code:
+   - Add fields to `worker/src/db/event_mapper.ts` if API shapes need to expose them
+   - Update `worker/src/types.ts` for any new column types
+   - Update `src/lib/supabase/types.ts` if frontend reads them directly
+3. Land all consumer changes in a single PR per the Nyuchi "big PR, multiple commits" convention.
 
-   Legacy SQL files (unnumbered) are treated as migrations 001-005 in chronological order. New migrations always get the next sequential number.
+## Historical context
 
-2. **Read existing schema** (`worker/src/db/schema.sql`) and recent migrations to understand current tables and columns.
-
-3. **Write the migration SQL file** to `worker/src/db/migrations/NNN_description.sql`:
-   ```sql
-   -- Migration NNN: <description>
-
-   -- Add new table / alter existing table
-   CREATE TABLE IF NOT EXISTS new_table (
-     id TEXT PRIMARY KEY,
-     created_at TEXT DEFAULT (datetime('now')),
-     updated_at TEXT DEFAULT (datetime('now'))
-   );
-
-   -- Add indexes
-   CREATE INDEX IF NOT EXISTS idx_new_table_field ON new_table(field);
-   ```
-
-4. **Update `worker/src/db/schema.sql`** to include the new table/column definitions.
-
-5. **Update `worker/src/types.ts`** if the migration adds or modifies fields that need TypeScript type changes.
-
-6. **Report what was created** and the command to run it:
-   ```bash
-   cd worker && wrangler d1 execute mukoko-nhimbe-db --file=./src/db/migrations/NNN_description.sql
-   ```
-
-### D1 Conventions
-
-- Migration files are plain SQL (`.sql` extension)
-- D1 is SQLite — use SQLite syntax (e.g., `TEXT` not `VARCHAR`, `datetime('now')` not `NOW()`)
-- `ALTER TABLE` in SQLite only supports `ADD COLUMN` and `RENAME` (no `DROP COLUMN`, `ALTER COLUMN`)
-- IDs are `TEXT PRIMARY KEY` (application-generated UUIDs)
-- Timestamps are `TEXT DEFAULT (datetime('now'))` (ISO 8601 strings)
-- Booleans are `INTEGER` or `BOOLEAN` (0/1 in SQLite)
-- JSON stored as `TEXT` (parsed with `JSON()` in queries or application-side)
-- Use `CREATE INDEX IF NOT EXISTS` for idempotent migrations
-- Index naming: `idx_tableName_field`
-- Table names use snake_case (e.g., `event_views`, `ai_conversations`)
-- Always add `IF NOT EXISTS` / `IF EXISTS` guards for idempotency
-
-## Steps — MongoDB Migration
-
-1. **Determine the next migration number.** Same numbering as D1 (they share the sequence). Format: `NNN_description.ts` (e.g., `006_add_notifications.ts`).
-
-2. **Read existing migrations** to understand current collections, indexes, and data shapes.
-
-3. **Write the migration TypeScript file** to `worker/src/db/migrations/NNN_description.ts`:
-   ```typescript
-   // Migration NNN: <description>
-   import { Db } from "mongodb";
-
-   export async function up(db: Db): Promise<void> {
-     // Create collections, indexes, insert seed data
-   }
-
-   export async function down(db: Db): Promise<void> {
-     // Reverse the up() changes
-   }
-   ```
-
-4. **Update `worker/src/types.ts`** if the migration adds or modifies collections/fields that need TypeScript type changes.
-
-5. **Report what was created** and any manual steps needed.
-
-### MongoDB Conventions
-
-- Migration files are TypeScript with `up()` and `down()` exports
-- Every `up()` must have a corresponding `down()` for rollback
-- IDs are `string` (application-generated UUIDs or MongoDB ObjectIds)
-- Timestamps are `Date` objects (not ISO strings)
-- Use `createIndex()` for new indexes, not `ensureIndex()` (deprecated)
-- Index naming: `idx_collectionName_field`
-- Collections use camelCase (e.g., `eventViews`, `aiConversations`)
-- Embedded documents preferred over joins for data accessed together
-- Arrays of references (`ObjectId[]`) for many-to-many relationships
-- Always set `{ unique: true }` on indexes that enforce uniqueness (e.g., `users.email`, `users.handle`, `events.slug`)
+Before April 2026 this skill scaffolded D1 SQLite migrations under `worker/src/db/migrations/`. That directory and all 11 D1 migration files were removed in the D1→Supabase migration (see `claude/d1-to-supabase-migration` branch). MongoDB was once "planned future" and has been dropped from the stack entirely.
