@@ -2,10 +2,10 @@
 
 ## Supported Versions
 
-| Version | Supported |
-|---------|-----------|
-| Latest on `main` | Yes |
-| Older releases | No |
+| Version          | Supported |
+| ---------------- | --------- |
+| Latest on `main` | Yes       |
+| Older releases   | No        |
 
 ## Reporting a Vulnerability
 
@@ -25,6 +25,7 @@ We will acknowledge receipt within 48 hours and provide a detailed response with
 nhimbe implements the following security controls:
 
 ### Authentication & Authorization
+
 - JWT validation via WorkOS JWKS (issuer + audience + signature + expiry checks; no API secrets stored in client)
 - Timing-safe API key comparison to prevent timing attacks
 - Suspended user enforcement (403 on all authenticated routes)
@@ -32,12 +33,14 @@ nhimbe implements the following security controls:
 - Role-based access control (user, moderator, admin, super_admin)
 
 ### Input Validation & Sanitization
+
 - AI safety middleware with prompt injection detection on all AI routes
 - Input length enforcement and content sanitization
 - All database access via PostgREST (`supabaseFetch()`) with typed query params — no raw SQL string concatenation in the worker
 - File upload validation (type whitelist, 10MB size limit)
 
 ### Transport & Headers
+
 - HTTPS enforced via HSTS (max-age=63072000, includeSubDomains, preload)
 - X-Content-Type-Options: nosniff
 - X-Frame-Options: DENY (clickjacking protection)
@@ -46,16 +49,19 @@ nhimbe implements the following security controls:
 - CORS restricted to trusted domains (nyuchi.com, mukoko.com, nhimbe.com)
 
 ### Data Protection
+
 - Soft deletes with PII anonymization on account deletion
 - Audit logging for all destructive operations
 - No error details leaked in production responses (generic error + request ID)
 - Environment validation on startup (missing bindings logged as errors)
 
 ### Payments
+
 - Paynow webhook signature verification (HMAC-SHA512, timing-safe comparison)
 - Payment secrets stored via Cloudflare `wrangler secret put` (not in code or config)
 
 ### Resilience
+
 - Rate limiting on all API endpoints (100 req/min)
 - Circuit breaker pattern for external service calls (Vectorize, Workers AI, R2 — Supabase REST not yet wrapped)
 - Request timeout handling
@@ -71,6 +77,7 @@ nhimbe implements the following security controls:
 ## Scope
 
 The following are in scope for security reports:
+
 - Authentication and authorization bypasses
 - Injection vulnerabilities (SQL, XSS, prompt injection)
 - Data exposure or leakage
@@ -79,6 +86,7 @@ The following are in scope for security reports:
 - Rate limiting bypasses
 
 Out of scope:
+
 - Denial of service (handled by Cloudflare)
 - Social engineering
 - Issues in third-party services (WorkOS, Supabase, Cloudflare, Vercel)

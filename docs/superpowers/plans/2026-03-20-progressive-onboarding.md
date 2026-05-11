@@ -14,27 +14,28 @@
 
 ## File Structure
 
-| File | Responsibility |
-|------|---------------|
-| `worker/src/routes/auth.ts` | Backend auth routes — add PATCH /profile (UPSERT), remove POST /onboarding |
-| `worker/src/__tests__/auth-profile.test.ts` | Backend tests for PATCH /profile |
-| `src/lib/api.ts` | Frontend API client — add `updateProfile()` |
-| `src/components/auth/auth-context.tsx` | Auth state — replace `onboardingCompleted`/`needsOnboarding` with `profileCompleteness` |
-| `src/components/auth/auth-guard.tsx` | Simplify to auth-only gate (remove onboarding redirect) |
-| `src/components/prompts/name-prompt.tsx` | Inline name collection component |
-| `src/components/prompts/location-prompt.tsx` | Dismissible location banner |
-| `src/components/prompts/interests-prompt.tsx` | Dismissible interests banner |
-| `src/app/profile/edit/page.tsx` | Unified profile edit form (replaces onboarding wizard) |
-| `src/app/events/[id]/rsvp-button.tsx` | Integrate NamePrompt before RSVP |
-| `src/app/events/create/page.tsx` | Integrate NamePrompt as overlay before create form |
-| `src/app/events/events-client.tsx` | Integrate LocationPrompt and InterestsPrompt |
-| `src/app/profile/page.tsx` | Add completeness nudge card |
+| File                                          | Responsibility                                                                          |
+| --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `worker/src/routes/auth.ts`                   | Backend auth routes — add PATCH /profile (UPSERT), remove POST /onboarding              |
+| `worker/src/__tests__/auth-profile.test.ts`   | Backend tests for PATCH /profile                                                        |
+| `src/lib/api.ts`                              | Frontend API client — add `updateProfile()`                                             |
+| `src/components/auth/auth-context.tsx`        | Auth state — replace `onboardingCompleted`/`needsOnboarding` with `profileCompleteness` |
+| `src/components/auth/auth-guard.tsx`          | Simplify to auth-only gate (remove onboarding redirect)                                 |
+| `src/components/prompts/name-prompt.tsx`      | Inline name collection component                                                        |
+| `src/components/prompts/location-prompt.tsx`  | Dismissible location banner                                                             |
+| `src/components/prompts/interests-prompt.tsx` | Dismissible interests banner                                                            |
+| `src/app/profile/edit/page.tsx`               | Unified profile edit form (replaces onboarding wizard)                                  |
+| `src/app/events/[id]/rsvp-button.tsx`         | Integrate NamePrompt before RSVP                                                        |
+| `src/app/events/create/page.tsx`              | Integrate NamePrompt as overlay before create form                                      |
+| `src/app/events/events-client.tsx`            | Integrate LocationPrompt and InterestsPrompt                                            |
+| `src/app/profile/page.tsx`                    | Add completeness nudge card                                                             |
 
 ---
 
 ### Task 1: Backend — PATCH /api/auth/profile endpoint
 
 **Files:**
+
 - Modify: `worker/src/routes/auth.ts`
 - Create: `worker/src/__tests__/auth-profile.test.ts`
 
@@ -60,28 +61,29 @@ describe("PATCH /api/auth/profile", () => {
     env.DB.prepare = vi.fn().mockImplementation((sql: string) => ({
       bind: vi.fn().mockReturnValue({
         first: vi.fn().mockResolvedValue(
-          sql.includes("SELECT") ? {
-            _id: "usr-1",
-            email: "test@example.com",
-            name: "Old Name",
-            image: null,
-            address_locality: null,
-            address_country: null,
-            interests: "[]",
-            stytch_user_id: "stytch-123",
-            role: "user",
-            onboarding_completed: 0,
-          } : null
+          sql.includes("SELECT")
+            ? {
+                _id: "usr-1",
+                email: "test@example.com",
+                name: "Old Name",
+                image: null,
+                address_locality: null,
+                address_country: null,
+                interests: "[]",
+                stytch_user_id: "stytch-123",
+                role: "user",
+                onboarding_completed: 0,
+              }
+            : null,
         ),
         run: vi.fn().mockResolvedValue({ success: true }),
       }),
     }));
 
-    const request = createAuthenticatedRequest(
-      "https://api.test/api/auth/profile",
-      "valid-jwt-token",
-      { method: "PATCH", body: JSON.stringify({ name: "New Name" }) }
-    );
+    const request = createAuthenticatedRequest("https://api.test/api/auth/profile", "valid-jwt-token", {
+      method: "PATCH",
+      body: JSON.stringify({ name: "New Name" }),
+    });
 
     const worker = (await import("../index")).default;
     const response = await worker.fetch(request, env, {});
@@ -91,11 +93,10 @@ describe("PATCH /api/auth/profile", () => {
   });
 
   it("returns 400 when no fields provided", async () => {
-    const request = createAuthenticatedRequest(
-      "https://api.test/api/auth/profile",
-      "valid-jwt-token",
-      { method: "PATCH", body: JSON.stringify({}) }
-    );
+    const request = createAuthenticatedRequest("https://api.test/api/auth/profile", "valid-jwt-token", {
+      method: "PATCH",
+      body: JSON.stringify({}),
+    });
 
     const worker = (await import("../index")).default;
     const response = await worker.fetch(request, env, {});
@@ -123,7 +124,7 @@ auth.patch("/profile", async (c) => {
   }
   const stytchUser = authResult.user;
 
-  const body = await c.req.json() as {
+  const body = (await c.req.json()) as {
     name?: string;
     city?: string;
     country?: string;
@@ -148,9 +149,9 @@ auth.patch("/profile", async (c) => {
     onboarding_completed: number | null;
   }
 
-  const existingUser = await c.env.DB.prepare(
-    "SELECT * FROM users WHERE stytch_user_id = ?"
-  ).bind(stytchUser.userId).first() as DbUser | null;
+  const existingUser = (await c.env.DB.prepare("SELECT * FROM users WHERE stytch_user_id = ?")
+    .bind(stytchUser.userId)
+    .first()) as DbUser | null;
 
   let userId: string;
 
@@ -160,39 +161,53 @@ auth.patch("/profile", async (c) => {
     const setClauses: string[] = [];
     const values: (string | number)[] = [];
 
-    if (body.name !== undefined) { setClauses.push("name = ?"); values.push(body.name); }
-    if (body.city !== undefined) { setClauses.push("address_locality = ?"); values.push(body.city); }
-    if (body.country !== undefined) { setClauses.push("address_country = ?"); values.push(body.country); }
-    if (body.interests !== undefined) { setClauses.push("interests = ?"); values.push(JSON.stringify(body.interests)); }
+    if (body.name !== undefined) {
+      setClauses.push("name = ?");
+      values.push(body.name);
+    }
+    if (body.city !== undefined) {
+      setClauses.push("address_locality = ?");
+      values.push(body.city);
+    }
+    if (body.country !== undefined) {
+      setClauses.push("address_country = ?");
+      values.push(body.country);
+    }
+    if (body.interests !== undefined) {
+      setClauses.push("interests = ?");
+      values.push(JSON.stringify(body.interests));
+    }
     setClauses.push("date_modified = datetime('now')");
 
-    await c.env.DB.prepare(
-      `UPDATE users SET ${setClauses.join(", ")} WHERE _id = ?`
-    ).bind(...values, userId).run();
+    await c.env.DB.prepare(`UPDATE users SET ${setClauses.join(", ")} WHERE _id = ?`)
+      .bind(...values, userId)
+      .run();
   } else {
     // INSERT new user — email comes from JWT auth result
     userId = generateId();
-    await c.env.DB.prepare(`
+    await c.env.DB.prepare(
+      `
       INSERT INTO users (
         _id, email, name, stytch_user_id,
         address_locality, address_country, interests,
         email_verified, onboarding_completed, last_login_at, date_modified
       ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, datetime('now'), datetime('now'))
-    `).bind(
-      userId,
-      stytchUser.email || "",
-      body.name || "",
-      stytchUser.userId,
-      body.city || null,
-      body.country || null,
-      JSON.stringify(body.interests || [])
-    ).run();
+    `,
+    )
+      .bind(
+        userId,
+        stytchUser.email || "",
+        body.name || "",
+        stytchUser.userId,
+        body.city || null,
+        body.country || null,
+        JSON.stringify(body.interests || []),
+      )
+      .run();
   }
 
   // Fetch updated user
-  const result = await c.env.DB.prepare(
-    "SELECT * FROM users WHERE _id = ?"
-  ).bind(userId).first() as DbUser;
+  const result = (await c.env.DB.prepare("SELECT * FROM users WHERE _id = ?").bind(userId).first()) as DbUser;
 
   const user = {
     id: result._id,
@@ -202,7 +217,7 @@ auth.patch("/profile", async (c) => {
     city: result.address_locality,
     country: result.address_country,
     interests: safeParseJSON(result.interests, []) as string[],
-    onboardingCompleted: !!(result.onboarding_completed),
+    onboardingCompleted: !!result.onboarding_completed,
     stytchUserId: result.stytch_user_id,
     role: result.role || "user",
   };
@@ -228,29 +243,28 @@ it("inserts new user when no D1 record exists", async () => {
         sql.includes("SELECT") && sql.includes("stytch_user_id")
           ? null // No existing user
           : sql.includes("SELECT") && sql.includes("_id")
-          ? {
-              _id: "new-uuid",
-              email: "new@example.com",
-              name: "Jane",
-              image: null,
-              address_locality: null,
-              address_country: null,
-              interests: "[]",
-              stytch_user_id: "stytch-new",
-              role: "user",
-              onboarding_completed: 0,
-            }
-          : null
+            ? {
+                _id: "new-uuid",
+                email: "new@example.com",
+                name: "Jane",
+                image: null,
+                address_locality: null,
+                address_country: null,
+                interests: "[]",
+                stytch_user_id: "stytch-new",
+                role: "user",
+                onboarding_completed: 0,
+              }
+            : null,
       ),
       run: vi.fn().mockResolvedValue({ success: true }),
     }),
   }));
 
-  const request = createAuthenticatedRequest(
-    "https://api.test/api/auth/profile",
-    "valid-jwt-token",
-    { method: "PATCH", body: JSON.stringify({ name: "Jane" }) }
-  );
+  const request = createAuthenticatedRequest("https://api.test/api/auth/profile", "valid-jwt-token", {
+    method: "PATCH",
+    body: JSON.stringify({ name: "Jane" }),
+  });
 
   const worker = (await import("../index")).default;
   const response = await worker.fetch(request, env, {});
@@ -280,6 +294,7 @@ git commit -m "feat: add PATCH /api/auth/profile with UPSERT for progressive onb
 ### Task 2: Frontend API client — add `updateProfile()`
 
 **Files:**
+
 - Modify: `src/lib/api.ts`
 
 - [ ] **Step 1: Add `updateProfile` function**
@@ -289,7 +304,7 @@ In `src/lib/api.ts`, add after the existing auth-related functions:
 ```typescript
 export async function updateProfile(
   sessionJwt: string,
-  fields: Partial<{ name: string; city: string; country: string; interests: string[] }>
+  fields: Partial<{ name: string; city: string; country: string; interests: string[] }>,
 ): Promise<{ user: User }> {
   const response = await fetch(`${API_URL}/api/auth/profile`, {
     method: "PATCH",
@@ -326,6 +341,7 @@ git commit -m "feat: add updateProfile() API client function"
 ### Task 3: Auth context — replace onboarding with profileCompleteness
 
 **Files:**
+
 - Modify: `src/components/auth/auth-context.tsx`
 - Modify: `src/components/auth/auth-context.test.tsx`
 
@@ -401,23 +417,23 @@ In `src/components/auth/auth-context.test.tsx`:
 - Add test: "computes profileCompleteness based on populated fields"
 
 ```typescript
-it('computes profileCompleteness based on populated fields', async () => {
+it("computes profileCompleteness based on populated fields", async () => {
   const backendUser: NhimbeUser = {
-    id: 'usr-1',
-    email: 'test@example.com',
-    name: 'Test User',
-    city: 'Harare',
-    stytchUserId: 'stytch-123',
-    role: 'user',
+    id: "usr-1",
+    email: "test@example.com",
+    name: "Test User",
+    city: "Harare",
+    stytchUserId: "stytch-123",
+    role: "user",
   };
 
   // ... setup mocks, render ...
 
   await waitFor(() => {
-    expect(screen.getByTestId('profile-name').textContent).toBe('true');
-    expect(screen.getByTestId('profile-city').textContent).toBe('true');
-    expect(screen.getByTestId('profile-interests').textContent).toBe('false');
-    expect(screen.getByTestId('profile-complete').textContent).toBe('false');
+    expect(screen.getByTestId("profile-name").textContent).toBe("true");
+    expect(screen.getByTestId("profile-city").textContent).toBe("true");
+    expect(screen.getByTestId("profile-interests").textContent).toBe("false");
+    expect(screen.getByTestId("profile-complete").textContent).toBe("false");
   });
 });
 ```
@@ -439,6 +455,7 @@ git commit -m "refactor: replace onboardingCompleted with profileCompleteness"
 ### Task 4: Simplify AuthGuard — auth-only gate
 
 **Files:**
+
 - Modify: `src/components/auth/auth-guard.tsx`
 - Modify: `src/components/auth/auth-guard.test.tsx`
 
@@ -487,12 +504,14 @@ export function AuthGuard({ children }: AuthGuardProps) {
 - [ ] **Step 2: Update tests**
 
 Rewrite `auth-guard.test.tsx` — remove all onboarding-related test cases. Keep:
+
 - Shows loading spinner when auth is loading
 - Redirects to /auth/signin when not authenticated
 - Renders children when authenticated
 - Does not render children when not authenticated
 
 Remove:
+
 - All `requireOnboarding` tests
 - All `needsOnboarding` redirect tests
 
@@ -513,6 +532,7 @@ git commit -m "refactor: simplify AuthGuard to auth-only gate, remove onboarding
 ### Task 5: NamePrompt component
 
 **Files:**
+
 - Create: `src/components/prompts/name-prompt.tsx`
 
 - [ ] **Step 1: Create NamePrompt component**
@@ -605,6 +625,7 @@ git commit -m "feat: add NamePrompt inline component for contextual name collect
 ### Task 6: Integrate NamePrompt into RSVP button
 
 **Files:**
+
 - Modify: `src/app/events/[id]/rsvp-button.tsx`
 
 - [ ] **Step 1: Add NamePrompt to RSVPButton**
@@ -658,6 +679,7 @@ git commit -m "feat: integrate NamePrompt into RSVP button for nameless users"
 ### Task 7: Integrate NamePrompt into create event page
 
 **Files:**
+
 - Modify: `src/app/events/create/page.tsx`
 
 - [ ] **Step 1: Add NamePrompt overlay to create event**
@@ -737,6 +759,7 @@ git commit -m "feat: require name via NamePrompt before creating an event"
 ### Task 8: LocationPrompt and InterestsPrompt components
 
 **Files:**
+
 - Create: `src/components/prompts/location-prompt.tsx`
 - Create: `src/components/prompts/interests-prompt.tsx`
 
@@ -958,6 +981,7 @@ git commit -m "feat: add LocationPrompt and InterestsPrompt dismissible banners"
 ### Task 9: Integrate prompts into events page
 
 **Files:**
+
 - Modify: `src/app/events/events-client.tsx`
 
 - [ ] **Step 1: Add LocationPrompt and InterestsPrompt to events listing**
@@ -988,6 +1012,7 @@ git commit -m "feat: add location and interests prompts to events listing page"
 ### Task 10: Profile edit page
 
 **Files:**
+
 - Create: `src/app/profile/edit/page.tsx`
 
 - [ ] **Step 1: Create profile edit page**
@@ -995,6 +1020,7 @@ git commit -m "feat: add location and interests prompts to events listing page"
 Build a single-page form with all profile fields (name, city/country, interests). Uses the same data sources as the old onboarding form (`/api/cities`, `/api/categories`). Pre-populates from `useAuth().user`. Save calls `updateProfile()`. Wrap in `<AuthGuard>`.
 
 Key patterns:
+
 - `useAuth()` for current user data and `refreshUser()`
 - `useStytch()` for session JWT
 - `getCities()` and `getCategories()` for dropdown/pill data
@@ -1018,6 +1044,7 @@ git commit -m "feat: add profile edit page with all fields editable"
 ### Task 11: Profile page — completeness nudge
 
 **Files:**
+
 - Modify: `src/app/profile/page.tsx`
 
 - [ ] **Step 1: Add completeness nudge card**
@@ -1079,6 +1106,7 @@ git commit -m "feat: add profile completeness nudge card with progress ring"
 ### Task 12: Delete old onboarding files and POST /onboarding endpoint
 
 **Files:**
+
 - Delete: `src/app/onboarding/page.tsx`
 - Delete: `src/app/onboarding/onboarding-form.tsx`
 - Modify: `worker/src/routes/auth.ts` — remove `POST /onboarding` handler
@@ -1141,6 +1169,7 @@ Expected: Clean
 - [ ] **Step 3: Verify end-to-end**
 
 Manual verification checklist:
+
 1. Sign in with Stytch → lands on home page (no onboarding redirect)
 2. View event → tap RSVP → NamePrompt appears → enter name → RSVP fires
 3. Browse events page → LocationPrompt banner shows → set city → banner disappears

@@ -27,13 +27,13 @@ The Mukoko navigation system includes:
 
 ### Key Features
 
-| Feature | Description |
-|---------|-------------|
-| Scroll Detection | Header transitions at 20px scroll |
-| Touch Targets | 44px minimum for mobile accessibility |
-| Theme Toggle | Cycles: Dark → Light → System |
-| Page Titles | Static mapping + dynamic H1 detection |
-| Frosted Glass | `backdrop-blur-xl` with theme-aware opacity |
+| Feature          | Description                                 |
+| ---------------- | ------------------------------------------- |
+| Scroll Detection | Header transitions at 20px scroll           |
+| Touch Targets    | 44px minimum for mobile accessibility       |
+| Theme Toggle     | Cycles: Dark → Light → System               |
+| Page Titles      | Static mapping + dynamic H1 detection       |
+| Frosted Glass    | `backdrop-blur-xl` with theme-aware opacity |
 
 ---
 
@@ -97,7 +97,7 @@ function getSystemTheme(): ResolvedTheme {
 export function ThemeProvider({
   children,
   defaultTheme = "system",
-  storageKey = "app-theme" // Change this per app
+  storageKey = "app-theme", // Change this per app
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(defaultTheme);
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("dark");
@@ -160,9 +160,7 @@ export function ThemeProvider({
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme, cycleTheme }}>
-      {children}
-    </ThemeContext.Provider>
+    <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme, cycleTheme }}>{children}</ThemeContext.Provider>
   );
 }
 
@@ -258,7 +256,7 @@ const pageTitles: Record<string, string> = {
 
 // App configuration - change these per app
 const APP_CONFIG = {
-  name: "nhimbe",        // Lowercase wordmark
+  name: "nhimbe", // Lowercase wordmark
   createPath: "/events/create",
   searchPath: "/search",
   profilePath: "/profile",
@@ -311,9 +309,7 @@ export function Header() {
   return (
     <header
       className={`sticky top-0 z-50 transition-all duration-300 ${
-        isScrolled
-          ? "bg-background/70 backdrop-blur-xl border-b border-elevated/50 shadow-sm"
-          : ""
+        isScrolled ? "bg-background/70 backdrop-blur-xl border-b border-elevated/50 shadow-sm" : ""
       }`}
     >
       <div className="max-w-[1200px] mx-auto px-6 py-4 flex items-center justify-between">
@@ -323,9 +319,7 @@ export function Header() {
             {/* Logo - visible when not scrolled */}
             <span
               className={`text-[28px] font-bold text-primary transition-all duration-300 ${
-                isScrolled && pageTitle
-                  ? "opacity-0 absolute"
-                  : "opacity-100"
+                isScrolled && pageTitle ? "opacity-0 absolute" : "opacity-100"
               }`}
             >
               {APP_CONFIG.name}
@@ -334,9 +328,7 @@ export function Header() {
             {pageTitle && (
               <span
                 className={`text-lg font-semibold text-foreground truncate max-w-[200px] sm:max-w-[300px] transition-all duration-300 ${
-                  isScrolled
-                    ? "opacity-100"
-                    : "opacity-0 absolute"
+                  isScrolled ? "opacity-100" : "opacity-0 absolute"
                 }`}
               >
                 {pageTitle}
@@ -352,9 +344,7 @@ export function Header() {
               key={link.href}
               href={link.href}
               className={`text-sm font-medium transition-colors ${
-                pathname === link.href
-                  ? "text-primary"
-                  : "text-text-secondary hover:text-foreground"
+                pathname === link.href ? "text-primary" : "text-text-secondary hover:text-foreground"
               }`}
             >
               {link.label}
@@ -463,9 +453,7 @@ export function Footer() {
         {/* Brand */}
         <div className="flex items-center gap-4">
           <span className="text-2xl font-bold text-primary">{APP_CONFIG.name}</span>
-          <span className="font-serif italic text-sm text-text-secondary">
-            &ldquo;{APP_CONFIG.tagline}&rdquo;
-          </span>
+          <span className="font-serif italic text-sm text-text-secondary">&ldquo;{APP_CONFIG.tagline}&rdquo;</span>
         </div>
 
         {/* Links */}
@@ -491,7 +479,9 @@ export function Footer() {
             </Link>{" "}
             Product
           </span>
-          <span>© {new Date().getFullYear()} {APP_CONFIG.copyrightHolder}</span>
+          <span>
+            © {new Date().getFullYear()} {APP_CONFIG.copyrightHolder}
+          </span>
         </div>
       </div>
     </footer>
@@ -574,24 +564,24 @@ export default function RootLayout({
 
 :root {
   /* Design Tokens - Shared */
-  --charcoal: #0A0A0A;
-  --cream: #FAF9F5;
+  --charcoal: #0a0a0a;
+  --cream: #faf9f5;
 
   /* Default to dark mode */
-  --background: #0A0A0A;
-  --foreground: #F5F5F4;
+  --background: #0a0a0a;
+  --foreground: #f5f5f4;
   --surface: #141414;
-  --elevated: #1E1E1E;
+  --elevated: #1e1e1e;
 
   /* Text hierarchy */
-  --text-primary: #F5F5F4;
-  --text-secondary: #B8B8B3;
-  --text-tertiary: #8A8A85;
+  --text-primary: #f5f5f4;
+  --text-secondary: #b8b8b3;
+  --text-tertiary: #8a8a85;
 
   /* Brand Colors - Dark mode */
-  --malachite: #64FFDA;
-  --tanzanite: #B388FF;
-  --gold: #FFD740;
+  --malachite: #64ffda;
+  --tanzanite: #b388ff;
+  --gold: #ffd740;
 
   /* Semantic */
   --primary: var(--malachite);
@@ -601,20 +591,20 @@ export default function RootLayout({
 
 /* Dark Theme - WCAG AAA Compliant */
 .dark {
-  --background: #0A0A0A;
-  --foreground: #F5F5F4;
+  --background: #0a0a0a;
+  --foreground: #f5f5f4;
   --surface: #141414;
-  --elevated: #1E1E1E;
+  --elevated: #1e1e1e;
 
   /* Text hierarchy - AAA compliant (7:1+ contrast on #0A0A0A) */
-  --text-primary: #F5F5F4;     /* 19.3:1 contrast */
-  --text-secondary: #B8B8B3;   /* 10.4:1 contrast */
-  --text-tertiary: #8A8A85;    /* 7.1:1 contrast */
+  --text-primary: #f5f5f4; /* 19.3:1 contrast */
+  --text-secondary: #b8b8b3; /* 10.4:1 contrast */
+  --text-tertiary: #8a8a85; /* 7.1:1 contrast */
 
   /* Brand Colors */
-  --malachite: #64FFDA;
-  --tanzanite: #B388FF;
-  --gold: #FFD740;
+  --malachite: #64ffda;
+  --tanzanite: #b388ff;
+  --gold: #ffd740;
 
   --primary: var(--malachite);
   --secondary: var(--tanzanite);
@@ -623,20 +613,20 @@ export default function RootLayout({
 
 /* Light Theme - WCAG AAA Compliant */
 .light {
-  --background: #FAFAF8;
+  --background: #fafaf8;
   --foreground: #171717;
-  --surface: #FFFFFF;
-  --elevated: #F0F0ED;
+  --surface: #ffffff;
+  --elevated: #f0f0ed;
 
   /* Text hierarchy - AAA compliant (7:1+ contrast on #FAFAF8) */
-  --text-primary: #171717;     /* 17.4:1 contrast */
-  --text-secondary: #404040;   /* 10.2:1 contrast */
-  --text-tertiary: #595959;    /* 7.0:1 contrast */
+  --text-primary: #171717; /* 17.4:1 contrast */
+  --text-secondary: #404040; /* 10.2:1 contrast */
+  --text-tertiary: #595959; /* 7.0:1 contrast */
 
   /* Brand Colors - Darker for light mode */
-  --malachite: #00574B;        /* 7.3:1 contrast */
-  --tanzanite: #4B0082;        /* 10.5:1 contrast */
-  --gold: #8B5A00;             /* 7.1:1 contrast */
+  --malachite: #00574b; /* 7.3:1 contrast */
+  --tanzanite: #4b0082; /* 10.5:1 contrast */
+  --gold: #8b5a00; /* 7.1:1 contrast */
 
   --primary: var(--malachite);
   --secondary: var(--tanzanite);
@@ -673,7 +663,10 @@ body {
 }
 
 /* Touch target minimum size (44px) */
-button, input, select, textarea {
+button,
+input,
+select,
+textarea {
   min-height: 44px;
 }
 ```
@@ -687,9 +680,10 @@ button, input, select, textarea {
 When implementing in a new Mukoko app, update these values:
 
 1. **Header (`APP_CONFIG`)**
+
    ```tsx
    const APP_CONFIG = {
-     name: "your-app-name",  // Lowercase wordmark
+     name: "your-app-name", // Lowercase wordmark
      createPath: "/create",
      searchPath: "/search",
      profilePath: "/profile",
@@ -697,6 +691,7 @@ When implementing in a new Mukoko app, update these values:
    ```
 
 2. **Footer (`APP_CONFIG`)**
+
    ```tsx
    const APP_CONFIG = {
      name: "your-app-name",
@@ -707,6 +702,7 @@ When implementing in a new Mukoko app, update these values:
    ```
 
 3. **Theme Storage Key**
+
    - Layout: `storageKey="your-app-theme"`
    - Flash script: `localStorage.getItem('your-app-theme')`
 
@@ -741,7 +737,7 @@ import { Plus, Search, Bell, Settings } from "lucide-react";
 // In the pill div:
 <Link href="/notifications">
   <Bell className="w-6 h-6 text-background" />
-</Link>
+</Link>;
 ```
 
 ---
@@ -778,5 +774,5 @@ import { Plus, Search, Bell, Settings } from "lucide-react";
 
 ---
 
-*Last updated: December 2025*
-*Part of the Mukoko Design System*
+_Last updated: December 2025_
+_Part of the Mukoko Design System_

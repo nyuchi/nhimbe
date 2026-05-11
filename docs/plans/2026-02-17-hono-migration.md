@@ -13,16 +13,21 @@
 ## Important Context
 
 ### Current test approach
+
 Tests in `worker/src/__tests__/` **re-implement private functions** from `index.ts` (they copy-paste `safeParseInt`, `isAllowedOrigin`, etc.) since they can't import them. After this refactor, tests should import from the new modules directly.
 
 ### Response format
+
 The current `jsonResponse()` adds CORS headers and pretty-prints JSON. Hono's `c.json()` does not pretty-print by default and doesn't add CORS headers (that's handled by `cors()` middleware). To maintain identical response bodies, we'll use `c.json(data, status)` with CORS handled by middleware. **Note:** We drop pretty-printing (`JSON.stringify(data, null, 2)` → compact JSON) — this is an acceptable change since no client parses whitespace.
 
 ### Queue handlers
+
 Hono handles `fetch` only. The `queue` handler must be exported separately alongside the Hono app. The export shape changes from `ExportedHandler<Env>` to `{ fetch, queue }`.
 
 ### Line ranges for reference
+
 These are approximate line ranges in the current `index.ts` for each handler group:
+
 - Utilities (validation, ID gen): 36-100, 2725-2826
 - Fetch handler (routing): 102-387
 - Queue processors: 389-438
@@ -44,11 +49,13 @@ These are approximate line ranges in the current `index.ts` for each handler gro
 ### Task 1: Install Hono and verify setup
 
 **Files:**
+
 - Modify: `worker/package.json`
 
 **Step 1: Install Hono**
 
 Run:
+
 ```bash
 cd worker && npm install hono
 ```
@@ -56,17 +63,21 @@ cd worker && npm install hono
 **Step 2: Verify Hono is in dependencies**
 
 Run:
+
 ```bash
 cd worker && node -e "require('hono')" 2>&1 || echo "Hono not found"
 ```
+
 Expected: No output (success)
 
 **Step 3: Verify existing tests still pass**
 
 Run:
+
 ```bash
 cd worker && npx vitest run
 ```
+
 Expected: All tests PASS (no changes to code yet)
 
 **Step 4: Commit**
@@ -81,6 +92,7 @@ git commit -m "chore: add hono dependency for router migration"
 ### Task 2: Extract shared utilities
 
 **Files:**
+
 - Create: `worker/src/utils/response.ts`
 - Create: `worker/src/utils/validation.ts`
 - Create: `worker/src/utils/ids.ts`
@@ -103,7 +115,7 @@ export function safeParseInt(value: string | null, defaultValue: number, min: nu
 // Validate required string fields
 export function validateRequiredFields(obj: Record<string, unknown>, fields: string[]): string | null {
   for (const field of fields) {
-    if (!obj[field] || (typeof obj[field] === 'string' && !(obj[field] as string).trim())) {
+    if (!obj[field] || (typeof obj[field] === "string" && !(obj[field] as string).trim())) {
       return `Missing required field: ${field}`;
     }
   }
@@ -199,7 +211,7 @@ export function dbRowToEvent(row: Record<string, unknown>): Event {
       country: row.location_country as string,
     },
     category: row.category as string,
-    tags: safeParseJSON((row.tags as string), []) as string[],
+    tags: safeParseJSON(row.tags as string, []) as string[],
     coverImage: row.cover_image as string | undefined,
     coverGradient: row.cover_gradient as string | undefined,
     attendeeCount: row.attendee_count as number,
@@ -264,17 +276,21 @@ export { jsonResponse, corsHeaders } from "./response";
 **Step 6: Verify TypeScript compiles**
 
 Run:
+
 ```bash
 cd worker && npx tsc --noEmit
 ```
+
 Expected: PASS (new files compile, old index.ts still works independently)
 
 **Step 7: Verify tests still pass**
 
 Run:
+
 ```bash
 cd worker && npx vitest run
 ```
+
 Expected: All tests PASS
 
 **Step 8: Commit**
@@ -289,6 +305,7 @@ git commit -m "refactor: extract shared utilities into worker/src/utils/"
 ### Task 3: Create middleware modules
 
 **Files:**
+
 - Create: `worker/src/middleware/auth.ts`
 - Create: `worker/src/middleware/index.ts`
 
@@ -313,7 +330,7 @@ export function isAllowedOrigin(request: Request, env: Env): boolean {
   try {
     const url = new URL(origin);
     const hostname = url.hostname;
-    if (TRUSTED_DOMAINS.some(domain => hostname === domain || hostname.endsWith(`.${domain}`))) {
+    if (TRUSTED_DOMAINS.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`))) {
       return true;
     }
   } catch {
@@ -321,7 +338,7 @@ export function isAllowedOrigin(request: Request, env: Env): boolean {
   }
 
   const extraOrigins = (env.ALLOWED_ORIGINS || "").split(",").filter(Boolean);
-  return extraOrigins.some(allowed => origin === allowed.trim());
+  return extraOrigins.some((allowed) => origin === allowed.trim());
 }
 
 // Validate API key from request
@@ -368,9 +385,9 @@ export async function getAdminUser(request: Request, env: Env, requiredRole: Use
     role: string | null;
   }
 
-  const user = await env.DB.prepare(
-    "SELECT id, email, name, role FROM users WHERE stytch_user_id = ?"
-  ).bind(stytchUser.userId).first() as DbUserRow | null;
+  const user = (await env.DB.prepare("SELECT id, email, name, role FROM users WHERE stytch_user_id = ?")
+    .bind(stytchUser.userId)
+    .first()) as DbUserRow | null;
 
   if (!user) return null;
 
@@ -391,9 +408,11 @@ export type { AdminUser } from "./auth";
 **Step 3: Verify TypeScript compiles**
 
 Run:
+
 ```bash
 cd worker && npx tsc --noEmit
 ```
+
 Expected: PASS
 
 **Step 4: Commit**
@@ -410,6 +429,7 @@ git commit -m "refactor: extract auth middleware into worker/src/middleware/"
 This is the most critical task. We create the new `index.ts` with Hono, but **we do it incrementally**: first create the app shell with a few routes to verify the pattern works, then extract remaining routes in subsequent tasks.
 
 **Files:**
+
 - Create: `worker/src/routes/health.ts`
 - Create: `worker/src/routes/categories.ts`
 - Modify: `worker/src/index.ts` (backup old, write new shell)
@@ -528,11 +548,14 @@ import { categories } from "./routes/categories";
 const app = new Hono<{ Bindings: Env }>();
 
 // Global CORS middleware
-app.use("*", cors({
-  origin: "*",
-  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "X-API-Key"],
-}));
+app.use(
+  "*",
+  cors({
+    origin: "*",
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization", "X-API-Key"],
+  }),
+);
 
 // Mount route modules
 app.route("/", health);
@@ -575,6 +598,7 @@ export default {
 **Step 4: Verify TypeScript compiles**
 
 Run:
+
 ```bash
 cd worker && npx tsc --noEmit
 ```
@@ -582,6 +606,7 @@ cd worker && npx tsc --noEmit
 **Step 5: Verify health routes work locally**
 
 Run:
+
 ```bash
 cd worker && npx wrangler dev --port 8788 &
 sleep 3
@@ -590,6 +615,7 @@ curl -s http://localhost:8788/api/categories | head -5
 curl -s http://localhost:8788/api/cities | head -5
 kill %1
 ```
+
 Expected: JSON responses
 
 **Step 6: Commit**
@@ -604,6 +630,7 @@ git commit -m "refactor: create Hono app shell with health and categories routes
 ### Task 5: Extract events routes
 
 **Files:**
+
 - Create: `worker/src/routes/events.ts`
 - Modify: `worker/src/index.ts` (add route import)
 
@@ -636,13 +663,21 @@ events.get("/", async (c) => {
   let query = "SELECT * FROM events WHERE is_published = TRUE AND is_cancelled = FALSE";
   const params: unknown[] = [];
 
-  if (city) { query += " AND location_city = ?"; params.push(city); }
-  if (category) { query += " AND category = ?"; params.push(category); }
+  if (city) {
+    query += " AND location_city = ?";
+    params.push(city);
+  }
+  if (category) {
+    query += " AND category = ?";
+    params.push(category);
+  }
 
   query += " ORDER BY date_iso ASC LIMIT ? OFFSET ?";
   params.push(limit, offset);
 
-  const result = await c.env.DB.prepare(query).bind(...params).all();
+  const result = await c.env.DB.prepare(query)
+    .bind(...params)
+    .all();
   const eventsList = result.results.map((row) => dbRowToEvent(row as Record<string, unknown>));
 
   return c.json({ events: eventsList, pagination: { limit, offset, total: eventsList.length } });
@@ -731,6 +766,7 @@ git commit -m "refactor: extract events routes to worker/src/routes/events.ts"
 ### Task 6: Extract search and AI routes
 
 **Files:**
+
 - Create: `worker/src/routes/search.ts`
 - Create: `worker/src/routes/ai.ts`
 - Modify: `worker/src/index.ts`
@@ -770,7 +806,12 @@ Copy from `index.old.ts`: `handleAssistant` (966-985), `handleDescriptionWizardS
 import { Hono } from "hono";
 import type { Env, AssistantRequest } from "../types";
 import { chat, generateSuggestions } from "../ai/assistant";
-import { generateDescription, regenerateDescription, getWizardSteps, type DescriptionContext } from "../ai/description-generator";
+import {
+  generateDescription,
+  regenerateDescription,
+  getWizardSteps,
+  type DescriptionContext,
+} from "../ai/description-generator";
 
 export const ai = new Hono<{ Bindings: Env }>();
 
@@ -818,6 +859,7 @@ git commit -m "refactor: extract search and AI routes"
 ### Task 7: Extract auth routes
 
 **Files:**
+
 - Create: `worker/src/routes/auth.ts`
 - Modify: `worker/src/index.ts`
 
@@ -870,6 +912,7 @@ git commit -m "refactor: extract auth routes"
 ### Task 8: Extract users, registrations, and media routes
 
 **Files:**
+
 - Create: `worker/src/routes/users.ts`
 - Create: `worker/src/routes/registrations.ts`
 - Create: `worker/src/routes/media.ts`
@@ -888,19 +931,29 @@ import { generateReferralCode } from "../utils/ids";
 export const users = new Hono<{ Bindings: Env }>();
 
 // GET /api/users/:id
-users.get("/:id", async (c) => { /* handleUsers GET */ });
+users.get("/:id", async (c) => {
+  /* handleUsers GET */
+});
 
 // POST /api/users/:id
-users.post("/:id", async (c) => { /* handleUsers POST */ });
+users.post("/:id", async (c) => {
+  /* handleUsers POST */
+});
 
 // GET /api/users/:id/referral-code
-users.get("/:id/referral-code", async (c) => { /* handleUserReferralCode GET */ });
+users.get("/:id/referral-code", async (c) => {
+  /* handleUserReferralCode GET */
+});
 
 // POST /api/users/:id/referral-code
-users.post("/:id/referral-code", async (c) => { /* handleUserReferralCode POST */ });
+users.post("/:id/referral-code", async (c) => {
+  /* handleUserReferralCode POST */
+});
 
 // GET /api/users/:id/reputation
-users.get("/:id/reputation", async (c) => { /* handleHostReputation */ });
+users.get("/:id/reputation", async (c) => {
+  /* handleHostReputation */
+});
 ```
 
 **Step 2: Create `worker/src/routes/registrations.ts`**
@@ -917,16 +970,24 @@ export const registrations = new Hono<{ Bindings: Env }>();
 registrations.use("*", writeAuth);
 
 // GET /api/registrations
-registrations.get("/", async (c) => { /* list registrations */ });
+registrations.get("/", async (c) => {
+  /* list registrations */
+});
 
 // POST /api/registrations
-registrations.post("/", async (c) => { /* create registration */ });
+registrations.post("/", async (c) => {
+  /* create registration */
+});
 
 // PUT /api/registrations/:id
-registrations.put("/:id", async (c) => { /* update registration */ });
+registrations.put("/:id", async (c) => {
+  /* update registration */
+});
 
 // DELETE /api/registrations/:id
-registrations.delete("/:id", async (c) => { /* cancel registration */ });
+registrations.delete("/:id", async (c) => {
+  /* cancel registration */
+});
 ```
 
 **Step 3: Create `worker/src/routes/media.ts`**
@@ -942,13 +1003,19 @@ export const media = new Hono<{ Bindings: Env }>();
 media.use("*", writeAuth);
 
 // POST /api/media/upload
-media.post("/upload", async (c) => { /* upload to R2 */ });
+media.post("/upload", async (c) => {
+  /* upload to R2 */
+});
 
 // GET /api/media/:key
-media.get("/:key", async (c) => { /* get from R2 */ });
+media.get("/:key", async (c) => {
+  /* get from R2 */
+});
 
 // DELETE /api/media/:key
-media.delete("/:key", async (c) => { /* delete from R2 */ });
+media.delete("/:key", async (c) => {
+  /* delete from R2 */
+});
 ```
 
 **Step 4: Mount and commit**
@@ -973,6 +1040,7 @@ git commit -m "refactor: extract users, registrations, and media routes"
 ### Task 9: Extract referrals, reviews, stats, and community routes
 
 **Files:**
+
 - Create: `worker/src/routes/referrals.ts`
 - Create: `worker/src/routes/reviews.ts`
 - Create: `worker/src/routes/stats.ts`
@@ -989,7 +1057,9 @@ import type { Env } from "../types";
 export const referrals = new Hono<{ Bindings: Env }>();
 
 // POST /api/referrals/track
-referrals.post("/track", async (c) => { /* handleTrackReferral */ });
+referrals.post("/track", async (c) => {
+  /* handleTrackReferral */
+});
 ```
 
 **Step 2: Create `worker/src/routes/reviews.ts`**
@@ -1003,7 +1073,9 @@ import type { Env } from "../types";
 export const reviews = new Hono<{ Bindings: Env }>();
 
 // POST /api/reviews/:id/helpful
-reviews.post("/:id/helpful", async (c) => { /* handleReviewHelpful */ });
+reviews.post("/:id/helpful", async (c) => {
+  /* handleReviewHelpful */
+});
 ```
 
 **Step 3: Create `worker/src/routes/stats.ts`**
@@ -1017,7 +1089,9 @@ import type { Env } from "../types";
 export const stats = new Hono<{ Bindings: Env }>();
 
 // GET /api/community/stats
-stats.get("/stats", async (c) => { /* handleCommunityStats */ });
+stats.get("/stats", async (c) => {
+  /* handleCommunityStats */
+});
 ```
 
 **Step 4: Mount and commit**
@@ -1042,6 +1116,7 @@ git commit -m "refactor: extract referrals, reviews, and community stats routes"
 ### Task 10: Extract admin routes and seed
 
 **Files:**
+
 - Create: `worker/src/routes/admin.ts`
 - Create: `worker/src/routes/seed.ts`
 - Modify: `worker/src/index.ts`
@@ -1061,37 +1136,59 @@ import { indexEvents } from "../ai/embeddings";
 export const admin = new Hono<{ Bindings: Env }>();
 
 // GET /api/admin/stats
-admin.get("/stats", async (c) => { /* handleAdminStats */ });
+admin.get("/stats", async (c) => {
+  /* handleAdminStats */
+});
 
 // GET /api/admin/users
-admin.get("/users", async (c) => { /* handleAdminUsers */ });
+admin.get("/users", async (c) => {
+  /* handleAdminUsers */
+});
 
 // POST /api/admin/users/:id/suspend
-admin.post("/users/:id/suspend", async (c) => { /* handleAdminUserAction("suspend") */ });
+admin.post("/users/:id/suspend", async (c) => {
+  /* handleAdminUserAction("suspend") */
+});
 
 // POST /api/admin/users/:id/activate
-admin.post("/users/:id/activate", async (c) => { /* handleAdminUserAction("activate") */ });
+admin.post("/users/:id/activate", async (c) => {
+  /* handleAdminUserAction("activate") */
+});
 
 // POST /api/admin/users/:id/role
-admin.post("/users/:id/role", async (c) => { /* handleAdminUserAction("role") */ });
+admin.post("/users/:id/role", async (c) => {
+  /* handleAdminUserAction("role") */
+});
 
 // GET /api/admin/events
-admin.get("/events", async (c) => { /* handleAdminEvents */ });
+admin.get("/events", async (c) => {
+  /* handleAdminEvents */
+});
 
 // DELETE /api/admin/events/:id
-admin.delete("/events/:id", async (c) => { /* handleAdminDeleteEvent */ });
+admin.delete("/events/:id", async (c) => {
+  /* handleAdminDeleteEvent */
+});
 
 // POST /api/admin/index-events (API key required)
-admin.post("/index-events", apiKeyRequired, async (c) => { /* handleIndexEvents */ });
+admin.post("/index-events", apiKeyRequired, async (c) => {
+  /* handleIndexEvents */
+});
 
 // GET /api/admin/support
-admin.get("/support", async (c) => { /* handleAdminSupport */ });
+admin.get("/support", async (c) => {
+  /* handleAdminSupport */
+});
 
 // PUT /api/admin/support/:id/status
-admin.put("/support/:id/status", async (c) => { /* handleAdminTicketStatus */ });
+admin.put("/support/:id/status", async (c) => {
+  /* handleAdminTicketStatus */
+});
 
 // POST /api/admin/support/:id/reply
-admin.post("/support/:id/reply", async (c) => { /* handleAdminTicketReply */ });
+admin.post("/support/:id/reply", async (c) => {
+  /* handleAdminTicketReply */
+});
 ```
 
 **Step 2: Create `worker/src/routes/seed.ts`**
@@ -1106,7 +1203,9 @@ import { apiKeyRequired } from "../middleware/auth";
 export const seed = new Hono<{ Bindings: Env }>();
 
 // POST /api/admin/seed (API key required)
-seed.post("/admin/seed", apiKeyRequired, async (c) => { /* handleSeedData */ });
+seed.post("/admin/seed", apiKeyRequired, async (c) => {
+  /* handleSeedData */
+});
 ```
 
 **Step 3: Mount and commit**
@@ -1129,6 +1228,7 @@ git commit -m "refactor: extract admin and seed routes"
 ### Task 11: Move queue handlers
 
 **Files:**
+
 - Create: `worker/src/queues/handlers.ts`
 - Modify: `worker/src/index.ts`
 
@@ -1167,6 +1267,7 @@ git commit -m "refactor: extract queue handlers to worker/src/queues/"
 ### Task 12: Update tests to import from modules
 
 **Files:**
+
 - Modify: `worker/src/__tests__/validation.test.ts`
 - Modify: `worker/src/__tests__/security.test.ts`
 
@@ -1177,9 +1278,9 @@ The tests currently re-implement private functions. Now that utilities and middl
 Replace the re-implemented functions at the top with imports:
 
 ```typescript
-import { safeParseInt, validateRequiredFields, safeParseJSON, slugify, getInitials } from '../utils/validation';
-import { generateShortCode, generateReferralCode } from '../utils/ids';
-import { dbRowToEvent } from '../utils/db';
+import { safeParseInt, validateRequiredFields, safeParseJSON, slugify, getInitials } from "../utils/validation";
+import { generateShortCode, generateReferralCode } from "../utils/ids";
+import { dbRowToEvent } from "../utils/db";
 ```
 
 Remove the copy-pasted function definitions (lines 19-100 approximately).
@@ -1189,7 +1290,7 @@ Remove the copy-pasted function definitions (lines 19-100 approximately).
 Replace the re-implemented `isAllowedOrigin` with import:
 
 ```typescript
-import { isAllowedOrigin, validateApiKey } from '../middleware/auth';
+import { isAllowedOrigin, validateApiKey } from "../middleware/auth";
 ```
 
 **Note:** The `isAllowedOrigin` in tests takes `(origin, allowedOrigins)` while the module version takes `(request, env)`. You may need to keep the test-local version or adjust the test to create mock requests. **Evaluate which approach is simpler.** If the test function signatures differ, keep the test-local versions for now and add a TODO comment.
@@ -1197,9 +1298,11 @@ import { isAllowedOrigin, validateApiKey } from '../middleware/auth';
 **Step 3: Run all tests**
 
 Run:
+
 ```bash
 cd worker && npx vitest run
 ```
+
 Expected: All tests PASS
 
 **Step 4: Commit**
@@ -1214,31 +1317,38 @@ git commit -m "refactor: update tests to import from extracted modules"
 ### Task 13: Delete old index and verify everything
 
 **Files:**
+
 - Delete: `worker/src/index.old.ts`
 - Modify: `worker/src/index.ts` (final cleanup)
 
 **Step 1: Run full test suite**
 
 Run:
+
 ```bash
 cd worker && npx vitest run
 ```
+
 Expected: All tests PASS
 
 **Step 2: Run type check**
 
 Run:
+
 ```bash
 cd worker && npx tsc --noEmit
 ```
+
 Expected: PASS
 
 **Step 3: Run the CI pipeline locally**
 
 Run from root:
+
 ```bash
 npm run lint && npm run build
 ```
+
 Expected: PASS
 
 **Step 4: Delete the backup**
@@ -1275,6 +1385,7 @@ Migrated 3,362-line index.ts to modular Hono router:
 npx vitest run
 cd worker && npx vitest run
 ```
+
 Expected: All tests PASS
 
 **Step 2: Type check**
@@ -1282,6 +1393,7 @@ Expected: All tests PASS
 ```bash
 cd worker && npx tsc --noEmit
 ```
+
 Expected: PASS
 
 **Step 3: Lint**
@@ -1289,6 +1401,7 @@ Expected: PASS
 ```bash
 npm run lint
 ```
+
 Expected: PASS
 
 **Step 4: Build frontend (confirms no import breakage)**
@@ -1296,6 +1409,7 @@ Expected: PASS
 ```bash
 npm run build
 ```
+
 Expected: PASS
 
 **Step 5: Local smoke test**
@@ -1310,6 +1424,7 @@ curl -s http://localhost:8788/api/events
 curl -s http://localhost:8788/api/cities
 kill %1
 ```
+
 Expected: All return valid JSON
 
 ---

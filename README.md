@@ -6,19 +6,19 @@
 
 ## Tech Stack
 
-| Layer | Technology | Deployment |
-|-------|-----------|------------|
-| Frontend | Next.js 16, React 19, Tailwind CSS v4 | Vercel |
-| Backend | Hono on Cloudflare Workers | Cloudflare |
-| Database | Supabase Postgres (via PostgREST) | Supabase |
-| API Gateway | FastAPI (api.mukoko.com) | fly.io |
-| AI | Workers AI (BGE embeddings, Llama 3.1, Qwen 3) | Cloudflare |
-| Search | Cloudflare Vectorize (RAG) | Cloudflare |
-| Storage | Cloudflare R2 | Cloudflare |
-| Cache | Cloudflare KV | Cloudflare |
-| Auth | WorkOS AuthKit (`@workos-inc/authkit-nextjs`, JWT/JWKS) | WorkOS |
-| Payments | Paynow (Zimbabwe mobile money) | Paynow |
-| Email | Resend (transactional) | Resend |
+| Layer       | Technology                                              | Deployment |
+| ----------- | ------------------------------------------------------- | ---------- |
+| Frontend    | Next.js 16, React 19, Tailwind CSS v4                   | Vercel     |
+| Backend     | Hono on Cloudflare Workers                              | Cloudflare |
+| Database    | Supabase Postgres (via PostgREST)                       | Supabase   |
+| API Gateway | FastAPI (api.mukoko.com)                                | fly.io     |
+| AI          | Workers AI (BGE embeddings, Llama 3.1, Qwen 3)          | Cloudflare |
+| Search      | Cloudflare Vectorize (RAG)                              | Cloudflare |
+| Storage     | Cloudflare R2                                           | Cloudflare |
+| Cache       | Cloudflare KV                                           | Cloudflare |
+| Auth        | WorkOS AuthKit (`@workos-inc/authkit-nextjs`, JWT/JWKS) | WorkOS     |
+| Payments    | Paynow (Zimbabwe mobile money)                          | Paynow     |
+| Email       | Resend (transactional)                                  | Resend     |
 
 ## Features
 
@@ -147,12 +147,12 @@ All 4 must pass before merge. (The migration-validation job retired with the D1â
 
 ## Documentation
 
-| Document | Purpose |
-|----------|---------|
-| [CLAUDE.md](./CLAUDE.md) | Complete architecture guide, API reference, conventions |
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | How to contribute |
-| [SECURITY.md](./SECURITY.md) | Security policy and vulnerability reporting |
-| [RELEASES.md](./RELEASES.md) | Release process and versioning |
+| Document                             | Purpose                                                 |
+| ------------------------------------ | ------------------------------------------------------- |
+| [CLAUDE.md](./CLAUDE.md)             | Complete architecture guide, API reference, conventions |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | How to contribute                                       |
+| [SECURITY.md](./SECURITY.md)         | Security policy and vulnerability reporting             |
+| [RELEASES.md](./RELEASES.md)         | Release process and versioning                          |
 
 ## Security
 

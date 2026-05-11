@@ -37,6 +37,7 @@ See [CLAUDE.md](./CLAUDE.md) for the full list of required environment variables
 ## Development Workflow
 
 1. **Create a branch** from `main` with a descriptive name:
+
    - `feat/event-reminders` for new features
    - `fix/registration-race-condition` for bug fixes
    - `docs/update-api-reference` for documentation
@@ -44,6 +45,7 @@ See [CLAUDE.md](./CLAUDE.md) for the full list of required environment variables
 2. **Make your changes** following the conventions below.
 
 3. **Run checks locally** before pushing:
+
    ```bash
    npm run lint                          # ESLint
    npm run build                         # Next.js build
@@ -69,6 +71,7 @@ See [CLAUDE.md](./CLAUDE.md) for the full list of required environment variables
 ## Architecture
 
 See [CLAUDE.md](./CLAUDE.md) for the complete architecture guide including:
+
 - Backend routing (18 Hono route modules)
 - Authentication flow (WorkOS AuthKit + JWKS validation)
 - Database (Supabase Postgres via PostgREST — schema owned by `nyuchi_platform_db`)
@@ -119,6 +122,7 @@ If your change requires a schema modification, open a separate PR against `nyuch
 ## Reporting Issues
 
 Use the [GitHub issue templates](.github/ISSUE_TEMPLATE/) for:
+
 - Bug reports
 - Feature requests
 

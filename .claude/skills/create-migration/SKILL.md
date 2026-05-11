@@ -17,6 +17,7 @@ All database schema for the Mukoko platform — including the tables nhimbe read
 ## What this repo does
 
 This repo (`nhimbe`) is a pure consumer of the platform DB:
+
 - **Worker side**: `worker/src/db/supabase.ts` (`supabaseFetch()` helper) uses PostgREST + the service-role key.
 - **Frontend side**: `src/lib/supabase/` clients use the anon key for RLS-protected reads.
 - Row → API mapping for events lives in `worker/src/db/event_mapper.ts`.

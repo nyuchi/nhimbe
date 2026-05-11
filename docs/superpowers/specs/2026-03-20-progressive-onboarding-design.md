@@ -7,6 +7,7 @@
 The current onboarding flow gates users behind a 3-step wizard (name, city, interests) before they can use the app. This creates unnecessary friction — users must complete onboarding before seeing a single event. The data collected (city, interests) isn't currently used for discovery or recommendations, making the gate feel arbitrary.
 
 Additionally:
+
 - Users who skip onboarding are stuck forever (`/profile/edit` doesn't exist)
 - `onboardingCompleted` gates access to protected pages via `AuthGuard`
 - Profile page is read-only with no edit capability
@@ -75,10 +76,10 @@ Replaces the binary `onboardingCompleted` flag with a computed `profileCompleten
 
 ```typescript
 profileCompleteness: {
-  name: boolean;      // user.name is set
-  city: boolean;      // user.city is set
+  name: boolean; // user.name is set
+  city: boolean; // user.city is set
   interests: boolean; // user.interests.length > 0
-  complete: boolean;  // all three are true
+  complete: boolean; // all three are true
 }
 ```
 
@@ -88,6 +89,7 @@ profileCompleteness: {
 ### Profile page nudge
 
 If `profileCompleteness.complete` is false, the profile page shows a card at the top:
+
 - Progress ring visual (no percentage number)
 - Plain-language prompt: "Add your location for better event recommendations"
 - Link to `/profile/edit`
@@ -112,12 +114,12 @@ Response: { user: UserObject }
 
 The request body uses frontend-friendly names. The handler maps them to schema.org D1 columns:
 
-| Request field | D1 column |
-|--------------|-----------|
-| `name` | `name` |
-| `city` | `address_locality` |
-| `country` | `address_country` |
-| `interests` | `interests` (JSON string) |
+| Request field | D1 column                 |
+| ------------- | ------------------------- |
+| `name`        | `name`                    |
+| `city`        | `address_locality`        |
+| `country`     | `address_country`         |
+| `interests`   | `interests` (JSON string) |
 
 Primary key is `_id` (not `id`). Timestamp column is `date_modified` (not `updated_at`).
 
@@ -147,38 +149,38 @@ The D1 `users` table in production uses schema.org column names (`_id`, `address
 
 ### Deleted
 
-| File | Reason |
-|------|--------|
-| `src/app/onboarding/page.tsx` | No more onboarding route |
+| File                                     | Reason                                       |
+| ---------------------------------------- | -------------------------------------------- |
+| `src/app/onboarding/page.tsx`            | No more onboarding route                     |
 | `src/app/onboarding/onboarding-form.tsx` | Replaced by profile edit + prompt components |
 
 ### Created
 
-| File | Purpose |
-|------|---------|
-| `src/components/prompts/name-prompt.tsx` | Inline name collection at RSVP / create event |
-| `src/components/prompts/location-prompt.tsx` | Dismissible banner on discover/search page |
-| `src/components/prompts/interests-prompt.tsx` | Dismissible banner on category browse |
-| `src/app/profile/edit/page.tsx` | Unified profile edit form (all fields, single page) |
+| File                                          | Purpose                                             |
+| --------------------------------------------- | --------------------------------------------------- |
+| `src/components/prompts/name-prompt.tsx`      | Inline name collection at RSVP / create event       |
+| `src/components/prompts/location-prompt.tsx`  | Dismissible banner on discover/search page          |
+| `src/components/prompts/interests-prompt.tsx` | Dismissible banner on category browse               |
+| `src/app/profile/edit/page.tsx`               | Unified profile edit form (all fields, single page) |
 
 ### Modified
 
-| File | Change |
-|------|--------|
-| `src/components/auth/auth-context.tsx` | Remove `needsOnboarding`, `onboardingCompleted`. Add `profileCompleteness` computed value. |
-| `src/components/auth/auth-guard.tsx` | Remove `requireOnboarding` prop and onboarding redirect. Auth-only gate. |
-| `src/components/auth/auth-guard.test.tsx` | Update tests: remove onboarding redirect cases, add auth-only cases. |
-| `src/components/auth/auth-context.test.tsx` | Update tests for `profileCompleteness`. |
-| `src/app/events/[id]/rsvp-button.tsx` | Integrate `<NamePrompt />` when user has no name. |
-| `src/app/events/create/page.tsx` | Integrate `<NamePrompt />` when creating event without name. |
-| `src/app/profile/page.tsx` | Add completeness nudge card, link to `/profile/edit`. |
-| `src/lib/api.ts` | Add `updateProfile()` function. |
-| `worker/src/routes/auth.ts` | Remove `POST /onboarding`, add `PATCH /profile` handler. |
+| File                                        | Change                                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `src/components/auth/auth-context.tsx`      | Remove `needsOnboarding`, `onboardingCompleted`. Add `profileCompleteness` computed value. |
+| `src/components/auth/auth-guard.tsx`        | Remove `requireOnboarding` prop and onboarding redirect. Auth-only gate.                   |
+| `src/components/auth/auth-guard.test.tsx`   | Update tests: remove onboarding redirect cases, add auth-only cases.                       |
+| `src/components/auth/auth-context.test.tsx` | Update tests for `profileCompleteness`.                                                    |
+| `src/app/events/[id]/rsvp-button.tsx`       | Integrate `<NamePrompt />` when user has no name.                                          |
+| `src/app/events/create/page.tsx`            | Integrate `<NamePrompt />` when creating event without name.                               |
+| `src/app/profile/page.tsx`                  | Add completeness nudge card, link to `/profile/edit`.                                      |
+| `src/lib/api.ts`                            | Add `updateProfile()` function.                                                            |
+| `worker/src/routes/auth.ts`                 | Remove `POST /onboarding`, add `PATCH /profile` handler.                                   |
 
 ### Unchanged
 
-| File | Reason |
-|------|--------|
-| `src/app/authenticate/page.tsx` | Stytch callback flow unchanged |
-| `src/app/auth/signin/page.tsx` | Sign-in UI unchanged |
-| `src/components/auth/stytch-provider.tsx` | SDK initialization unchanged |
+| File                                      | Reason                         |
+| ----------------------------------------- | ------------------------------ |
+| `src/app/authenticate/page.tsx`           | Stytch callback flow unchanged |
+| `src/app/auth/signin/page.tsx`            | Sign-in UI unchanged           |
+| `src/components/auth/stytch-provider.tsx` | SDK initialization unchanged   |

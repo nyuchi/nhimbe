@@ -7,7 +7,7 @@
     ".next/**",
     "worker/.wrangler",
     "worker/.wrangler/**",
-    "**/CHANGELOG.md"
+    "**/CHANGELOG.md",
   ],
   "config": {
     "default": true,
@@ -25,6 +25,6 @@
     "MD046": false,
     "MD047": false,
     "MD001": false,
-    "MD060": false
-  }
+    "MD060": false,
+  },
 }
