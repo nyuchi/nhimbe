@@ -1,14 +1,18 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
-import { generateId } from "../utils/ids";
 import { writeAuth } from "../middleware/auth";
+import { supabaseFetch } from "../db/supabase";
 
 export const series = new Hono<{ Bindings: Env }>();
-
-// Apply writeAuth to all POST/PUT/DELETE operations
 series.use("*", writeAuth);
 
-// POST /api/series — Create a new event series
+// "Series" is no longer a separate table. The parent event IS the series:
+// events.event has rrule + recurrence_end + series_parent_id + series_occurrence
+// already on the row. /api/series/:id resolves to that parent; occurrences are
+// rows where series_parent_id = :id.
+
+// POST /api/series — Create the parent (template) event with an rrule.
+// Body keeps the legacy shape; we mirror it onto events.event columns.
 series.post("/", async (c) => {
   const body = await c.req.json() as {
     name: string;
@@ -23,62 +27,90 @@ series.post("/", async (c) => {
     return c.json({ error: "name, recurrenceRule, and hostId are required" }, 400);
   }
 
-  const id = generateId();
+  // If the caller supplies a template event id, we just patch it with the
+  // series rrule. Otherwise we create a stub parent — the host will fill in
+  // dates/location via the regular event-edit flow.
+  if (body.templateEventId) {
+    await supabaseFetch(c.env, {
+      schema: "events",
+      path: "event",
+      query: `id=eq.${encodeURIComponent(body.templateEventId)}`,
+      method: "PATCH",
+      body: {
+        name: body.name,
+        rrule: body.recurrenceRule,
+        recurrence_end: body.endsAt ?? null,
+      },
+    });
+    return c.json({ id: body.templateEventId, message: "Series created" }, 201);
+  }
 
-  await c.env.DB.prepare(`
-    INSERT INTO event_series (id, name, recurrence_rule, host_id, template_event_id, max_occurrences, ends_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    id,
-    body.name,
-    body.recurrenceRule,
-    body.hostId,
-    body.templateEventId || null,
-    body.maxOccurrences ?? 52,
-    body.endsAt || null,
-  ).run();
+  interface InsertedRow { id: string }
+  const inserted = await supabaseFetch<InsertedRow[]>(c.env, {
+    schema: "events",
+    path: "event",
+    method: "POST",
+    body: {
+      name: body.name,
+      eventtype: "Event",
+      eventstatus: "EventScheduled",
+      eventattendancemode: "OfflineEventAttendanceMode",
+      startdate: new Date().toISOString(),
+      timezone: "UTC",
+      visibility: "private",
+      calendar_type: "events",
+      owner_type: "person",
+      owner_id: body.hostId,
+      organizer_person_id: body.hostId,
+      organizer: { name: "Unknown", initials: "??" },
+      location: { name: "TBD", addresslocality: "TBD", addresscountry: "TBD" },
+      rrule: body.recurrenceRule,
+      recurrence_end: body.endsAt ?? null,
+    },
+  });
 
-  return c.json({ id, message: "Series created" }, 201);
+  return c.json({ id: inserted?.[0]?.id, message: "Series created" }, 201);
 });
 
-// GET /api/series/:id — Get series details
+// GET /api/series/:id — Return the parent event in legacy "series" shape.
 series.get("/:id", async (c) => {
   const id = c.req.param("id");
 
-  interface SeriesRow {
+  interface SeriesParent {
     id: string;
     name: string;
-    recurrence_rule: string;
-    host_id: string;
-    template_event_id: string | null;
-    max_occurrences: number;
-    ends_at: string | null;
-    date_created: string;
-    date_modified: string;
+    rrule: string | null;
+    recurrence_end: string | null;
+    organizer_person_id: string | null;
+    created_at: string | null;
+    updated_at: string | null;
   }
 
-  const row = await c.env.DB.prepare(
-    "SELECT * FROM event_series WHERE id = ?"
-  ).bind(id).first() as SeriesRow | null;
+  const row = await supabaseFetch<SeriesParent>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(id)}&select=id,name,rrule,recurrence_end,organizer_person_id,created_at,updated_at`,
+    single: true,
+  });
 
-  if (!row) {
+  if (!row || !row.rrule) {
     return c.json({ error: "Series not found" }, 404);
   }
 
   return c.json({
     id: row.id,
     name: row.name,
-    recurrenceRule: row.recurrence_rule,
-    hostId: row.host_id,
-    templateEventId: row.template_event_id,
-    maxOccurrences: row.max_occurrences,
-    endsAt: row.ends_at,
-    dateCreated: row.date_created,
-    dateModified: row.date_modified,
+    recurrenceRule: row.rrule,
+    hostId: row.organizer_person_id,
+    templateEventId: row.id,
+    maxOccurrences: null,
+    endsAt: row.recurrence_end,
+    dateCreated: row.created_at,
+    dateModified: row.updated_at,
   });
 });
 
-// PUT /api/series/:id — Update series
+// PUT /api/series/:id — Update name / rrule / endsAt on the parent.
 series.put("/:id", async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json() as {
@@ -88,115 +120,88 @@ series.put("/:id", async (c) => {
     endsAt?: string;
   };
 
-  interface SeriesRow {
-    id: string;
-  }
+  const patch: Record<string, unknown> = {};
+  if (body.name !== undefined) patch.name = body.name;
+  if (body.recurrenceRule !== undefined) patch.rrule = body.recurrenceRule;
+  if (body.endsAt !== undefined) patch.recurrence_end = body.endsAt;
 
-  const existing = await c.env.DB.prepare(
-    "SELECT id FROM event_series WHERE id = ?"
-  ).bind(id).first() as SeriesRow | null;
-
-  if (!existing) {
-    return c.json({ error: "Series not found" }, 404);
-  }
-
-  const updates: string[] = [];
-  const values: (string | number)[] = [];
-
-  if (body.name !== undefined) {
-    updates.push("name = ?");
-    values.push(body.name);
-  }
-  if (body.recurrenceRule !== undefined) {
-    updates.push("recurrence_rule = ?");
-    values.push(body.recurrenceRule);
-  }
-  if (body.maxOccurrences !== undefined) {
-    updates.push("max_occurrences = ?");
-    values.push(body.maxOccurrences);
-  }
-  if (body.endsAt !== undefined) {
-    updates.push("ends_at = ?");
-    values.push(body.endsAt);
-  }
-
-  if (updates.length === 0) {
+  if (Object.keys(patch).length === 0) {
     return c.json({ error: "No fields to update" }, 400);
   }
 
-  updates.push("date_modified = datetime('now')");
-  values.push(id);
+  const updated = await supabaseFetch<{ id: string }[]>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(id)}&rrule=not.is.null`,
+    method: "PATCH",
+    body: patch,
+  });
 
-  await c.env.DB.prepare(
-    `UPDATE event_series SET ${updates.join(", ")} WHERE id = ?`
-  ).bind(...values).run();
+  if (!updated || updated.length === 0) {
+    return c.json({ error: "Series not found" }, 404);
+  }
 
   return c.json({ message: "Series updated" });
 });
 
-// DELETE /api/series/:id — Cancel series and mark future events as cancelled
+// DELETE /api/series/:id — Cancel future occurrences then clear rrule on parent.
 series.delete("/:id", async (c) => {
   const id = c.req.param("id");
+  const now = new Date().toISOString();
 
-  interface SeriesRow {
-    id: string;
-  }
+  await supabaseFetch(c.env, {
+    schema: "events",
+    path: "event",
+    query: `series_parent_id=eq.${encodeURIComponent(id)}&startdate=gt.${encodeURIComponent(now)}`,
+    method: "PATCH",
+    body: { eventstatus: "EventCancelled" },
+  });
 
-  const existing = await c.env.DB.prepare(
-    "SELECT id FROM event_series WHERE id = ?"
-  ).bind(id).first() as SeriesRow | null;
+  const cleared = await supabaseFetch<{ id: string }[]>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(id)}&rrule=not.is.null`,
+    method: "PATCH",
+    body: { rrule: null, recurrence_end: null },
+  });
 
-  if (!existing) {
+  if (!cleared || cleared.length === 0) {
     return c.json({ error: "Series not found" }, 404);
   }
-
-  // Cancel all future events in the series
-  const now = new Date().toISOString();
-  await c.env.DB.prepare(`
-    UPDATE events SET event_status = 'EventCancelled', date_modified = datetime('now')
-    WHERE series_id = ? AND start_date > ?
-  `).bind(id, now).run();
-
-  // Delete the series record
-  await c.env.DB.prepare(
-    "DELETE FROM event_series WHERE id = ?"
-  ).bind(id).run();
 
   return c.json({ message: "Series cancelled and future events updated" });
 });
 
-// GET /api/series/:id/events — List events in the series
+// GET /api/series/:id/events — Occurrences (children of the parent series).
 series.get("/:id/events", async (c) => {
   const id = c.req.param("id");
-  const limit = parseInt(c.req.query("limit") || "20", 10);
-  const offset = parseInt(c.req.query("offset") || "0", 10);
+  const limit = Math.max(1, Math.min(100, parseInt(c.req.query("limit") || "20", 10)));
+  const offset = Math.max(0, parseInt(c.req.query("offset") || "0", 10));
 
-  interface EventRow {
-    _id: string;
+  interface OccurrenceRow {
+    id: string;
     name: string;
-    start_date: string;
-    end_date: string | null;
-    event_status: string;
-    series_index: number | null;
+    startdate: string;
+    enddate: string | null;
+    eventstatus: string;
+    series_occurrence: number | null;
   }
 
-  const { results } = await c.env.DB.prepare(`
-    SELECT _id, name, start_date, end_date, event_status, series_index
-    FROM events
-    WHERE series_id = ?
-    ORDER BY series_index ASC, start_date ASC
-    LIMIT ? OFFSET ?
-  `).bind(id, limit, offset).all() as { results: EventRow[] };
+  const rows = await supabaseFetch<OccurrenceRow[]>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `series_parent_id=eq.${encodeURIComponent(id)}&select=id,name,startdate,enddate,eventstatus,series_occurrence&order=series_occurrence.asc,startdate.asc&limit=${limit}&offset=${offset}`,
+  }) ?? [];
 
   return c.json({
-    events: results.map((row) => ({
-      id: row._id,
-      name: row.name,
-      startDate: row.start_date,
-      endDate: row.end_date,
-      status: row.event_status,
-      seriesIndex: row.series_index,
+    events: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      startDate: r.startdate,
+      endDate: r.enddate,
+      status: r.eventstatus,
+      seriesIndex: r.series_occurrence,
     })),
-    pagination: { limit, offset, count: results.length },
+    pagination: { limit, offset, count: rows.length },
   });
 });

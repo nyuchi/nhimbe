@@ -11,3 +11,15 @@
 # Auth is handled entirely by the Stytch frontend SDK.
 # The backend validates session JWTs locally via Stytch's public JWKS.
 WORKOS_CLIENT_ID=REPLACE_WITH_WORKOS_CLIENT_ID
+
+# Supabase nyuchi_platform_db — service-role key for trusted server-side reads
+# (bypasses RLS — only used in the worker, never sent to the browser).
+# In production: `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
+SUPABASE_SERVICE_ROLE_KEY=REPLACE_WITH_SERVICE_ROLE_KEY
+
+# api.mukoko.com — public API gateway (FastAPI on fly.io). The worker calls
+# it as a machine-context client with X-Api-Key, optionally forwarding the
+# signed-in user's WorkOS access token for user-context calls. Generate the
+# API key via api.mukoko.com's API-key management UI; set it as a wrangler
+# secret in production: `wrangler secret put MUKOKO_API_KEY`.
+MUKOKO_API_KEY=REPLACE_WITH_MUKOKO_API_KEY

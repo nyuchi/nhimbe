@@ -16,7 +16,6 @@ import { categories } from "./routes/categories";
 import { events } from "./routes/events";
 import { search } from "./routes/search";
 import { ai } from "./routes/ai";
-import { auth } from "./routes/auth";
 import { users } from "./routes/users";
 import { registrations } from "./routes/registrations";
 import { media } from "./routes/media";
@@ -67,7 +66,8 @@ app.use("*", async (c, next) => {
     const missing: string[] = [];
     if (!c.env.API_KEY) missing.push("API_KEY");
     if (!c.env.WORKOS_CLIENT_ID) missing.push("WORKOS_CLIENT_ID");
-    if (!c.env.DB) missing.push("DB (D1 binding)");
+    if (!c.env.SUPABASE_URL) missing.push("SUPABASE_URL");
+    if (!c.env.SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
     if (!c.env.CACHE) missing.push("CACHE (KV binding)");
     if (!c.env.RATE_LIMITER) missing.push("RATE_LIMITER binding");
     if (missing.length > 0) {
@@ -106,7 +106,6 @@ app.use("*", requestLogger);
 // Rate limit sensitive endpoints
 app.use("/api/assistant/*", rateLimit);
 app.use("/api/ai/*", rateLimit);
-app.use("/api/auth/*", rateLimit);
 app.use("/api/search", rateLimit);
 app.use("/api/users/*", rateLimit);
 app.use("/api/reviews/*", rateLimit);
@@ -125,7 +124,6 @@ app.route("/api", categories);
 app.route("/api/events", events);
 app.route("/api", search);
 app.route("/api", ai);
-app.route("/api/auth", auth);
 app.route("/api/users", users);
 app.route("/api/registrations", registrations);
 app.route("/api/media", media);

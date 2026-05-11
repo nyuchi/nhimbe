@@ -17,14 +17,9 @@ search.post("/search", async (c) => {
     return c.json({ error: "Query is required" }, 400);
   }
 
-  const result = await searchEvents(c.env.AI, c.env.VECTORIZE, c.env.DB, body);
-
-  // Log truncated query to avoid storing sensitive search terms
-  const truncatedQuery = body.query.length > 100 ? body.query.substring(0, 100) : body.query;
-  await c.env.DB.prepare(
-    "INSERT INTO search_queries (query, results_count) VALUES (?, ?)"
-  ).bind(truncatedQuery, result.totalResults).run();
-
+  const result = await searchEvents(c.env, body);
+  // Search-query logging now goes through service_bus.events in a follow-up;
+  // dropped here so the route is D1-free.
   return c.json(result);
 });
 
@@ -36,7 +31,7 @@ search.get("/similar/:id", async (c) => {
     return c.json({ error: "Event ID required" }, 400);
   }
 
-  const events = await findSimilarEvents(c.env.AI, c.env.VECTORIZE, c.env.DB, eventId);
+  const events = await findSimilarEvents(c.env, eventId);
 
   return c.json({ events });
 });
@@ -46,7 +41,7 @@ search.get("/recommendations", async (c) => {
   const city = c.req.query("city") || undefined;
   const interests = c.req.query("interests")?.split(",") || [];
 
-  const suggestions = await generateSuggestions(c.env.AI, c.env.VECTORIZE, c.env.DB, {
+  const suggestions = await generateSuggestions(c.env, {
     city,
     interests,
   });
@@ -59,9 +54,7 @@ search.post("/recommendations", async (c) => {
   const body = await c.req.json() as { city?: string; interests?: string[] };
 
   const events = await getRecommendations(
-    c.env.AI,
-    c.env.VECTORIZE,
-    c.env.DB,
+    c.env,
     body.interests || [],
     body.city
   );

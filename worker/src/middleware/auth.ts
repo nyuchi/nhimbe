@@ -2,6 +2,7 @@ import { createMiddleware } from "hono/factory";
 import type { Env, UserRole } from "../types";
 import { hasPermission } from "../types";
 import { getAuthenticatedUser } from "../auth/workos";
+import { supabaseFetch } from "../db/supabase";
 
 // Trusted domains — always allow these and all their subdomains
 const TRUSTED_DOMAINS = ["nyuchi.com", "mukoko.com", "nhimbe.com"];
@@ -70,29 +71,54 @@ export interface AdminUser {
   role: UserRole;
 }
 
+interface IdentityPersonRow {
+  id: string;
+  email: string | null;
+  name: string | null;
+  role: string | null;
+}
+
+// `identity.person.role` holds platform-wide role names (admin, moderator,
+// platform_admin, …). Map to the worker's UserRole hierarchy at the boundary
+// so callers keep using `hasPermission(userRole, requiredRole)` without
+// caring that the source-of-truth strings differ.
+function mapPlatformRole(raw: string | null): UserRole {
+  switch (raw) {
+    case "platform_admin":
+      return "super_admin";
+    case "admin":
+      return "admin";
+    case "moderator":
+      return "moderator";
+    default:
+      return "user";
+  }
+}
+
 export async function getAdminUser(request: Request, env: Env, requiredRole: UserRole): Promise<AdminUser | null> {
   const authResult = await getAuthenticatedUser(request, env);
   if (!authResult.user) return null;
   const authUser = authResult.user;
 
-  interface DbUserRow {
-    _id: string;
-    email: string;
-    name: string;
-    role: string | null;
-  }
+  // Reads `identity.person` in nyuchi_platform_db via PostgREST with the
+  // service-role key (bypasses RLS — this is a trusted server-side lookup).
+  // Replaces the previous D1 `users` table query; the worker no longer
+  // owns a copy of the user record.
+  const rows = await supabaseFetch<IdentityPersonRow[]>(env, {
+    schema: "identity",
+    path: "person",
+    query: `workos_user_id=eq.${encodeURIComponent(authUser.userId)}&select=id,email,name,role&limit=1`,
+  });
+  const person = rows && rows.length > 0 ? rows[0] : null;
+  if (!person) return null;
 
-  // The users.stytch_user_id column stores the WorkOS user id post-migration.
-  // Column name retained to avoid a breaking D1 migration on this PR; rename
-  // to external_user_id is tracked separately.
-  const user = await env.DB.prepare(
-    "SELECT _id, email, name, role FROM users WHERE stytch_user_id = ?",
-  ).bind(authUser.userId).first() as DbUserRow | null;
-
-  if (!user) return null;
-
-  const userRole = (user.role || "user") as UserRole;
+  const userRole = mapPlatformRole(person.role);
   if (!hasPermission(userRole, requiredRole)) return null;
 
-  return { id: user._id, email: user.email, name: user.name, role: userRole };
+  return {
+    id: person.id,
+    email: person.email ?? "",
+    name: person.name ?? "",
+    role: userRole,
+  };
 }

@@ -2,12 +2,12 @@ import { Hono } from "hono";
 import type { Env } from "../types";
 import { writeAuth } from "../middleware/auth";
 import { getAuthenticatedUser } from "../auth/workos";
-import { generateId } from "../utils/ids";
+import { supabaseFetch } from "../db/supabase";
 
 export const waitlist = new Hono<{ Bindings: Env }>();
 waitlist.use("*", writeAuth);
 
-// POST /api/events/:eventId/waitlist — Join waitlist
+// POST /api/events/:eventId/waitlist — Join the waitlist for a capacity-bound event.
 waitlist.post("/events/:eventId/waitlist", async (c) => {
   const eventId = c.req.param("eventId");
   const body = await c.req.json() as { userId: string };
@@ -16,53 +16,65 @@ waitlist.post("/events/:eventId/waitlist", async (c) => {
     return c.json({ error: "userId is required" }, 400);
   }
 
-  // Check if event exists and has a capacity limit
-  const event = await c.env.DB.prepare(
-    "SELECT _id, maximum_attendee_capacity FROM events WHERE _id = ?"
-  ).bind(eventId).first() as { _id: string; maximum_attendee_capacity: number | null } | null;
+  interface EventRow { id: string; maximumattendeecapacity: number | null }
+  const event = await supabaseFetch<EventRow>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(eventId)}&select=id,maximumattendeecapacity`,
+    single: true,
+  });
 
   if (!event) {
     return c.json({ error: "Event not found" }, 404);
   }
-
-  if (!event.maximum_attendee_capacity) {
+  if (!event.maximumattendeecapacity) {
     return c.json({ error: "Event has no capacity limit — no waitlist needed" }, 400);
   }
 
-  // Check current registration count
-  const regCount = await c.env.DB.prepare(
-    "SELECT COUNT(*) as count FROM registrations WHERE event_id = ? AND status != 'cancelled'"
-  ).bind(eventId).first() as { count: number } | null;
-
-  if ((regCount?.count || 0) < event.maximum_attendee_capacity) {
+  const rsvps = await supabaseFetch<{ id: string }[]>(c.env, {
+    schema: "events",
+    path: "rsvp_action",
+    query: `event_id=eq.${encodeURIComponent(eventId)}&rsvpresponse=neq.rsvpNo&select=id`,
+  });
+  if ((rsvps?.length ?? 0) < event.maximumattendeecapacity) {
     return c.json({ error: "Event is not at capacity — register directly instead" }, 400);
   }
 
-  // Check if user is already on the waitlist
-  const existing = await c.env.DB.prepare(
-    "SELECT id FROM waitlists WHERE event_id = ? AND user_id = ?"
-  ).bind(eventId, body.userId).first();
-
+  const existing = await supabaseFetch<{ id: string }>(c.env, {
+    schema: "events",
+    path: "waitlist_entry",
+    query: `event_id=eq.${encodeURIComponent(eventId)}&person_id=eq.${encodeURIComponent(body.userId)}&select=id`,
+    single: true,
+  });
   if (existing) {
     return c.json({ error: "User is already on the waitlist" }, 409);
   }
 
-  // Get next position
-  const maxPos = await c.env.DB.prepare(
-    "SELECT MAX(position) as max_pos FROM waitlists WHERE event_id = ?"
-  ).bind(eventId).first() as { max_pos: number | null } | null;
+  const positions = await supabaseFetch<{ position: number }[]>(c.env, {
+    schema: "events",
+    path: "waitlist_entry",
+    query: `event_id=eq.${encodeURIComponent(eventId)}&select=position&order=position.desc&limit=1`,
+  });
+  const position = (positions?.[0]?.position ?? 0) + 1;
 
-  const position = (maxPos?.max_pos || 0) + 1;
-  const id = generateId();
+  interface InsertedRow { id: string }
+  const inserted = await supabaseFetch<InsertedRow[]>(c.env, {
+    schema: "events",
+    path: "waitlist_entry",
+    method: "POST",
+    body: {
+      event_id: eventId,
+      person_id: body.userId,
+      position,
+      status: "waiting",
+      joined_at: new Date().toISOString(),
+    },
+  });
 
-  await c.env.DB.prepare(
-    "INSERT INTO waitlists (id, event_id, user_id, position) VALUES (?, ?, ?, ?)"
-  ).bind(id, eventId, body.userId, position).run();
-
-  return c.json({ id, position, message: "Added to waitlist" }, 201);
+  return c.json({ id: inserted?.[0]?.id, position, message: "Added to waitlist" }, 201);
 });
 
-// DELETE /api/events/:eventId/waitlist — Leave waitlist
+// DELETE /api/events/:eventId/waitlist — Leave the waitlist.
 waitlist.delete("/events/:eventId/waitlist", async (c) => {
   const eventId = c.req.param("eventId");
   const body = await c.req.json() as { userId: string };
@@ -71,18 +83,27 @@ waitlist.delete("/events/:eventId/waitlist", async (c) => {
     return c.json({ error: "userId is required" }, 400);
   }
 
-  const result = await c.env.DB.prepare(
-    "DELETE FROM waitlists WHERE event_id = ? AND user_id = ?"
-  ).bind(eventId, body.userId).run();
-
-  if (!result.meta.changes) {
+  const existing = await supabaseFetch<{ id: string }>(c.env, {
+    schema: "events",
+    path: "waitlist_entry",
+    query: `event_id=eq.${encodeURIComponent(eventId)}&person_id=eq.${encodeURIComponent(body.userId)}&select=id`,
+    single: true,
+  });
+  if (!existing) {
     return c.json({ error: "User not found on waitlist" }, 404);
   }
+
+  await supabaseFetch(c.env, {
+    schema: "events",
+    path: "waitlist_entry",
+    query: `id=eq.${encodeURIComponent(existing.id)}`,
+    method: "DELETE",
+  });
 
   return c.json({ message: "Removed from waitlist" });
 });
 
-// GET /api/events/:eventId/waitlist — Get waitlist for event (requires auth)
+// GET /api/events/:eventId/waitlist — List for the event (auth required; email exposed only to host).
 waitlist.get("/events/:eventId/waitlist", async (c) => {
   const authResult = await getAuthenticatedUser(c.req.raw, c.env);
   if (!authResult.user) {
@@ -91,44 +112,59 @@ waitlist.get("/events/:eventId/waitlist", async (c) => {
 
   const eventId = c.req.param("eventId");
 
-  // Only return names (not emails) unless the requester is the event host
-  const event = await c.env.DB.prepare(
-    "SELECT organizer_identifier FROM events WHERE _id = ?"
-  ).bind(eventId).first() as { organizer_identifier: string } | null;
-
-  const isHost = event?.organizer_identifier === authResult.user.userId;
-
-  // Include email only when the requester is the event host
-  const selectFields = isHost
-    ? "w.id, w.event_id, w.user_id, w.position, w.date_created, u.name as user_name, u.email as user_email"
-    : "w.id, w.event_id, w.user_id, w.position, w.date_created, u.name as user_name";
-
-  const result = await c.env.DB.prepare(
-    `SELECT ${selectFields} FROM waitlists w LEFT JOIN users u ON w.user_id = u._id WHERE w.event_id = ? ORDER BY w.position ASC`
-  ).bind(eventId).all();
-
-  interface WaitlistRow {
-    id: string;
-    event_id: string;
-    user_id: string;
-    position: number;
-    date_created: string;
-    user_name: string | null;
-    user_email?: string;
-  }
-
-  const waitlistEntries = (result.results as WaitlistRow[]).map((row) => ({
-    id: row.id,
-    eventId: row.event_id,
-    userId: row.user_id,
-    position: row.position,
-    userName: row.user_name,
-    ...(isHost && row.user_email ? { userEmail: row.user_email } : {}),
-    dateCreated: row.date_created,
-  }));
-
-  return c.json({
-    waitlist: waitlistEntries,
-    total: waitlistEntries.length,
+  interface EventOrgRow { organizer_person_id: string | null }
+  const event = await supabaseFetch<EventOrgRow>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(eventId)}&select=organizer_person_id`,
+    single: true,
   });
+
+  // Resolve the requester's identity.person id to compare against the
+  // organizer. workos_user_id is the linkage column.
+  let requesterPersonId: string | null = null;
+  interface PersonRow { id: string }
+  const requester = await supabaseFetch<PersonRow>(c.env, {
+    schema: "identity",
+    path: "person",
+    query: `workos_user_id=eq.${encodeURIComponent(authResult.user.userId)}&select=id`,
+    single: true,
+  });
+  requesterPersonId = requester?.id ?? null;
+
+  const isHost = !!event && !!requesterPersonId && event.organizer_person_id === requesterPersonId;
+
+  interface WaitRow { id: string; event_id: string; person_id: string; position: number; joined_at: string | null }
+  const rows = await supabaseFetch<WaitRow[]>(c.env, {
+    schema: "events",
+    path: "waitlist_entry",
+    query: `event_id=eq.${encodeURIComponent(eventId)}&select=id,event_id,person_id,position,joined_at&order=position.asc`,
+  }) ?? [];
+
+  // Join names/emails. Single query for all person_ids.
+  const personIds = Array.from(new Set(rows.map((r) => r.person_id)));
+  interface PersonNameRow { id: string; name: string; email: string | null }
+  const persons = personIds.length
+    ? (await supabaseFetch<PersonNameRow[]>(c.env, {
+        schema: "identity",
+        path: "person",
+        query: `id=in.(${personIds.map(encodeURIComponent).join(",")})&select=id,name,email`,
+      })) ?? []
+    : [];
+  const personById = new Map(persons.map((p) => [p.id, p]));
+
+  const waitlistEntries = rows.map((row) => {
+    const person = personById.get(row.person_id);
+    return {
+      id: row.id,
+      eventId: row.event_id,
+      userId: row.person_id,
+      position: row.position,
+      userName: person?.name ?? null,
+      ...(isHost && person?.email ? { userEmail: person.email } : {}),
+      dateCreated: row.joined_at,
+    };
+  });
+
+  return c.json({ waitlist: waitlistEntries, total: waitlistEntries.length });
 });

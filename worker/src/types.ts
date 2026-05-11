@@ -338,10 +338,24 @@ export interface Env {
   WORKOS_CLIENT_ID: string;
   // MongoDB Atlas — primary database (set via `wrangler secret put MONGODB_URI`)
   MONGODB_URI?: string;
-  // Cloudflare bindings
+  // Supabase (nyuchi_platform_db) — replaces D1 reads for identity/role lookups.
+  // SUPABASE_URL is the project REST root, SUPABASE_SERVICE_ROLE_KEY bypasses
+  // RLS for trusted server-side reads. Set the URL as a `[vars]` value and the
+  // key via `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
+  SUPABASE_URL?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+  // api.mukoko.com — public API gateway (FastAPI on fly.io). The worker is
+  // one consumer among many (third-party apps also hit it). It owns API-key
+  // management and brokers access to private back-end stores (pay-db,
+  // platform-db). Auth is dual: MUKOKO_API_KEY identifies the worker as a
+  // calling system; user-context calls also forward the signed-in user's
+  // WorkOS access token. MUKOKO_API_URL is a public var; MUKOKO_API_KEY is a
+  // wrangler secret.
+  MUKOKO_API_URL?: string;
+  MUKOKO_API_KEY?: string;
+  // Cloudflare bindings (D1 removed — Supabase platform-db is the system of record).
   AI: Ai;
   VECTORIZE: VectorizeIndex;
-  DB: D1Database; // Edge processing — fast reads, caching
   CACHE: KVNamespace;
   MEDIA: R2Bucket;
   IMAGES: ImagesBinding;

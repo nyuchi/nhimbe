@@ -1,16 +1,16 @@
 /**
- * AI Assistant for nhimbe
- * Natural language interface for event discovery and planning
+ * AI Assistant ("Shamwari") for nhimbe.
+ *
+ * Natural-language interface for event discovery. Reads Supabase events via
+ * the search helpers; no D1 dependency.
  */
 
 import type {
-  Ai,
-  D1Database,
+  Env,
   AssistantRequest,
   AssistantResponse,
   AssistantMessage,
   Event,
-  VectorizeIndex,
 } from "../types";
 import { searchEvents } from "./search";
 import { withTimeout } from "../utils/timeout";
@@ -38,68 +38,41 @@ Guidelines:
 - Keep responses concise but helpful
 - When suggesting events, explain why they match the user's interests
 - If you don't know something, say so honestly
-- Use inclusive language that brings people together
+- Use inclusive language that brings people together`;
 
-Categories available: Tech, Culture, Wellness, Social, Professional, Music, Food & Drink, Sports, Community, Education
-
-Cities covered: Harare, Bulawayo, Victoria Falls (Zimbabwe), Johannesburg, Cape Town (South Africa), Nairobi (Kenya), Lagos (Nigeria), Accra (Ghana)`;
-
-/**
- * Process a message from the user and generate a response
- */
-export async function chat(
-  ai: Ai,
-  vectorize: VectorizeIndex,
-  db: D1Database,
-  request: AssistantRequest
-): Promise<AssistantResponse> {
-  // Build conversation history
+export async function chat(env: Env, request: AssistantRequest): Promise<AssistantResponse> {
   const messages: AssistantMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
     ...(request.conversationHistory || []),
     { role: "user", content: request.message },
   ];
 
-  // Add context if provided
   if (request.context) {
-    const contextInfo = [];
-    if (request.context.userLocation) {
-      contextInfo.push(`User is in: ${request.context.userLocation}`);
-    }
+    const contextInfo: string[] = [];
+    if (request.context.userLocation) contextInfo.push(`User is in: ${request.context.userLocation}`);
     if (request.context.userInterests?.length) {
-      contextInfo.push(
-        `User interests: ${request.context.userInterests.join(", ")}`
-      );
+      contextInfo.push(`User interests: ${request.context.userInterests.join(", ")}`);
     }
     if (contextInfo.length > 0) {
-      messages[0] = {
-        role: "system",
-        content: `${SYSTEM_PROMPT}\n\nUser context:\n${contextInfo.join("\n")}`,
-      };
+      messages[0] = { role: "system", content: `${SYSTEM_PROMPT}\n\nUser context:\n${contextInfo.join("\n")}` };
     }
   }
 
-  // Detect intent and gather relevant events
-  const intent = await detectIntent(ai, request.message);
+  const intent = await detectIntent(env, request.message);
   let suggestedEvents: Event[] = [];
 
   if (intent.type === "search" && intent.query) {
-    const searchResult = await searchEvents(ai, vectorize, db, {
+    const searchResult = await searchEvents(env, {
       query: intent.query,
       filters: intent.filters,
       limit: 5,
     });
     suggestedEvents = searchResult.events;
 
-    // Add event context to the conversation
     if (suggestedEvents.length > 0) {
       const eventContext = suggestedEvents
-        .map(
-          (e) =>
-            `- "${e.name}" on ${e.date.full} at ${e.location.name}, ${e.location.addressLocality}`
-        )
+        .map((e) => `- "${e.name}" on ${e.date.full} at ${e.location.name}, ${e.location.addressLocality}`)
         .join("\n");
-
       messages.push({
         role: "system",
         content: `Relevant events found:\n${eventContext}\n\nIncorporate these events naturally in your response.`,
@@ -107,21 +80,14 @@ export async function chat(
     }
   }
 
-  // Generate response
   const response = await withTimeout(
-    ai.run(LLM_MODEL, {
-      messages,
-      max_tokens: 500,
-      temperature: 0.7,
-    }),
+    env.AI.run(LLM_MODEL, { messages, max_tokens: 500, temperature: 0.7 }),
     10_000,
-    null
+    null,
   );
 
   const result = (response as { response?: string }) || {};
-  const messageText =
-    result.response ||
-    "I'd be happy to help you find events! What are you looking for?";
+  const messageText = result.response || "I'd be happy to help you find events! What are you looking for?";
 
   return {
     message: messageText,
@@ -130,12 +96,9 @@ export async function chat(
   };
 }
 
-/**
- * Detect the user's intent from their message
- */
 async function detectIntent(
-  ai: Ai,
-  message: string
+  env: Env,
+  message: string,
 ): Promise<{
   type: "search" | "navigate" | "create" | "general";
   query?: string;
@@ -159,73 +122,46 @@ Intent types:
 
   try {
     const response = await withTimeout(
-      ai.run(LLM_MODEL, {
+      env.AI.run(LLM_MODEL, {
         messages: [
-          {
-            role: "system",
-            content: "You are a JSON parser. Only output valid JSON, nothing else.",
-          },
+          { role: "system", content: "You are a JSON parser. Only output valid JSON, nothing else." },
           { role: "user", content: intentPrompt },
         ],
         max_tokens: 150,
         temperature: 0.1,
       }),
       5_000,
-      null
+      null,
     );
-
     if (response) {
       const result = response as { response?: string };
       if (result.response) {
-        // Extract JSON from response
         const jsonMatch = result.response.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          return JSON.parse(jsonMatch[0]);
-        }
+        if (jsonMatch) return JSON.parse(jsonMatch[0]);
       }
     }
   } catch {
-    // Fall back to keyword detection
+    // fall through to keyword heuristics
   }
 
-  // Fallback: Simple keyword detection
-  const lowerMessage = message.toLowerCase();
-
-  if (
-    lowerMessage.includes("find") ||
-    lowerMessage.includes("search") ||
-    lowerMessage.includes("looking for") ||
-    lowerMessage.includes("show me") ||
-    lowerMessage.includes("events")
-  ) {
+  const lower = message.toLowerCase();
+  if (lower.includes("find") || lower.includes("search") || lower.includes("looking for") ||
+      lower.includes("show me") || lower.includes("events")) {
     return { type: "search", query: message };
   }
-
-  if (
-    lowerMessage.includes("create") ||
-    lowerMessage.includes("host") ||
-    lowerMessage.includes("organize")
-  ) {
+  if (lower.includes("create") || lower.includes("host") || lower.includes("organize")) {
     return { type: "create" };
   }
-
   return { type: "general" };
 }
 
-/**
- * Generate event suggestions based on context
- */
 export async function generateSuggestions(
-  ai: Ai,
-  vectorize: VectorizeIndex,
-  db: D1Database,
-  context: { city?: string; interests?: string[] }
+  env: Env,
+  context: { city?: string; interests?: string[] },
 ): Promise<{ message: string; events: Event[] }> {
-  const query = context.interests?.length
-    ? context.interests.join(" ")
-    : "popular community events";
+  const query = context.interests?.length ? context.interests.join(" ") : "popular community events";
 
-  const searchResult = await searchEvents(ai, vectorize, db, {
+  const searchResult = await searchEvents(env, {
     query,
     filters: context.city ? { city: context.city } : undefined,
     limit: 6,
@@ -235,8 +171,5 @@ export async function generateSuggestions(
     ? `Here are some gatherings happening in ${context.city}:`
     : "Here are some gatherings you might enjoy:";
 
-  return {
-    message: searchResult.aiSummary || intro,
-    events: searchResult.events,
-  };
+  return { message: searchResult.aiSummary || intro, events: searchResult.events };
 }

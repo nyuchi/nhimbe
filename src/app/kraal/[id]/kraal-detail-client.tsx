@@ -27,7 +27,7 @@ interface KraalDetailClientProps {
 
 function authorLabel(p: KraalPostWithAuthor["author"] | KraalMember["person"]): string {
   if (!p) return "Member";
-  return p.display_name || [p.given_name, p.family_name].filter(Boolean).join(" ") || "Member";
+  return p.name || [p.givenname, p.familyname].filter(Boolean).join(" ") || "Member";
 }
 
 function authorInitial(label: string): string {
@@ -110,9 +110,9 @@ export default function KraalDetailClient({ circleId }: KraalDetailClientProps) 
       // Optimistic — backfill author from current user
       const me = members.find((m) => m.person_id === personId)?.person ?? {
         id: personId,
-        display_name: user?.name ?? null,
-        given_name: null,
-        family_name: null,
+        name: user?.name ?? null,
+        givenname: null,
+        familyname: null,
         image: null,
       };
       setPosts((prev) => [{ ...newPost, author: me }, ...prev]);

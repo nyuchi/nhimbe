@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { X, MapPin, Loader2 } from "lucide-react";
-import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { useAuth } from "@/components/auth/auth-context";
 import { updateProfile, getCities } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -12,7 +11,6 @@ const DISMISS_KEY = "nhimbe_location_prompt_dismissed";
 
 export function LocationPrompt() {
   const { user, isAuthenticated, refreshUser } = useAuth();
-  const { accessToken, getAccessToken } = useAccessToken();
   const [cities, setCities] = useState<{ addressLocality: string; addressCountry: string }[]>([]);
   const [selected, setSelected] = useState<{ addressLocality: string; addressCountry: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,12 +29,10 @@ export function LocationPrompt() {
   if (!isAuthenticated || user?.addressLocality || dismissed) return null;
 
   const handleSave = async () => {
-    if (!selected) return;
+    if (!selected || !user?.personId) return;
     setLoading(true);
     try {
-      const token = accessToken ?? (await getAccessToken().catch(() => null));
-      if (!token) return;
-      await updateProfile(token, { addressLocality: selected.addressLocality, addressCountry: selected.addressCountry });
+      await updateProfile(user.personId, { addressLocality: selected.addressLocality, addressCountry: selected.addressCountry });
       await refreshUser();
     } catch {
       // Silently fail — non-blocking prompt
