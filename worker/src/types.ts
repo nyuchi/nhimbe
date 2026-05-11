@@ -82,38 +82,6 @@ export interface VectorizeDeleteResult {
   ids: string[];
 }
 
-// D1 Database Types
-export interface D1Database {
-  prepare(query: string): D1PreparedStatement;
-  dump(): Promise<ArrayBuffer>;
-  batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
-  exec(query: string): Promise<D1ExecResult>;
-}
-
-export interface D1PreparedStatement {
-  bind(...values: unknown[]): D1PreparedStatement;
-  first<T = unknown>(colName?: string): Promise<T | null>;
-  run(): Promise<D1Result>;
-  all<T = unknown>(): Promise<D1Result<T>>;
-  raw<T = unknown>(): Promise<T[]>;
-}
-
-export interface D1Result<T = unknown> {
-  results: T[];
-  success: boolean;
-  meta: {
-    duration: number;
-    changes: number;
-    last_row_id: number;
-    served_by: string;
-  };
-}
-
-export interface D1ExecResult {
-  count: number;
-  duration: number;
-}
-
 // KV Namespace Types
 export interface KVNamespace {
   get(key: string, options?: KVGetOptions): Promise<string | null>;
@@ -336,9 +304,7 @@ export interface Env {
   // WorkOS's JWKS (https://api.workos.com/sso/jwks/<client_id>). No WorkOS API
   // secret is required on the worker side for the auth path.
   WORKOS_CLIENT_ID: string;
-  // MongoDB Atlas — primary database (set via `wrangler secret put MONGODB_URI`)
-  MONGODB_URI?: string;
-  // Supabase (nyuchi_platform_db) — replaces D1 reads for identity/role lookups.
+  // Supabase (nyuchi_platform_db) — primary datastore.
   // SUPABASE_URL is the project REST root, SUPABASE_SERVICE_ROLE_KEY bypasses
   // RLS for trusted server-side reads. Set the URL as a `[vars]` value and the
   // key via `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
