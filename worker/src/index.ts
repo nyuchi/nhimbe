@@ -64,9 +64,14 @@ app.use("*", async (c, next) => {
   if (!envValidated) {
     envValidated = true;
     const missing: string[] = [];
+    // A var is "missing" if it's unset, empty, or still holds a REPLACE_WITH_*
+    // placeholder from wrangler.toml — the latter would otherwise silently
+    // route every JWT validation to a 404 JWKS endpoint.
+    const isPlaceholder = (v: string | undefined): boolean =>
+      !v || v.startsWith("REPLACE_WITH_") || v === "CHANGE_ME";
     if (!c.env.API_KEY) missing.push("API_KEY");
-    if (!c.env.WORKOS_CLIENT_ID) missing.push("WORKOS_CLIENT_ID");
-    if (!c.env.SUPABASE_URL) missing.push("SUPABASE_URL");
+    if (isPlaceholder(c.env.WORKOS_CLIENT_ID)) missing.push("WORKOS_CLIENT_ID");
+    if (isPlaceholder(c.env.SUPABASE_URL)) missing.push("SUPABASE_URL");
     if (!c.env.SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
     if (!c.env.CACHE) missing.push("CACHE (KV binding)");
     if (!c.env.RATE_LIMITER) missing.push("RATE_LIMITER binding");

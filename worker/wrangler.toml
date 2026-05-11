@@ -9,8 +9,9 @@ compatibility_date = "2024-12-01"
 [vars]
 ENVIRONMENT = "development"
 ALLOWED_ORIGINS = "http://localhost:3000,http://localhost:3001"
-# Stytch project ID — public value, used for local JWT validation via JWKS.
-# No Stytch secret needed; auth is handled entirely by the frontend SDK.
+# WorkOS Client ID — public value, used as the JWT audience and to build
+# the JWKS URL (https://api.workos.com/sso/jwks/{client_id}). Override
+# locally via `worker/.dev.vars`; the env validator rejects this placeholder.
 WORKOS_CLIENT_ID = "REPLACE_WITH_WORKOS_CLIENT_ID"
 # Supabase nyuchi_platform_db — REST root for identity / events / etc. reads.
 # Service-role key is a secret (set via `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`).
@@ -112,7 +113,9 @@ simple = { limit = 100, period = 60 }  # 100 requests per minute
 # ============================================
 [env.production]
 name = "mukoko-nhimbe-api"
-vars = { ENVIRONMENT = "production", ALLOWED_ORIGINS = "https://nhimbe.com,https://www.nhimbe.com,https://mukoko.com,https://www.mukoko.com", WORKOS_CLIENT_ID = "REPLACE_WITH_WORKOS_CLIENT_ID", SUPABASE_URL = "https://tdcpuzqyoodrdsxldgsh.supabase.co", MUKOKO_API_URL = "https://api.mukoko.com" }
+vars = { ENVIRONMENT = "production", ALLOWED_ORIGINS = "https://nhimbe.com,https://www.nhimbe.com,https://mukoko.com,https://www.mukoko.com", SUPABASE_URL = "https://tdcpuzqyoodrdsxldgsh.supabase.co", MUKOKO_API_URL = "https://api.mukoko.com" }
+# WORKOS_CLIENT_ID must be set per environment via `wrangler secret put WORKOS_CLIENT_ID --env production`
+# (or as a non-secret var via the Cloudflare dashboard). Do NOT inline a placeholder here.
 routes = [
   { pattern = "events-api.mukoko.com", custom_domain = true }
 ]
@@ -172,7 +175,9 @@ simple = { limit = 100, period = 60 }
 # ============================================
 [env.staging]
 name = "mukoko-nhimbe-api-staging"
-vars = { ENVIRONMENT = "staging", ALLOWED_ORIGINS = "https://staging.nhimbe.com", WORKOS_CLIENT_ID = "REPLACE_WITH_WORKOS_CLIENT_ID", SUPABASE_URL = "https://tdcpuzqyoodrdsxldgsh.supabase.co", MUKOKO_API_URL = "https://api.mukoko.com" }
+vars = { ENVIRONMENT = "staging", ALLOWED_ORIGINS = "https://staging.nhimbe.com", SUPABASE_URL = "https://tdcpuzqyoodrdsxldgsh.supabase.co", MUKOKO_API_URL = "https://api.mukoko.com" }
+# WORKOS_CLIENT_ID must be set per environment via `wrangler secret put WORKOS_CLIENT_ID --env staging`
+# (or as a non-secret var via the Cloudflare dashboard). Do NOT inline a placeholder here.
 
 [env.staging.ai]
 binding = "AI"

@@ -291,7 +291,7 @@ describe('KV Cache Patterns', () => {
       'events:harare:tech',
       'events:harare:music',
       'users:usr-123',
-      'jwks:stytch',
+      'jwks:workos',
     ];
 
     const uniqueKeys = new Set(keys);
