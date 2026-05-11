@@ -319,6 +319,11 @@ All backend tests live in `worker/src/__tests__/`. Config: `worker/vitest.config
 | `SECURITY.md` | Security policy and reporting |
 | `RELEASES.md` | Release notes |
 
+## Workflow Conventions
+
+- **Big PR, multiple commits** — the Nyuchi house style. Related work lands in one pull request as a sequence of focused commits, not as separate PRs. Each commit is independently readable; the PR groups them by intent. Don't open a second PR for "just one more cleanup" — append a commit to the active branch.
+- **Branches** — work on `claude/<topic>-<slug>` branches; push with `-u origin <branch>` and open the PR as a draft until ready for review.
+
 ## Code Conventions
 
 - **Brand**: Always lowercase "nhimbe" — even at sentence start
