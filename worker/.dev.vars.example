@@ -1,21 +1,14 @@
 # Cloudflare Workers Development Variables
 # Copy this file to .dev.vars and fill in the values
 
-# Secrets (use wrangler secret put for production)
-# API_SECRET_KEY=your-secret-key
-
-# MongoDB Atlas — connection string for document storage alongside D1
-# MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/nhimbe?retryWrites=true&w=majority
-
-# Stytch — only the project ID is needed (no secret required).
-# Auth is handled entirely by the Stytch frontend SDK.
-# The backend validates session JWTs locally via Stytch's public JWKS.
+# WorkOS — Client ID is used as the JWT audience and to build the JWKS URL.
+# The env validator rejects the placeholder, so set this to your real dev client ID.
 WORKOS_CLIENT_ID=REPLACE_WITH_WORKOS_CLIENT_ID
 
-# Supabase nyuchi_platform_db — service-role key for trusted server-side reads
+# Supabase nyuchi_platform_db — secret key for trusted server-side reads
 # (bypasses RLS — only used in the worker, never sent to the browser).
-# In production: `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
-SUPABASE_SERVICE_ROLE_KEY=REPLACE_WITH_SERVICE_ROLE_KEY
+# In production: `wrangler secret put SUPABASE_SECRET_KEY`.
+SUPABASE_SECRET_KEY=REPLACE_WITH_SECRET_KEY
 
 # api.mukoko.com — public API gateway (FastAPI on fly.io). The worker calls
 # it as a machine-context client with X-Api-Key, optionally forwarding the
@@ -23,3 +16,10 @@ SUPABASE_SERVICE_ROLE_KEY=REPLACE_WITH_SERVICE_ROLE_KEY
 # API key via api.mukoko.com's API-key management UI; set it as a wrangler
 # secret in production: `wrangler secret put MUKOKO_API_KEY`.
 MUKOKO_API_KEY=REPLACE_WITH_MUKOKO_API_KEY
+
+# Internal API key for writeAuth middleware (machine-context calls from the
+# frontend build and admin tools). Set a random 32+ char string.
+API_KEY=REPLACE_WITH_API_KEY
+
+# Resend transactional email
+RESEND_API_KEY=REPLACE_WITH_RESEND_API_KEY

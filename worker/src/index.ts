@@ -72,7 +72,7 @@ app.use("*", async (c, next) => {
     if (!c.env.API_KEY) missing.push("API_KEY");
     if (isPlaceholder(c.env.WORKOS_CLIENT_ID)) missing.push("WORKOS_CLIENT_ID");
     if (isPlaceholder(c.env.SUPABASE_URL)) missing.push("SUPABASE_URL");
-    if (!c.env.SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+    if (!c.env.SUPABASE_SECRET_KEY) missing.push("SUPABASE_SECRET_KEY");
     if (!c.env.CACHE) missing.push("CACHE (KV binding)");
     if (!c.env.RATE_LIMITER) missing.push("RATE_LIMITER binding");
     if (missing.length > 0) {

@@ -305,11 +305,11 @@ export interface Env {
   // secret is required on the worker side for the auth path.
   WORKOS_CLIENT_ID: string;
   // Supabase (nyuchi_platform_db) — primary datastore.
-  // SUPABASE_URL is the project REST root, SUPABASE_SERVICE_ROLE_KEY bypasses
+  // SUPABASE_URL is the project REST root, SUPABASE_SECRET_KEY bypasses
   // RLS for trusted server-side reads. Set the URL as a `[vars]` value and the
-  // key via `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
+  // key via `wrangler secret put SUPABASE_SECRET_KEY`.
   SUPABASE_URL?: string;
-  SUPABASE_SERVICE_ROLE_KEY?: string;
+  SUPABASE_SECRET_KEY?: string;
   // api.mukoko.com — public API gateway (FastAPI on fly.io). The worker is
   // one consumer among many (third-party apps also hit it). It owns API-key
   // management and brokers access to private back-end stores (pay-db,

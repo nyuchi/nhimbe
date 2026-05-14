@@ -72,13 +72,13 @@ WORKOS_API_KEY=sk_xxx                          # server-only
 WORKOS_COOKIE_PASSWORD=at-least-32-chars       # server-only
 WORKOS_REDIRECT_URI=http://localhost:3000/callback
 NEXT_PUBLIC_SUPABASE_URL=https://....supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your-key
 
 # Backend (worker/.dev.vars)
 API_KEY=your-api-key
 WORKOS_CLIENT_ID=client_xxx                    # overrides wrangler placeholder
-SUPABASE_SERVICE_ROLE_KEY=eyJ...
+SUPABASE_SECRET_KEY=sb_secret_...
 MUKOKO_API_KEY=your-mukoko-api-key
 RESEND_API_KEY=your-resend-key
 ```

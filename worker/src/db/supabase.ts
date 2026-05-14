@@ -15,7 +15,7 @@ import { withRetry } from "../utils/retry";
 
 export class SupabaseConfigError extends Error {
   constructor() {
-    super("[mukoko] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing on env");
+    super("[mukoko] SUPABASE_URL or SUPABASE_SECRET_KEY missing on env");
     this.name = "SupabaseConfigError";
   }
 }
@@ -47,7 +47,7 @@ interface SupabaseFetchOptions {
 
 export async function supabaseFetch<T>(env: Env, opts: SupabaseFetchOptions): Promise<T | null> {
   const url = env.SUPABASE_URL;
-  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = env.SUPABASE_SECRET_KEY;
   if (!url || !key) throw new SupabaseConfigError();
 
   const headers = new Headers({

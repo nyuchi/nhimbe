@@ -106,7 +106,7 @@ Global middleware applied in `index.ts`: CORS (restricted to trusted origins), e
 
 ### Database adapter (`worker/src/db/`)
 
-- `supabase.ts` — Thin `supabaseFetch()` helper that wraps PostgREST calls with the service-role key, request ID propagation, and consistent error handling. All route modules use this instead of a raw fetch.
+- `supabase.ts` — Thin `supabaseFetch()` helper that wraps PostgREST calls with the secret key, request ID propagation, and consistent error handling. All route modules use this instead of a raw fetch.
 - `event_mapper.ts` — Maps Postgres row shapes (snake_case) to the schema.org-aligned API shapes (`Event`, etc.) consumed by the frontend.
 
 ### Queues (`worker/src/queues/`)
@@ -289,7 +289,7 @@ All backend tests live in `worker/src/__tests__/`. Config: `worker/vitest.config
 
 ## Database
 
-**Primary: Supabase Postgres** (project `nyuchi_platform_db`, hosted at `https://tdcpuzqyoodrdsxldgsh.supabase.co`). All read/write is via PostgREST through `worker/src/db/supabase.ts` (`supabaseFetch()` helper, service-role key). The frontend can also read directly via `src/lib/supabase/` clients using the anon key (RLS-protected paths only).
+**Primary: Supabase Postgres** (project `nyuchi_platform_db`, hosted at `https://tdcpuzqyoodrdsxldgsh.supabase.co`). All read/write is via PostgREST through `worker/src/db/supabase.ts` (`supabaseFetch()` helper, secret key). The frontend can also read directly via `src/lib/supabase/` clients using the publishable key (RLS-protected paths only).
 
 The schema is owned by the `nyuchi_platform_db` repo — not this one. Apply migrations via the Supabase MCP (`apply_migration`) or `supabase db push` from that repo. This repo only consumes the schema.
 
@@ -375,18 +375,18 @@ Frontend (`.env.local`):
 - `NEXT_PUBLIC_API_URL` — worker base URL (e.g. `http://localhost:8787`)
 - `NEXT_PUBLIC_SITE_URL` — public site URL
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
-- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — for direct browser/RSC reads via `src/lib/supabase/`
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — for direct browser/RSC reads via `src/lib/supabase/`
 
 Backend (`worker/.dev.vars`):
 
 - `API_KEY` — internal machine-context key for `writeAuth` middleware
 - `WORKOS_CLIENT_ID` — overrides the wrangler.toml placeholder for local dev
-- `SUPABASE_SERVICE_ROLE_KEY` — bearer for `supabaseFetch()`
+- `SUPABASE_SECRET_KEY` — bearer for `supabaseFetch()`
 - `MUKOKO_API_KEY` — bearer for `mukokoApiFetch()` (api.mukoko.com gateway)
 - `RESEND_API_KEY` — Resend transactional email
 
 Backend (`worker/wrangler.toml` vars): `ENVIRONMENT`, `ALLOWED_ORIGINS`, `WORKOS_CLIENT_ID` (dev only — production/staging must set via `wrangler secret put`), `SUPABASE_URL`, `MUKOKO_API_URL`
 
-Backend secrets (set via `wrangler secret put --env <env>`): `API_KEY`, `WORKOS_CLIENT_ID` (production/staging), `SUPABASE_SERVICE_ROLE_KEY`, `MUKOKO_API_KEY`, `RESEND_API_KEY`, `PAYNOW_INTEGRATION_ID`, `PAYNOW_INTEGRATION_KEY`
+Backend secrets (set via `wrangler secret put --env <env>`): `API_KEY`, `WORKOS_CLIENT_ID` (production/staging), `SUPABASE_SECRET_KEY`, `MUKOKO_API_KEY`, `RESEND_API_KEY`, `PAYNOW_INTEGRATION_ID`, `PAYNOW_INTEGRATION_KEY`
 
 Cloudflare bindings: `AI` (Workers AI), `VECTORIZE`, `CACHE` (KV), `MEDIA` (R2), `IMAGES`, `ANALYTICS`, `ANALYTICS_QUEUE`, `EMAIL_QUEUE`, `RATE_LIMITER` (no D1 binding post-migration)
