@@ -25,7 +25,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { registrations } from "../routes/registrations";
-import { createMockEnv } from "./mocks";
+import {
+  createMockEnv,
+  makeFetchStub,
+  pgrstMatch,
+  jsonResponse as json,
+  noContent,
+  notFoundSingle,
+  trustedOriginHeaders as authHeaders,
+} from "./mocks";
 
 vi.mock("../auth/workos", () => ({
   getAuthenticatedUser: vi.fn(),
@@ -33,81 +41,12 @@ vi.mock("../auth/workos", () => ({
 import { getAuthenticatedUser } from "../auth/workos";
 const mockedGetAuthenticatedUser = vi.mocked(getAuthenticatedUser);
 
-// ============================================
-// Fetch router — turns global fetch into a PostgREST stub
-// ============================================
-
-type Handler = (req: { url: URL; method: string; body: unknown }) => Response | Promise<Response>;
-interface Route {
-  match: (url: URL, method: string) => boolean;
-  handle: Handler;
-}
-
-function makeFetchStub(routes: Route[]) {
-  const calls: Array<{ url: string; method: string; body: unknown; headers: Record<string, string> }> = [];
-
-  const stub = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const urlString = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    const url = new URL(urlString);
-    const method = (init?.method ?? "GET").toUpperCase();
-    let body: unknown = null;
-    if (init?.body) {
-      try {
-        body = JSON.parse(init.body as string);
-      } catch {
-        body = init.body;
-      }
-    }
-    const headers: Record<string, string> = {};
-    new Headers(init?.headers).forEach((v, k) => { headers[k] = v; });
-    calls.push({ url: urlString, method, body, headers });
-
-    for (const route of routes) {
-      if (route.match(url, method)) {
-        return route.handle({ url, method, body });
-      }
-    }
-    throw new Error(`[fetch-stub] No route matched ${method} ${urlString}`);
-  });
-
-  return { stub, calls };
-}
-
-function pgrstMatch(table: string, methods: string[] = ["GET", "POST", "PATCH", "DELETE"]) {
-  return (url: URL, method: string) =>
-    url.hostname === "test-project.supabase.co" &&
-    url.pathname === `/rest/v1/${table}` &&
-    methods.includes(method);
-}
-
-function json(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-// ============================================
-// App factory — mount the route under test on a throwaway Hono app
-// ============================================
-
 function buildApp(env: Env) {
   const app = new Hono<{ Bindings: Env }>();
   app.route("/api/registrations", registrations);
   return {
     fetch: (path: string, init?: RequestInit) =>
       app.fetch(new Request(`http://localhost${path}`, init), env),
-  };
-}
-
-function authHeaders(extra: Record<string, string> = {}): HeadersInit {
-  // Use the trusted-origin path (localhost) rather than X-API-Key — Node's
-  // crypto.subtle lacks `timingSafeEqual`, which is a Workers-runtime extension
-  // that validateApiKey() relies on. Localhost is whitelisted by isAllowedOrigin.
-  return {
-    "Content-Type": "application/json",
-    Origin: "http://localhost:3000",
-    ...extra,
   };
 }
 
@@ -256,7 +195,7 @@ describe("POST /api/registrations", () => {
       // pgrst returns 406 from single=true when no rows, which supabaseFetch maps to null
       {
         match: pgrstMatch("event", ["GET"]),
-        handle: () => new Response(null, { status: 406 }),
+        handle: () => notFoundSingle(),
       },
     ]);
     vi.stubGlobal("fetch", stub);
@@ -360,7 +299,7 @@ describe("POST /api/registrations", () => {
       },
       {
         match: pgrstMatch("rsvp_action", ["GET"]),
-        handle: () => new Response(null, { status: 406 }), // no existing
+        handle: () => notFoundSingle(), // no existing
       },
       {
         match: pgrstMatch("rsvp_action", ["POST"]),
@@ -368,7 +307,7 @@ describe("POST /api/registrations", () => {
       },
       {
         match: pgrstMatch("event", ["PATCH"]),
-        handle: () => new Response(null, { status: 204 }),
+        handle: () => noContent(),
       },
     ]);
     vi.stubGlobal("fetch", stub);
@@ -417,7 +356,7 @@ describe("PUT /api/registrations/:id", () => {
     const { stub } = makeFetchStub([
       {
         match: pgrstMatch("rsvp_action", ["GET"]),
-        handle: () => new Response(null, { status: 406 }),
+        handle: () => notFoundSingle(),
       },
     ]);
     vi.stubGlobal("fetch", stub);
@@ -506,7 +445,7 @@ describe("PUT /api/registrations/:id", () => {
       },
       {
         match: pgrstMatch("rsvp_action", ["PATCH"]),
-        handle: () => new Response(null, { status: 204 }),
+        handle: () => noContent(),
       },
     ]);
     vi.stubGlobal("fetch", stub);
@@ -544,7 +483,7 @@ describe("PUT /api/registrations/:id", () => {
       },
       {
         match: pgrstMatch("rsvp_action", ["PATCH"]),
-        handle: () => new Response(null, { status: 204 }),
+        handle: () => noContent(),
       },
     ]);
     vi.stubGlobal("fetch", stub);
@@ -574,7 +513,7 @@ describe("DELETE /api/registrations/:id", () => {
       },
       {
         match: pgrstMatch("rsvp_action", ["PATCH"]),
-        handle: () => new Response(null, { status: 204 }),
+        handle: () => noContent(),
       },
       {
         match: pgrstMatch("event", ["GET"]),
@@ -584,7 +523,7 @@ describe("DELETE /api/registrations/:id", () => {
         match: pgrstMatch("event", ["PATCH"]),
         handle: ({ body }) => {
           attendeeCount = (body as { attendee_count: number }).attendee_count;
-          return new Response(null, { status: 204 });
+          return noContent();
         },
       },
     ]);
@@ -632,7 +571,7 @@ describe("DELETE /api/registrations/:id", () => {
     const { stub } = makeFetchStub([
       {
         match: pgrstMatch("rsvp_action", ["GET"]),
-        handle: () => new Response(null, { status: 406 }),
+        handle: () => notFoundSingle(),
       },
     ]);
     vi.stubGlobal("fetch", stub);
