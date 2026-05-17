@@ -26,6 +26,8 @@ import {
 import { EventEntityHostCard } from "./event-entity-host-card";
 import { EventSpecifics } from "./event-specifics";
 import { EventVenueCard } from "./event-venue-card";
+import { EventPolls } from "./event-polls";
+import { EventCampfire } from "./event-campfire";
 import { useAuth } from "@/components/auth/auth-context";
 import { getUserReferralCode, generateUserReferralCode, getEventStats, getEventReviews, type UserReferralCode, type EventStats, type ReviewStats } from "@/lib/api";
 import type { Event } from "@/lib/api";
@@ -228,8 +230,17 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
                 Collapses cleanly for categories with neither. */}
             <EventSpecifics event={event} />
 
+            {/* Polls — events.poll + events.poll_vote. Renders nothing
+                when no polls exist for this event. */}
+            <EventPolls eventId={event.id} />
+
             {/* Contributions board — chips from events.event.contributor jsonb */}
             <EventContributionsBoard event={event} />
+
+            {/* Campfire — on-page live chat. Only renders when this event
+                has a campfire.conversation row linked via
+                events.event.campfire_conversation_id. */}
+            <EventCampfire conversationId={event.campfireConversationId} />
 
             {/* Location Section - Luma style: heading, venue, address, map */}
             {isInPerson && (

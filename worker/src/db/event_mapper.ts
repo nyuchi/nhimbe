@@ -47,6 +47,8 @@ interface SupabaseEventRow {
    *  {elevation_m, distance_km, route_summary, profile?}. Other categories
    *  may store their own shapes; EventSpecifics narrows defensively. */
   about: Record<string, unknown> | null;
+  /** FK to campfire.conversation — drives the on-page event chat. */
+  campfire_conversation_id: string | null;
 }
 
 // The platform-db CHECK constraints on events.event require fully-qualified
@@ -150,11 +152,12 @@ export function mapSupabaseEventToApi(row: SupabaseEventRow): Event {
     timezone: row.timezone ?? undefined,
     contributor: row.contributor ?? undefined,
     about: row.about ?? undefined,
+    campfireConversationId: row.campfire_conversation_id ?? undefined,
   };
 }
 
 const EVENT_COLUMNS =
-  "id,name,description,startdate,enddate,eventattendancemode,eventstatus,eventtype,location,organizer,organizer_person_id,organization_id,offers,image,category,keywords,maximumattendeecapacity,attendee_count,visibility,slug,created_at,updated_at,event_circle_id,contributor,duration,timezone,place_id,about";
+  "id,name,description,startdate,enddate,eventattendancemode,eventstatus,eventtype,location,organizer,organizer_person_id,organization_id,offers,image,category,keywords,maximumattendeecapacity,attendee_count,visibility,slug,created_at,updated_at,event_circle_id,contributor,duration,timezone,place_id,about,campfire_conversation_id";
 
 /**
  * Fetch events by id from Supabase. Returns events in API shape, preserving

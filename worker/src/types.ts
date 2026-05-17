@@ -431,6 +431,8 @@ export interface Event {
    *  {elevation_m, distance_km, route_summary}; other categories use
    *  their own shape. EventSpecifics narrows defensively. */
   about?: unknown;
+  /** FK to campfire.conversation — drives the on-page event chat. */
+  campfireConversationId?: string;
 }
 
 // Search Types

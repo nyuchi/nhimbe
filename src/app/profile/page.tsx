@@ -26,6 +26,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ProfileBadges } from "@/components/ui/profile-badges";
 
 type MenuItem = {
   icon: LucideIcon;
@@ -185,6 +186,11 @@ function ProfileContent() {
           </Link>
         );
       })()}
+
+      {/* Ubuntu badges showcase — earned + a tail of locked ones for "more to earn" */}
+      {(user as { person_id?: string } | null)?.person_id && (
+        <ProfileBadges personId={(user as { person_id?: string }).person_id!} />
+      )}
 
       {/* Menu Sections */}
       <div className="space-y-6">
