@@ -57,7 +57,7 @@ export default function AdminLayout({
   useEffect(() => {
     if (!isLoading) {
       if (!isAuthenticated) {
-        router.push("/auth/signin?returnUrl=/admin");
+        router.push("/auth/signin?return_to=/admin");
       } else if (!canAccessAdmin) {
         router.push("/?error=unauthorized");
       }
