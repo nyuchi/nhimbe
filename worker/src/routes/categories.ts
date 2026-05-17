@@ -112,3 +112,80 @@ categories.get("/cities", async (c) => {
     return c.json({ cities: [] });
   }
 });
+
+// ─── Event types (formats) ────────────────────────────────────────────────
+// engagement.interest_category covers the *topic* axis (Music / Football /
+// Tech / Spirituality). Events also need a *format* axis — Workshop /
+// Festival / Hackathon — which is held by the schema.org event-type enum on
+// events.event.eventtype. There is no separate catalogue table in the DB;
+// the CHECK constraint on the column is the source of truth. We mirror it
+// here as a static list with friendly labels + groups + a synopsis of what
+// each format implies, so the wizard's "what kind of event" picker can
+// render without a Supabase round-trip.
+//
+// Keep this list in lockstep with the platform-db CHECK constraint
+// `event_eventtype_check` (verified via Supabase MCP). When a new type is
+// added there, mirror it here so the picker reflects it.
+
+interface EventTypeRow {
+  /** Exact value stored in events.event.eventtype (schema.org @type) */
+  id: string;
+  /** Display label for the picker */
+  name: string;
+  /** Loose grouping for sectioning the picker */
+  group: string;
+  /** One-line description shown under the option */
+  description: string;
+}
+
+const EVENT_TYPES: EventTypeRow[] = [
+  // Catch-all
+  { id: "Event",            name: "General gathering",  group: "General",        description: "Any community gathering that doesn't fit a more specific kind." },
+  { id: "SocialEvent",      name: "Social",             group: "General",        description: "Meetups, parties, networking, get-togethers." },
+  // Culture & arts
+  { id: "MusicEvent",       name: "Music",              group: "Culture & Arts", description: "Concerts, gigs, live performances, listening sessions." },
+  { id: "TheaterEvent",     name: "Theater",            group: "Culture & Arts", description: "Plays, performance art, staged readings." },
+  { id: "DanceEvent",       name: "Dance",              group: "Culture & Arts", description: "Dance performances, classes, social dances." },
+  { id: "ComedyEvent",      name: "Comedy",             group: "Culture & Arts", description: "Stand-up, improv, comedy nights." },
+  { id: "VisualArtsEvent",  name: "Visual arts",        group: "Culture & Arts", description: "Painting, sculpture, installation showings." },
+  { id: "ExhibitionEvent",  name: "Exhibition",         group: "Culture & Arts", description: "Galleries, museum openings, curated shows." },
+  { id: "ScreeningEvent",   name: "Film screening",     group: "Culture & Arts", description: "Cinema, film festivals, watch parties." },
+  { id: "LiteraryEvent",    name: "Literary",           group: "Culture & Arts", description: "Book launches, readings, poetry slams." },
+  { id: "Festival",         name: "Festival",           group: "Culture & Arts", description: "Multi-day, multi-stage, multi-format celebrations." },
+  // Knowledge
+  { id: "EducationEvent",   name: "Education",          group: "Knowledge",      description: "Talks, lectures, panels, learning sessions." },
+  { id: "CourseInstance",   name: "Course / class",     group: "Knowledge",      description: "Workshops, structured classes, training sessions." },
+  { id: "Hackathon",        name: "Hackathon",          group: "Knowledge",      description: "Build sprints, jams, fix-it events." },
+  // Sports & active
+  { id: "SportsEvent",      name: "Sports",             group: "Sports",         description: "Tournaments, matches, races, outdoor activities." },
+  // Family
+  { id: "ChildrensEvent",   name: "Children's",         group: "Family",         description: "Family-friendly events designed for kids." },
+  // Food & retail
+  { id: "FoodEvent",        name: "Food & drink",       group: "Food & Retail",  description: "Tastings, dinners, food festivals, pop-ups." },
+  { id: "SaleEvent",        name: "Sale / market",      group: "Food & Retail",  description: "Markets, craft fairs, sample sales." },
+  { id: "DeliveryEvent",    name: "Delivery / drop",    group: "Food & Retail",  description: "Scheduled drop-offs, drop-ins, kits." },
+  // Business
+  { id: "BusinessEvent",    name: "Business",           group: "Business",       description: "Conferences, summits, networking mixers." },
+  // Publishing
+  { id: "PublicationEvent", name: "Publication",        group: "Media",          description: "Launches, releases, premieres." },
+];
+
+interface FrontendEventType {
+  id: string;
+  name: string;
+  group: string;
+  description: string;
+}
+
+// GET /api/event-types — static schema.org event-type catalogue (mirror of
+// the events.event.eventtype CHECK constraint). 21 entries grouped into
+// 7 sections. Doesn't touch Supabase — no env requirements.
+categories.get("/event-types", (c) => {
+  const types: FrontendEventType[] = EVENT_TYPES.map((t) => ({
+    id: t.id,
+    name: t.name,
+    group: t.group,
+    description: t.description,
+  }));
+  return c.json({ eventTypes: types });
+});
