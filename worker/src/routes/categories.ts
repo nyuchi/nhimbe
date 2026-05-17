@@ -3,6 +3,7 @@ import type { Env, AppVariables } from "../types";
 import { supabaseFetch } from "../db/supabase";
 import { writeAuth } from "../middleware/auth";
 import { getAuthenticatedUser } from "../auth/workos";
+import { resolvePersonId } from "../auth/identity";
 import { badRequest, unauthorized, notFound, conflict } from "../utils/response";
 
 export const categories = new Hono<{ Bindings: Env; Variables: AppVariables }>();
@@ -205,22 +206,9 @@ categories.get("/event-types", (c) => {
 //     up (3+ vouches OR 5+ uses across 3+ distinct hosts).
 //   - Open flags ≥ 5 auto-hide a community row pending human moderation.
 // All trust logic lives in the DB triggers; the worker just maps WorkOS →
-// identity.person.id and forwards the write.
-
-// Map a WorkOS user_id (from the JWT) to identity.person.id. Returns null
-// when no row exists or the account is soft-deleted. supabaseFetch uses the
-// service-role key, so this bypasses RLS — safe for trusted lookups.
-async function resolvePersonId(
-  env: Env,
-  workosUserId: string,
-): Promise<string | null> {
-  const rows = await supabaseFetch<{ id: string }[]>(env, {
-    schema: "identity",
-    path: "person",
-    query: `workos_user_id=eq.${encodeURIComponent(workosUserId)}&deleted_at=is.null&select=id&limit=1`,
-  });
-  return rows?.[0]?.id ?? null;
-}
+// identity.person.id and forwards the write. The JWT → person.id lookup
+// lives in the shared identity helper now (worker/src/auth/identity.ts) so
+// every route uses the same canonical implementation.
 
 // PostgREST `ilike` treats `%` and `_` as wildcards. Without escaping, a
 // user-proposed name like "foo%" would match "foobar" / "foobaz" and reject
