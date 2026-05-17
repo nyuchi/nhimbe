@@ -21,6 +21,36 @@ interface EventCardHorizontalProps {
   };
   coverImage?: string;
   coverGradient?: string;
+  /** Current confirmed attendees — drives the pulse-dot strip. */
+  attendeeCount?: number;
+  /** Maximum capacity — when set, dots show fill ratio. */
+  maximumAttendeeCapacity?: number;
+}
+
+// Signature visual from Nhimbe.html: a row of small dots representing seats,
+// filled left-to-right by the current attendee count. Tells you fullness at a
+// glance without parsing "27/50". 16 dots is the compact horizontal-card scale.
+function PulseDotStrip({ filled, total }: { filled: number; total: number }) {
+  return (
+    <span
+      data-slot="pulse-dots"
+      aria-label={`${filled} of ${total} confirmed`}
+      className="inline-flex items-center gap-[3px]"
+    >
+      {Array.from({ length: total }).map((_, i) => (
+        <span
+          key={i}
+          aria-hidden
+          className="rounded-full"
+          style={{
+            width: 4,
+            height: 4,
+            background: i < filled ? "var(--nh-lead)" : "color-mix(in srgb, var(--nh-lead) 22%, transparent)",
+          }}
+        />
+      ))}
+    </span>
+  );
 }
 
 export function EventCardHorizontal({
@@ -30,6 +60,8 @@ export function EventCardHorizontal({
   location,
   coverImage,
   coverGradient,
+  attendeeCount,
+  maximumAttendeeCapacity,
 }: EventCardHorizontalProps) {
   // Format the datetime for display
   const dateTime = date.full
@@ -39,6 +71,14 @@ export function EventCardHorizontal({
   const venueDisplay = (location.name || location.venue)
     ? `${location.name ?? location.venue}`
     : `${location.addressLocality}, ${location.addressCountry}`;
+
+  // Only render the pulse strip when we have something meaningful to show.
+  const DOT_COUNT = 16;
+  const showPulse = typeof attendeeCount === "number" && attendeeCount >= 0;
+  const capacityForFill = maximumAttendeeCapacity ?? Math.max(attendeeCount ?? 0, DOT_COUNT);
+  const filled = showPulse
+    ? Math.min(DOT_COUNT, Math.round(((attendeeCount ?? 0) / Math.max(capacityForFill, 1)) * DOT_COUNT))
+    : 0;
 
   return (
     <Link data-slot="event-card-horizontal" href={`/events/${id}`} className="block group">
@@ -76,6 +116,17 @@ export function EventCardHorizontal({
 
           {/* Venue */}
           <p className="text-sm text-text-tertiary truncate">{venueDisplay}</p>
+
+          {/* Pulse strip — opt-in via attendeeCount prop */}
+          {showPulse && (
+            <div className="mt-2 flex items-center gap-2">
+              <PulseDotStrip filled={filled} total={DOT_COUNT} />
+              <span className="text-[11px] font-semibold text-muted-foreground">
+                {attendeeCount}
+                {maximumAttendeeCapacity ? `/${maximumAttendeeCapacity}` : ""}
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </Link>
