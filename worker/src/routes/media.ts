@@ -49,7 +49,10 @@ media.post("/upload", async (c) => {
 
 // GET /api/media/:key{.+} - Serve image with optional transformations
 media.get("/*", async (c) => {
-  const key = c.req.path.replace("/", "");
+  // Upload handler writes keys as `events/<id>.<ext>` and returns
+  // `/api/media/events/<id>.<ext>`. We need to strip the full route prefix,
+  // not just the leading slash, otherwise R2 lookups miss every key.
+  const key = c.req.path.replace(/^\/api\/media\//, "");
   const object = await c.env.MEDIA.get(key);
 
   if (!object) {
@@ -97,7 +100,7 @@ media.get("/*", async (c) => {
 
 // DELETE /api/media/:key{.+}
 media.delete("/*", async (c) => {
-  const key = c.req.path.replace("/", "");
+  const key = c.req.path.replace(/^\/api\/media\//, "");
   await c.env.MEDIA.delete(key);
   return c.json({ message: "File deleted" });
 });
