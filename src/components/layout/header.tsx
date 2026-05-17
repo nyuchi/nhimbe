@@ -225,7 +225,7 @@ export function Header() {
             </Link>
           ) : (
             <Link
-              href={`/auth/signin?redirect=${encodeURIComponent(pathname)}`}
+              href={`/auth/signin?return_to=${encodeURIComponent(pathname)}`}
               className="flex items-center justify-center w-11 h-11 rounded-full bg-background/20 hover:bg-background/30 transition-colors"
               aria-label="Sign in"
             >
