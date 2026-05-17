@@ -5,6 +5,23 @@ import { getAuthenticatedUser } from "../auth/workos";
 import { validateRequiredFields } from "../utils/validation";
 import { unauthorized, notFound, badRequest, forbidden } from "../utils/response";
 import { supabaseFetch } from "../db/supabase";
+import { RSVP_YES, RSVP_NO } from "../db/event_mapper";
+
+// platform-db CHECK constraints. events.rsvp_action stores the fully-qualified
+// schema.org URLs for rsvpresponse, and a narrow lifecycle enum for
+// confirmation_status. The legacy nhimbe API surface speaks short forms; we
+// translate at the worker boundary so the rest of the stack is unaffected.
+//
+// API status (what clients send and receive) → DB confirmation_status.
+// "registered" is the default-no-host-action state and writes NULL.
+// "attended" is host-actioned via /api/checkin (writes events.check_in),
+// not via this endpoint, so it's intentionally absent from the writable set.
+const API_TO_DB_CONFIRMATION: Record<string, string | null> = {
+  approved: "confirmed",
+  rejected: "declined",
+  pending: "pending",
+  registered: null,
+};
 
 interface RsvpRow {
   id: string;
@@ -18,13 +35,13 @@ interface RsvpRow {
 }
 
 // Map events.rsvp_action → legacy registration shape. The frontend reads
-// `status` as the lifecycle ("registered","approved","cancelled","attended"),
+// `status` as the lifecycle ("registered","approved","rejected","cancelled"),
 // which we derive from rsvpresponse + confirmation_status.
 function deriveStatus(row: RsvpRow): string {
-  if (row.rsvpresponse === "rsvpNo") return "cancelled";
-  if (row.confirmation_status === "approved") return "approved";
-  if (row.confirmation_status === "rejected") return "rejected";
-  if (row.confirmation_status === "attended") return "attended";
+  if (row.rsvpresponse === RSVP_NO) return "cancelled";
+  if (row.confirmation_status === "confirmed") return "approved";
+  if (row.confirmation_status === "declined") return "rejected";
+  if (row.confirmation_status === "waitlisted") return "waitlisted";
   return "registered";
 }
 
@@ -38,7 +55,7 @@ function mapRow(row: RsvpRow) {
     ticketPrice: null,
     ticketCurrency: null,
     registeredAt: row.created_at,
-    cancelledAt: row.rsvpresponse === "rsvpNo" ? row.updated_at : null,
+    cancelledAt: row.rsvpresponse === RSVP_NO ? row.updated_at : null,
     checkedInAt: null,
   };
 }
@@ -110,7 +127,7 @@ registrations.post("/", async (c) => {
   const existing = await supabaseFetch<{ id: string }>(c.env, {
     schema: "events",
     path: "rsvp_action",
-    query: `event_id=eq.${encodeURIComponent(eventId)}&agent_person_id=eq.${encodeURIComponent(userId)}&rsvpresponse=neq.rsvpNo&select=id&limit=1`,
+    query: `event_id=eq.${encodeURIComponent(eventId)}&agent_person_id=eq.${encodeURIComponent(userId)}&rsvpresponse=neq.${encodeURIComponent(RSVP_NO)}&select=id&limit=1`,
     single: true,
   });
   if (existing) {
@@ -130,7 +147,7 @@ registrations.post("/", async (c) => {
     body: {
       event_id: eventId,
       agent_person_id: userId,
-      rsvpresponse: "rsvpYes",
+      rsvpresponse: RSVP_YES,
       sync_version: 1,
       additional_guests: 0,
       starttime: new Date().toISOString(),
@@ -163,9 +180,11 @@ registrations.post("/", async (c) => {
   return c.json({ id: inserted?.[0]?.id, message: "Registration successful" }, 201);
 });
 
-const ALLOWED_STATUSES = new Set(["approved", "rejected", "pending", "registered", "attended"]);
+const ALLOWED_STATUSES = new Set(Object.keys(API_TO_DB_CONFIRMATION));
 
-// PUT /api/registrations/:id — host approves/rejects/attended; user can re-confirm.
+// PUT /api/registrations/:id — host approves/rejects; user can self-confirm
+// pending or registered. Attendance tracking goes through /api/checkin, not
+// this endpoint, so "attended" is no longer accepted here.
 registrations.put("/:id", async (c) => {
   const regId = c.req.param("id");
   let body: { status: string };
@@ -176,7 +195,7 @@ registrations.put("/:id", async (c) => {
   }
 
   if (!body.status || !ALLOWED_STATUSES.has(body.status)) {
-    return badRequest(c, "Invalid status. Must be: approved, rejected, pending, registered, or attended");
+    return badRequest(c, "Invalid status. Must be: approved, rejected, pending, or registered (use /api/checkin for attendance)");
   }
 
   interface RegRow {
@@ -219,8 +238,8 @@ registrations.put("/:id", async (c) => {
   const isHost = !!event && !!requesterPersonId && event.organizer_person_id === requesterPersonId;
   const isRegistrant = reg.agent_person_id === requesterPersonId;
 
-  if (!isHost && ["approved", "rejected", "attended"].includes(body.status)) {
-    return forbidden(c, "Only the event host can approve, reject, or mark attendance");
+  if (!isHost && ["approved", "rejected"].includes(body.status)) {
+    return forbidden(c, "Only the event host can approve or reject");
   }
   if (!isHost && !isRegistrant) {
     return forbidden(c, "Not authorized to update this registration");
@@ -231,7 +250,10 @@ registrations.put("/:id", async (c) => {
     path: "rsvp_action",
     query: `id=eq.${encodeURIComponent(regId)}`,
     method: "PATCH",
-    body: { confirmation_status: body.status, confirmed_at: new Date().toISOString() },
+    body: {
+      confirmation_status: API_TO_DB_CONFIRMATION[body.status],
+      confirmed_at: new Date().toISOString(),
+    },
   });
 
   return c.json({ message: `Registration ${body.status}` });
@@ -248,13 +270,13 @@ registrations.delete("/:id", async (c) => {
     single: true,
   });
 
-  if (reg && reg.rsvpresponse !== "rsvpNo") {
+  if (reg && reg.rsvpresponse !== RSVP_NO) {
     await supabaseFetch(c.env, {
       schema: "events",
       path: "rsvp_action",
       query: `id=eq.${encodeURIComponent(regId)}`,
       method: "PATCH",
-      body: { rsvpresponse: "rsvpNo", updated_at: new Date().toISOString() },
+      body: { rsvpresponse: RSVP_NO, updated_at: new Date().toISOString() },
     });
 
     // Atomic decrement via SECURITY DEFINER function (GREATEST clamps at 0).

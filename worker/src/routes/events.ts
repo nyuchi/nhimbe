@@ -8,7 +8,7 @@ import { toCsv } from "../utils/export";
 import { logAudit } from "../utils/audit";
 import { unauthorized, notFound, badRequest, forbidden, conflict } from "../utils/response";
 import { supabaseFetch } from "../db/supabase";
-import { fetchEventsByIds, mapSupabaseEventToApi, EVENT_COLUMNS, addSchemaPrefix, type SupabaseEventRow } from "../db/event_mapper";
+import { fetchEventsByIds, mapSupabaseEventToApi, EVENT_COLUMNS, addSchemaPrefix, RSVP_NO, type SupabaseEventRow } from "../db/event_mapper";
 
 export const events = new Hono<{ Bindings: Env }>();
 events.use("*", writeAuth);
@@ -383,7 +383,7 @@ events.get("/:id/stats", async (c) => {
     supabaseFetch<{ id: string }[]>(c.env, {
       schema: "events",
       path: "rsvp_action",
-      query: `event_id=eq.${encodeURIComponent(eventId)}&rsvpresponse=neq.rsvpNo&select=id`,
+      query: `event_id=eq.${encodeURIComponent(eventId)}&rsvpresponse=neq.${encodeURIComponent(RSVP_NO)}&select=id`,
     }),
     supabaseFetch<{ id: string }[]>(c.env, {
       schema: "events",
@@ -476,7 +476,7 @@ events.get("/:id/registrations/export", async (c) => {
     user_id: r.agent_person_id,
     user_name: personById.get(r.agent_person_id)?.name ?? null,
     user_email: personById.get(r.agent_person_id)?.email ?? null,
-    status: r.confirmation_status || (r.rsvpresponse === "rsvpNo" ? "cancelled" : "registered"),
+    status: r.confirmation_status || (r.rsvpresponse === RSVP_NO ? "cancelled" : "registered"),
     registered_at: r.created_at,
     checked_in_at: null,
   }));

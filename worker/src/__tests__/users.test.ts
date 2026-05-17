@@ -454,7 +454,7 @@ describe("DELETE /api/users/:id", () => {
     expect(patchBody.email).toMatch(/^deleted_[a-f0-9]{16}@deleted\.nhimbe\.com$/);
 
     const rsvpPatch = calls.find(c => c.method === "PATCH" && c.url.includes("/rsvp_action"));
-    expect(rsvpPatch!.body).toMatchObject({ rsvpresponse: "rsvpNo" });
+    expect(rsvpPatch!.body).toMatchObject({ rsvpresponse: "https://schema.org/RsvpResponseNo" });
 
     const audit = calls.find(c => c.method === "POST" && c.url.includes("/activity_logs"));
     expect(audit!.body).toMatchObject({

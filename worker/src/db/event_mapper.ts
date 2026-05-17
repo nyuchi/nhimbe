@@ -49,6 +49,13 @@ export function addSchemaPrefix(v: string | null | undefined): string | null {
   return v.startsWith(SCHEMA_PREFIX) ? v : SCHEMA_PREFIX + v;
 }
 
+// events.rsvp_action.rsvpresponse CHECK constraint values. Exported so every
+// worker route compares against and writes the same string the DB actually
+// stores. Avoid passing literal "rsvpYes"/"rsvpNo" — they fail the constraint.
+export const RSVP_YES = "https://schema.org/RsvpResponseYes";
+export const RSVP_NO = "https://schema.org/RsvpResponseNo";
+export const RSVP_MAYBE = "https://schema.org/RsvpResponseMaybe";
+
 function formatDateFragments(startdate: string) {
   const d = new Date(startdate);
   if (isNaN(d.getTime())) {

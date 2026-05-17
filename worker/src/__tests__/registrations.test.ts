@@ -81,7 +81,7 @@ describe("GET /api/registrations", () => {
             id: "rsvp-1",
             event_id: "evt-1",
             agent_person_id: "person-1",
-            rsvpresponse: "rsvpYes",
+            rsvpresponse: "https://schema.org/RsvpResponseYes",
             created_at: "2026-05-01T10:00:00Z",
             updated_at: null,
             confirmation_status: null,
@@ -127,16 +127,19 @@ describe("GET /api/registrations", () => {
     expect(queriedUrl.searchParams.has("event_id")).toBe(false);
   });
 
-  it("derives status correctly for cancelled / approved / attended rows", async () => {
+  it("derives status correctly from DB-stored values", async () => {
+    // DB confirmation_status values are pending/confirmed/waitlisted/declined.
+    // The mapper translates: confirmed→approved, declined→rejected,
+    // RsvpResponseNo→cancelled, anything else→registered.
     const env = createMockEnv();
     const { stub } = makeFetchStub([
       {
         match: pgrstMatch("rsvp_action", ["GET"]),
         handle: () => json([
-          { id: "1", event_id: "e", agent_person_id: "p1", rsvpresponse: "rsvpNo", created_at: "t", updated_at: "u", confirmation_status: null, confirmed_at: null },
-          { id: "2", event_id: "e", agent_person_id: "p2", rsvpresponse: "rsvpYes", created_at: "t", updated_at: null, confirmation_status: "approved", confirmed_at: "c" },
-          { id: "3", event_id: "e", agent_person_id: "p3", rsvpresponse: "rsvpYes", created_at: "t", updated_at: null, confirmation_status: "attended", confirmed_at: "c" },
-          { id: "4", event_id: "e", agent_person_id: "p4", rsvpresponse: "rsvpYes", created_at: "t", updated_at: null, confirmation_status: "rejected", confirmed_at: "c" },
+          { id: "1", event_id: "e", agent_person_id: "p1", rsvpresponse: "https://schema.org/RsvpResponseNo", created_at: "t", updated_at: "u", confirmation_status: null, confirmed_at: null },
+          { id: "2", event_id: "e", agent_person_id: "p2", rsvpresponse: "https://schema.org/RsvpResponseYes", created_at: "t", updated_at: null, confirmation_status: "confirmed", confirmed_at: "c" },
+          { id: "3", event_id: "e", agent_person_id: "p3", rsvpresponse: "https://schema.org/RsvpResponseYes", created_at: "t", updated_at: null, confirmation_status: "waitlisted", confirmed_at: null },
+          { id: "4", event_id: "e", agent_person_id: "p4", rsvpresponse: "https://schema.org/RsvpResponseYes", created_at: "t", updated_at: null, confirmation_status: "declined", confirmed_at: "c" },
         ]),
       },
     ]);
@@ -145,7 +148,7 @@ describe("GET /api/registrations", () => {
     const app = buildApp(env);
     const res = await app.fetch("/api/registrations?event_id=e");
     const body = await res.json() as { registrations: Array<{ status: string; cancelledAt: string | null }> };
-    expect(body.registrations.map(r => r.status)).toEqual(["cancelled", "approved", "attended", "rejected"]);
+    expect(body.registrations.map(r => r.status)).toEqual(["cancelled", "approved", "waitlisted", "rejected"]);
     expect(body.registrations[0].cancelledAt).toBe("u");
   });
 });
@@ -326,7 +329,7 @@ describe("POST /api/registrations", () => {
     expect(insert!.body).toMatchObject({
       event_id: "e",
       agent_person_id: "u",
-      rsvpresponse: "rsvpYes",
+      rsvpresponse: "https://schema.org/RsvpResponseYes",
     });
 
     const rpc = calls.find(c => c.method === "POST" && c.url.includes("/rpc/try_register_attendee"));
@@ -455,7 +458,7 @@ describe("PUT /api/registrations/:id", () => {
       body: JSON.stringify({ status: "approved" }),
     });
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: "Only the event host can approve, reject, or mark attendance" });
+    expect(await res.json()).toEqual({ error: "Only the event host can approve or reject" });
   });
 
   it("lets the host approve a registration", async () => {
@@ -493,7 +496,8 @@ describe("PUT /api/registrations/:id", () => {
     expect(await res.json()).toEqual({ message: "Registration approved" });
 
     const patch = calls.find(c => c.method === "PATCH" && c.url.includes("/rsvp_action"));
-    expect(patch!.body).toMatchObject({ confirmation_status: "approved" });
+    // API status "approved" → DB confirmation_status "confirmed".
+    expect(patch!.body).toMatchObject({ confirmation_status: "confirmed" });
   });
 
   it("lets the registrant self-update to 'registered'", async () => {
@@ -541,7 +545,7 @@ describe("DELETE /api/registrations/:id", () => {
     const { stub, calls } = makeFetchStub([
       {
         match: pgrstMatch("rsvp_action", ["GET"]),
-        handle: () => json({ id: "r", event_id: "e", rsvpresponse: "rsvpYes" }),
+        handle: () => json({ id: "r", event_id: "e", rsvpresponse: "https://schema.org/RsvpResponseYes" }),
       },
       { match: pgrstMatch("rsvp_action", ["PATCH"]), handle: () => noContent() },
       { match: pgrstMatch("rpc/decrement_attendee_count", ["POST"]), handle: () => json(4) },
@@ -557,7 +561,7 @@ describe("DELETE /api/registrations/:id", () => {
     expect(await res.json()).toEqual({ message: "Registration cancelled" });
 
     const rsvpPatch = calls.find(c => c.method === "PATCH" && c.url.includes("/rsvp_action"));
-    expect(rsvpPatch!.body).toMatchObject({ rsvpresponse: "rsvpNo" });
+    expect(rsvpPatch!.body).toMatchObject({ rsvpresponse: "https://schema.org/RsvpResponseNo" });
 
     const rpc = calls.find(c => c.method === "POST" && c.url.includes("/rpc/decrement_attendee_count"));
     expect(rpc).toBeDefined();
@@ -569,7 +573,7 @@ describe("DELETE /api/registrations/:id", () => {
     const { stub, calls } = makeFetchStub([
       {
         match: pgrstMatch("rsvp_action", ["GET"]),
-        handle: () => json({ id: "r", event_id: "e", rsvpresponse: "rsvpNo" }),
+        handle: () => json({ id: "r", event_id: "e", rsvpresponse: "https://schema.org/RsvpResponseNo" }),
       },
     ]);
     vi.stubGlobal("fetch", stub);

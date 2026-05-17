@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../types";
 import { writeAuth } from "../middleware/auth";
 import { supabaseFetch } from "../db/supabase";
+import { RSVP_NO } from "../db/event_mapper";
 
 export const checkin = new Hono<{ Bindings: Env }>();
 checkin.use("*", writeAuth);
@@ -69,7 +70,7 @@ checkin.get("/events/:eventId/checkin/stats", async (c) => {
     supabaseFetch<{ id: string }[]>(c.env, {
       schema: "events",
       path: "rsvp_action",
-      query: `event_id=eq.${encodeURIComponent(eventId)}&rsvpresponse=neq.rsvpNo&select=id`,
+      query: `event_id=eq.${encodeURIComponent(eventId)}&rsvpresponse=neq.${encodeURIComponent(RSVP_NO)}&select=id`,
     }),
     supabaseFetch<{ id: string }[]>(c.env, {
       schema: "events",

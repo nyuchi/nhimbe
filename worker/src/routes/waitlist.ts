@@ -4,6 +4,7 @@ import { writeAuth } from "../middleware/auth";
 import { getAuthenticatedUser } from "../auth/workos";
 import { unauthorized, notFound, badRequest, conflict } from "../utils/response";
 import { supabaseFetch } from "../db/supabase";
+import { RSVP_NO } from "../db/event_mapper";
 
 export const waitlist = new Hono<{ Bindings: Env }>();
 waitlist.use("*", writeAuth);
@@ -35,7 +36,7 @@ waitlist.post("/events/:eventId/waitlist", async (c) => {
   const rsvps = await supabaseFetch<{ id: string }[]>(c.env, {
     schema: "events",
     path: "rsvp_action",
-    query: `event_id=eq.${encodeURIComponent(eventId)}&rsvpresponse=neq.rsvpNo&select=id`,
+    query: `event_id=eq.${encodeURIComponent(eventId)}&rsvpresponse=neq.${encodeURIComponent(RSVP_NO)}&select=id`,
   });
   if ((rsvps?.length ?? 0) < event.maximumattendeecapacity) {
     return badRequest(c, "Event is not at capacity — register directly instead");
