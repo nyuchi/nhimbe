@@ -38,7 +38,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          NEXT_PUBLIC_WORKOS_CLIENT_ID: client_placeholder
+          WORKOS_CLIENT_ID: client_placeholder
           WORKOS_API_KEY: sk_placeholder
           WORKOS_COOKIE_PASSWORD: placeholder_cookie_password_at_least_32_chars
           WORKOS_REDIRECT_URI: https://example.com/callback

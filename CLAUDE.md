@@ -368,7 +368,7 @@ Three counters are read-then-written through PostgREST and are race-prone under 
 
 Frontend (`.env.local`):
 
-- `NEXT_PUBLIC_WORKOS_CLIENT_ID` — WorkOS Client ID (public)
+- `WORKOS_CLIENT_ID` — WorkOS Client ID. AuthKit reads it from `process.env` server-side; no `NEXT_PUBLIC_` prefix needed (and shouldn't have one — the Client ID is server-only in our flow)
 - `WORKOS_API_KEY` — server-only, used by the AuthKit proxy
 - `WORKOS_COOKIE_PASSWORD` — server-only, session-cookie encryption key (≥32 chars)
 - `WORKOS_REDIRECT_URI` — usually `${NEXT_PUBLIC_SITE_URL}/callback`

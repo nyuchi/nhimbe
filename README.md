@@ -67,7 +67,7 @@ npm run dev           # http://localhost:8787
 # Frontend (.env.local)
 NEXT_PUBLIC_API_URL=http://localhost:8787
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
-NEXT_PUBLIC_WORKOS_CLIENT_ID=client_xxx
+WORKOS_CLIENT_ID=client_xxx
 WORKOS_API_KEY=sk_xxx                          # server-only
 WORKOS_COOKIE_PASSWORD=at-least-32-chars       # server-only
 WORKOS_REDIRECT_URI=http://localhost:3000/callback
