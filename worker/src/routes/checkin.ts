@@ -53,6 +53,9 @@ checkin.post("/events/:eventId/checkin", async (c) => {
       person_id: rsvp.agent_person_id,
       method: "manual",
       checked_in_at: new Date().toISOString(),
+      // events.check_in.sync_version is NOT NULL — the legacy D1 mirror
+      // expected a row version. Default new rows to 1.
+      sync_version: 1,
     },
   });
 
