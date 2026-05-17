@@ -25,8 +25,15 @@ import {
   jsonResponse as json,
   noContent,
   notFoundSingle,
-  trustedOriginHeaders as authHeaders,
+  trustedOriginHeaders as originOnlyHeaders,
+  authedOriginHeaders as authHeaders,
 } from "./mocks";
+
+vi.mock("../auth/workos", () => ({
+  getAuthenticatedUser: vi.fn(),
+}));
+import { getAuthenticatedUser } from "../auth/workos";
+const mockedGetAuthenticatedUser = vi.mocked(getAuthenticatedUser);
 
 function buildApp(env: Env) {
   const app = new Hono<{ Bindings: Env }>();
@@ -39,6 +46,7 @@ function buildApp(env: Env) {
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  mockedGetAuthenticatedUser.mockReset();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -57,6 +65,15 @@ describe("POST /api/payments/create", () => {
     returnUrl: "https://nhimbe.com/payments/done",
   };
 
+  // Helper: every happy-path test below requires the requester to match
+  // rsvp.agent_person_id. We use "person-1" everywhere for simplicity.
+  function asPayer() {
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|payer" } });
+  }
+  function personRoute() {
+    return { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-1" }) } as const;
+  }
+
   it("rejects unauthenticated POST", async () => {
     const env = createMockEnv();
     const app = buildApp(env);
@@ -73,7 +90,7 @@ describe("POST /api/payments/create", () => {
     const app = buildApp(env);
     const res = await app.fetch("/api/payments/create", {
       method: "POST",
-      headers: authHeaders(),
+      headers: originOnlyHeaders(),
       body: JSON.stringify({ ...validBody, amount: 0 }),
     });
     expect(res.status).toBe(400);
@@ -84,7 +101,7 @@ describe("POST /api/payments/create", () => {
     const app = buildApp(env);
     const res = await app.fetch("/api/payments/create", {
       method: "POST",
-      headers: authHeaders(),
+      headers: originOnlyHeaders(),
       body: JSON.stringify({ ...validBody, amount: 2_000_000 }),
     });
     expect(res.status).toBe(400);
@@ -95,11 +112,32 @@ describe("POST /api/payments/create", () => {
     const app = buildApp(env);
     const res = await app.fetch("/api/payments/create", {
       method: "POST",
-      headers: authHeaders(),
+      headers: originOnlyHeaders(),
       body: JSON.stringify({ ...validBody, returnUrl: "https://evil.com/done" }),
     });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "Invalid returnUrl" });
+  });
+
+  it("403s when requester is not the registrant", async () => {
+    const env = createMockEnv({
+      PAYNOW_INTEGRATION_ID: "int-id",
+      PAYNOW_INTEGRATION_KEY: "int-key",
+    });
+    asPayer();
+    const { stub } = makeFetchStub([
+      personRoute(),
+      { match: pgrstMatch("rsvp_action", ["GET"]), handle: () => json({ id: "rsvp-1", agent_person_id: "person-other" }) },
+    ]);
+    vi.stubGlobal("fetch", stub);
+
+    const app = buildApp(env);
+    const res = await app.fetch("/api/payments/create", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(validBody),
+    });
+    expect(res.status).toBe(403);
   });
 
   it("allows localhost and trusted-domain subdomains", async () => {
@@ -107,7 +145,9 @@ describe("POST /api/payments/create", () => {
       PAYNOW_INTEGRATION_ID: "int-id",
       PAYNOW_INTEGRATION_KEY: "int-key",
     });
+    asPayer();
     const { stub } = makeFetchStub([
+      personRoute(),
       { match: pgrstMatch("rsvp_action", ["GET"]), handle: () => json({ id: "rsvp-1", agent_person_id: "person-1" }) },
       { match: pgrstMatch("event", ["GET"]), handle: () => json({ id: "evt-1", organizer_person_id: "host-1" }) },
       { match: pgrstMatch("payment_intents", ["POST"]), handle: () => json([{ id: "pay-1" }], 201) },
@@ -120,8 +160,6 @@ describe("POST /api/payments/create", () => {
       headers: authHeaders(),
       body: JSON.stringify({ ...validBody, returnUrl: "http://localhost:3000/done" }),
     });
-    // PaynowProvider.createPayment is currently a stub returning {success: false};
-    // route returns 200 + status:"error" rather than 201.
     expect(res.status).toBe(200);
     const body = await res.json() as { paymentId: string; status: string };
     expect(body.paymentId).toBe("pay-1");
@@ -133,7 +171,9 @@ describe("POST /api/payments/create", () => {
       PAYNOW_INTEGRATION_ID: "int-id",
       PAYNOW_INTEGRATION_KEY: "int-key",
     });
+    asPayer();
     const { stub } = makeFetchStub([
+      personRoute(),
       { match: pgrstMatch("rsvp_action", ["GET"]), handle: () => notFoundSingle() },
     ]);
     vi.stubGlobal("fetch", stub);
@@ -152,7 +192,9 @@ describe("POST /api/payments/create", () => {
       PAYNOW_INTEGRATION_ID: "int-id",
       PAYNOW_INTEGRATION_KEY: "int-key",
     });
+    asPayer();
     const { stub } = makeFetchStub([
+      personRoute(),
       { match: pgrstMatch("rsvp_action", ["GET"]), handle: () => json({ id: "rsvp-1", agent_person_id: "person-1" }) },
       { match: pgrstMatch("event", ["GET"]), handle: () => json({ id: "evt-1", organizer_person_id: null }) },
     ]);
@@ -173,7 +215,9 @@ describe("POST /api/payments/create", () => {
       PAYNOW_INTEGRATION_ID: undefined,
       PAYNOW_INTEGRATION_KEY: undefined,
     });
+    asPayer();
     const { stub } = makeFetchStub([
+      personRoute(),
       { match: pgrstMatch("rsvp_action", ["GET"]), handle: () => json({ id: "rsvp-1", agent_person_id: "person-1" }) },
       { match: pgrstMatch("event", ["GET"]), handle: () => json({ id: "evt-1", organizer_person_id: "host-1" }) },
       { match: pgrstMatch("payment_intents", ["POST"]), handle: () => json([{ id: "pay-1" }], 201) },
@@ -195,7 +239,9 @@ describe("POST /api/payments/create", () => {
       PAYNOW_INTEGRATION_ID: "int-id",
       PAYNOW_INTEGRATION_KEY: "int-key",
     });
+    asPayer();
     const { stub, calls } = makeFetchStub([
+      personRoute(),
       { match: pgrstMatch("rsvp_action", ["GET"]), handle: () => json({ id: "rsvp-1", agent_person_id: "person-1" }) },
       { match: pgrstMatch("event", ["GET"]), handle: () => json({ id: "evt-1", organizer_person_id: "host-1" }) },
       { match: pgrstMatch("payment_intents", ["POST"]), handle: () => json([{ id: "pay-1" }], 201) },

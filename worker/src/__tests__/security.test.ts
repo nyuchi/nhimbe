@@ -118,9 +118,14 @@ describe('CORS: isAllowedOrigin', () => {
 // API Key Validation
 // ============================================
 
-function validateApiKey(apiKey: string | null, authHeader: string | null, envApiKey: string): boolean {
-  const key = apiKey || authHeader?.replace('Bearer ', '');
-  return key === envApiKey;
+// Mirrors the production `validateApiKey` after the auth-hardening pass:
+// ONLY the X-API-Key header is consulted. The Authorization header is
+// reserved for WorkOS access tokens — a stray Bearer token in the API-key
+// slot must NOT be accepted, otherwise a leaked user JWT could bypass
+// origin checks on writeAuth-protected routes.
+function validateApiKey(apiKey: string | null, _authHeader: string | null, envApiKey: string): boolean {
+  if (!apiKey) return false;
+  return apiKey === envApiKey;
 }
 
 describe('API Key Validation', () => {
@@ -130,8 +135,8 @@ describe('API Key Validation', () => {
     expect(validateApiKey(ENV_KEY, null, ENV_KEY)).toBe(true);
   });
 
-  it('validates correct key from Authorization header', () => {
-    expect(validateApiKey(null, `Bearer ${ENV_KEY}`, ENV_KEY)).toBe(true);
+  it('does NOT fall back to Authorization: Bearer (machine vs user-token split)', () => {
+    expect(validateApiKey(null, `Bearer ${ENV_KEY}`, ENV_KEY)).toBe(false);
   });
 
   it('rejects wrong API key', () => {
@@ -142,7 +147,7 @@ describe('API Key Validation', () => {
     expect(validateApiKey(null, null, ENV_KEY)).toBe(false);
   });
 
-  it('prefers X-API-Key over Authorization', () => {
+  it('ignores Authorization even when X-API-Key matches', () => {
     expect(validateApiKey(ENV_KEY, 'Bearer wrong', ENV_KEY)).toBe(true);
   });
 
