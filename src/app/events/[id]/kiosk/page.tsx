@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
-  checkinRegistration,
+  checkinViaKiosk,
   getCheckinStats,
   requestKioskPairing,
   getKioskPairingStatus,
@@ -310,13 +310,12 @@ function CheckinScreen({ session, token }: { session: KioskSession; token: strin
       setScanning(false);
 
       try {
-        // FIXME: paired-kiosk check-in needs a dedicated worker endpoint
-        // that validates the kiosk session token, not the WorkOS JWT.
-        // After the auth-hardening pass /api/events/:id/checkin requires
-        // the organizer's JWT, which a paired kiosk doesn't have. Passing
-        // an empty token here will 401 — the kiosk flow needs to switch
-        // to a kiosk-session-authenticated endpoint, tracked separately.
-        await checkinRegistration(session.eventId, registrationId, "");
+        // Paired-kiosk check-in goes through the kiosk-session-authenticated
+        // endpoint (POST /api/kiosk/checkin) which validates the kiosk
+        // session token via X-Kiosk-Token, not the WorkOS Bearer slot.
+        // The host's organizer-only `/api/events/:id/checkin` endpoint is
+        // for the host's own page; paired devices don't carry a JWT.
+        await checkinViaKiosk(session.eventId, registrationId, token);
         setResult({
           status: "success",
           name: "Guest",

@@ -666,6 +666,25 @@ export async function getCheckinStats(eventId: string): Promise<CheckinStats> {
   return apiFetch<CheckinStats>(`/api/events/${eventId}/checkin/stats`);
 }
 
+// Paired-kiosk check-in. Hits POST /api/kiosk/checkin which validates the
+// kiosk session token via X-Kiosk-Token header (NOT the WorkOS Bearer slot)
+// and resolves the bound event server-side. The eventId arg is passed for
+// client-side sanity-checking only; the worker uses the token's bound event.
+export async function checkinViaKiosk(
+  eventId: string,
+  registrationId: string,
+  kioskToken: string,
+): Promise<{ message: string; registrationId: string; eventId: string }> {
+  return apiFetch<{ message: string; registrationId: string; eventId: string }>(
+    `/api/kiosk/checkin`,
+    {
+      method: "POST",
+      body: JSON.stringify({ registrationId, eventId }),
+      headers: { "X-Kiosk-Token": kioskToken },
+    },
+  );
+}
+
 // Kiosk Pairing Types
 export type ScreenType = "kiosk" | "signage-host" | "signage-admin";
 
