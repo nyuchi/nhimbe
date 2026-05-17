@@ -78,18 +78,24 @@ interface IdentityPersonRow {
   role: string | null;
 }
 
-// `identity.person.role` holds platform-wide role names (admin, moderator,
-// platform_admin, …). Map to the worker's UserRole hierarchy at the boundary
-// so callers keep using `hasPermission(userRole, requiredRole)` without
-// caring that the source-of-truth strings differ.
+// `identity.person.role` is constrained to one of:
+//   user | creator | moderator | support | admin | superadmin | employee | developer
+// Map to the worker's UserRole hierarchy at the boundary so callers keep
+// using hasPermission(userRole, requiredRole) without caring about the
+// source-of-truth strings.
 function mapPlatformRole(raw: string | null): UserRole {
   switch (raw) {
-    case "platform_admin":
+    case "superadmin":
+    case "developer":
       return "super_admin";
     case "admin":
+    case "employee":
       return "admin";
     case "moderator":
+    case "support":
       return "moderator";
+    case "user":
+    case "creator":
     default:
       return "user";
   }
