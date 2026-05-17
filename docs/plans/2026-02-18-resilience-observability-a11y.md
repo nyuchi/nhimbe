@@ -15,6 +15,7 @@
 ### Task 1: Create feature branch and ErrorBoundary components
 
 **Files:**
+
 - Create: `src/components/error/error-boundary.tsx`
 - Create: `src/components/error/widget-error-boundary.tsx`
 
@@ -104,11 +105,13 @@ export class WidgetErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
-      return this.props.fallback ?? (
-        <div className="p-4 rounded-xl bg-surface border border-elevated text-center text-sm text-text-secondary">
-          <AlertTriangle className="w-5 h-5 mx-auto mb-2 text-text-tertiary" />
-          <p>Something went wrong</p>
-        </div>
+      return (
+        this.props.fallback ?? (
+          <div className="p-4 rounded-xl bg-surface border border-elevated text-center text-sm text-text-secondary">
+            <AlertTriangle className="w-5 h-5 mx-auto mb-2 text-text-tertiary" />
+            <p>Something went wrong</p>
+          </div>
+        )
       );
     }
     return this.props.children;
@@ -133,6 +136,7 @@ git commit -m "feat: add ErrorBoundary and WidgetErrorBoundary components"
 ### Task 2: Create Skeleton component and loading.tsx files
 
 **Files:**
+
 - Create: `src/components/ui/skeleton.tsx`
 - Create: `src/app/loading.tsx`
 - Create: `src/app/events/loading.tsx`
@@ -148,9 +152,7 @@ git commit -m "feat: add ErrorBoundary and WidgetErrorBoundary components"
 import { cn } from "@/lib/utils";
 
 export function Skeleton({ className }: { className?: string }) {
-  return (
-    <div className={cn("animate-pulse rounded-md bg-surface-elevated", className)} />
-  );
+  return <div className={cn("animate-pulse rounded-md bg-surface-elevated", className)} />;
 }
 ```
 
@@ -269,6 +271,7 @@ git commit -m "feat: add Skeleton component and loading.tsx files for all routes
 ### Task 3: Create error.tsx files (Next.js error boundaries)
 
 **Files:**
+
 - Create: `src/app/global-error.tsx`
 - Create: `src/app/not-found.tsx`
 - Create: `src/app/error.tsx`
@@ -286,21 +289,13 @@ This catches errors in the root layout itself. It must render its own `<html>` a
 ```tsx
 "use client";
 
-export default function GlobalError({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string };
-  reset: () => void;
-}) {
+export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
     <html lang="en">
       <body className="antialiased min-h-screen flex items-center justify-center bg-[#0A0A0A] text-[#F5F5F4]">
         <div className="text-center px-6 max-w-md">
           <h1 className="text-2xl font-bold mb-4">Something went wrong</h1>
-          <p className="text-[#A8A8A3] mb-6">
-            We hit an unexpected error. Please try again.
-          </p>
+          <p className="text-[#A8A8A3] mb-6">We hit an unexpected error. Please try again.</p>
           <button
             onClick={reset}
             className="px-6 py-3 bg-[#64FFDA] text-[#0A0A0A] rounded-xl font-semibold hover:opacity-90 transition-opacity"
@@ -347,13 +342,7 @@ export default function NotFound() {
 
 import { AlertTriangle } from "lucide-react";
 
-export default function Error({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string };
-  reset: () => void;
-}) {
+export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
       <AlertTriangle className="w-12 h-12 text-primary mb-4" />
@@ -402,6 +391,7 @@ git commit -m "feat: add error.tsx boundaries for all route segments"
 ### Task 4: Integrate error boundaries into layout.tsx (app shell isolation)
 
 **Files:**
+
 - Modify: `src/app/layout.tsx`
 
 **Step 1: Update `src/app/layout.tsx`**
@@ -409,6 +399,7 @@ git commit -m "feat: add error.tsx boundaries for all route segments"
 Wrap providers, Header, and Footer in error boundaries so the app shell always survives child crashes. Add `id="main-content"` to `<main>` for skip-to-content.
 
 Current layout structure:
+
 ```tsx
 <StytchProvider>
   <AuthProvider>
@@ -423,6 +414,7 @@ Current layout structure:
 ```
 
 New structure:
+
 ```tsx
 import { ErrorBoundary } from "@/components/error/error-boundary";
 import { WidgetErrorBoundary } from "@/components/error/widget-error-boundary";
@@ -436,14 +428,16 @@ import { WidgetErrorBoundary } from "@/components/error/widget-error-boundary";
         <WidgetErrorBoundary fallback={<MinimalNav />} name="Header">
           <Header />
         </WidgetErrorBoundary>
-        <main id="main-content" className="flex-1 relative z-10">{children}</main>
+        <main id="main-content" className="flex-1 relative z-10">
+          {children}
+        </main>
         <WidgetErrorBoundary fallback={null} name="Footer">
           <Footer />
         </WidgetErrorBoundary>
       </ThemeProvider>
     </AuthProvider>
   </StytchProvider>
-</ErrorBoundary>
+</ErrorBoundary>;
 ```
 
 Define `DegradedShell` and `MinimalNav` as inline components in layout.tsx:
@@ -465,7 +459,9 @@ function MinimalNav() {
   return (
     <header className="sticky top-0 z-50 bg-background/70 backdrop-blur-xl border-b border-elevated/50">
       <div className="max-w-300 mx-auto px-6 py-4 flex items-center justify-between">
-        <a href="/" className="text-xl font-bold text-primary">nhimbe</a>
+        <a href="/" className="text-xl font-bold text-primary">
+          nhimbe
+        </a>
         <nav className="flex items-center gap-4 text-sm text-text-secondary">
           <a href="/events">Events</a>
           <a href="/search">Search</a>
@@ -493,6 +489,7 @@ git commit -m "feat: wrap app shell in error boundaries for crash isolation"
 ### Task 5: Worker observability middleware (request ID + structured logging)
 
 **Files:**
+
 - Create: `worker/src/middleware/observability.ts`
 - Modify: `worker/src/index.ts` — add middleware imports and mount
 - Modify: `worker/src/types.ts` — extend Hono context variables type
@@ -511,10 +508,13 @@ export interface AppVariables {
 **Step 2: Update app type in `worker/src/index.ts`**
 
 Change:
+
 ```typescript
 const app = new Hono<{ Bindings: Env }>();
 ```
+
 To:
+
 ```typescript
 import type { AppVariables } from "./types";
 const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
@@ -529,37 +529,33 @@ import { createMiddleware } from "hono/factory";
 import type { Env, AppVariables } from "../types";
 
 // Request ID — generate or forward from upstream
-export const requestId = createMiddleware<{ Bindings: Env; Variables: AppVariables }>(
-  async (c, next) => {
-    const id = c.req.header("X-Request-ID") || crypto.randomUUID();
-    c.set("requestId", id);
-    c.header("X-Request-ID", id);
-    await next();
-  }
-);
+export const requestId = createMiddleware<{ Bindings: Env; Variables: AppVariables }>(async (c, next) => {
+  const id = c.req.header("X-Request-ID") || crypto.randomUUID();
+  c.set("requestId", id);
+  c.header("X-Request-ID", id);
+  await next();
+});
 
 // Structured JSON logging for every request
-export const requestLogger = createMiddleware<{ Bindings: Env; Variables: AppVariables }>(
-  async (c, next) => {
-    const start = Date.now();
-    await next();
-    const duration = Date.now() - start;
+export const requestLogger = createMiddleware<{ Bindings: Env; Variables: AppVariables }>(async (c, next) => {
+  const start = Date.now();
+  await next();
+  const duration = Date.now() - start;
 
-    const level = c.res.status >= 500 ? "error" : c.res.status >= 400 ? "warn" : "info";
+  const level = c.res.status >= 500 ? "error" : c.res.status >= 400 ? "warn" : "info";
 
-    console.log(
-      JSON.stringify({
-        level,
-        requestId: c.get("requestId"),
-        method: c.req.method,
-        path: c.req.path,
-        status: c.res.status,
-        durationMs: duration,
-        userAgent: c.req.header("User-Agent")?.substring(0, 100),
-      })
-    );
-  }
-);
+  console.log(
+    JSON.stringify({
+      level,
+      requestId: c.get("requestId"),
+      method: c.req.method,
+      path: c.req.path,
+      status: c.res.status,
+      durationMs: duration,
+      userAgent: c.req.header("User-Agent")?.substring(0, 100),
+    }),
+  );
+});
 ```
 
 **Step 4: Mount middleware in `worker/src/index.ts`**
@@ -579,19 +575,21 @@ app.use("*", requestLogger);
 ```typescript
 app.onError((err, c) => {
   const reqId = c.get("requestId");
-  console.error(JSON.stringify({
-    level: "error",
-    requestId: reqId,
-    error: err instanceof Error ? err.message : "Unknown error",
-    stack: err instanceof Error ? err.stack : undefined,
-  }));
+  console.error(
+    JSON.stringify({
+      level: "error",
+      requestId: reqId,
+      error: err instanceof Error ? err.message : "Unknown error",
+      stack: err instanceof Error ? err.stack : undefined,
+    }),
+  );
   return c.json(
     {
       error: "Internal Server Error",
       message: err instanceof Error ? err.message : "Unknown error",
       requestId: reqId,
     },
-    500
+    500,
   );
 });
 ```
@@ -613,6 +611,7 @@ git commit -m "feat: add request ID and structured logging middleware to worker"
 ### Task 6: Worker rate limiting middleware
 
 **Files:**
+
 - Create: `worker/src/middleware/rate-limit.ts`
 - Modify: `worker/src/index.ts` — mount rate limiter on write + AI endpoints
 
@@ -656,6 +655,7 @@ app.use("/api/search", rateLimit);
 **Step 3: Export from middleware barrel**
 
 Add to `worker/src/middleware/index.ts`:
+
 ```typescript
 export { rateLimit } from "./rate-limit";
 export { requestId, requestLogger } from "./observability";
@@ -678,6 +678,7 @@ git commit -m "feat: wire up rate limiting middleware on AI and auth endpoints"
 ### Task 7: Health check upgrade (actual service probing)
 
 **Files:**
+
 - Modify: `worker/src/routes/health.ts`
 
 **Step 1: Update health check to probe services**
@@ -737,6 +738,7 @@ git commit -m "feat: upgrade health check to probe D1 and KV with latency"
 ### Task 8: AI circuit breakers (timeout wrapper)
 
 **Files:**
+
 - Create: `worker/src/utils/timeout.ts`
 - Modify: `worker/src/ai/search.ts` — wrap AI calls with timeout
 - Modify: `worker/src/ai/assistant.ts` — wrap AI calls with timeout
@@ -748,11 +750,7 @@ git commit -m "feat: upgrade health check to probe D1 and KV with latency"
 /**
  * Wrap a promise with a timeout. Returns fallback if the promise doesn't resolve in time.
  */
-export async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  fallback: T
-): Promise<T> {
+export async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout>;
 
   const timeoutPromise = new Promise<T>((resolve) => {
@@ -779,11 +777,7 @@ Find all `ai.run()` calls in search.ts and wrap with `withTimeout`:
 import { withTimeout } from "../utils/timeout";
 
 // In generateSearchSummary — wrap the ai.run() call:
-const result = await withTimeout(
-  ai.run(LLM_MODEL, { messages, max_tokens: 200 }),
-  10_000,
-  null
-);
+const result = await withTimeout(ai.run(LLM_MODEL, { messages, max_tokens: 200 }), 10_000, null);
 if (!result) return `Found ${events.length} events matching your search.`;
 ```
 
@@ -792,6 +786,7 @@ Apply the same pattern to assistant.ts and description-generator.ts. Each AI cal
 **Step 3: Export from utils barrel**
 
 Add to `worker/src/utils/index.ts`:
+
 ```typescript
 export { withTimeout } from "./timeout";
 ```
@@ -813,6 +808,7 @@ git commit -m "feat: add timeout wrapper for AI calls with 10s circuit breaker"
 ### Task 9: Skip-to-content link and LiveRegion provider
 
 **Files:**
+
 - Create: `src/components/ui/live-region.tsx`
 - Modify: `src/app/layout.tsx` — add skip link + LiveRegionProvider
 
@@ -839,12 +835,7 @@ export function LiveRegionProvider({ children }: { children: ReactNode }) {
   return (
     <LiveRegionContext.Provider value={announce}>
       {children}
-      <div
-        aria-live="polite"
-        aria-atomic="true"
-        role="status"
-        className="sr-only"
-      >
+      <div aria-live="polite" aria-atomic="true" role="status" className="sr-only">
         {message}
       </div>
     </LiveRegionContext.Provider>
@@ -876,9 +867,7 @@ Wrap the error boundary contents with `<LiveRegionProvider>`:
   <StytchProvider>
     <AuthProvider>
       <ThemeProvider>
-        <LiveRegionProvider>
-          {/* ... Header, main, Footer ... */}
-        </LiveRegionProvider>
+        <LiveRegionProvider>{/* ... Header, main, Footer ... */}</LiveRegionProvider>
       </ThemeProvider>
     </AuthProvider>
   </StytchProvider>
@@ -902,6 +891,7 @@ git commit -m "feat: add skip-to-content link and aria-live region provider"
 ### Task 10: Focus trap hook and modal Escape handling
 
 **Files:**
+
 - Create: `src/lib/use-focus-trap.ts`
 
 **Step 1: Create `src/lib/use-focus-trap.ts`**
@@ -916,9 +906,7 @@ interface UseFocusTrapOptions {
   onEscape?: () => void;
 }
 
-export function useFocusTrap<T extends HTMLElement>(
-  options: UseFocusTrapOptions
-): RefObject<T | null> {
+export function useFocusTrap<T extends HTMLElement>(options: UseFocusTrapOptions): RefObject<T | null> {
   const ref = useRef<T>(null);
 
   useEffect(() => {
@@ -991,6 +979,7 @@ git commit -m "feat: add useFocusTrap hook with Escape key and Tab cycling"
 ### Task 11: ARIA improvements (Button, Input, Tabs, nav, event cards)
 
 **Files:**
+
 - Modify: `src/components/ui/button.tsx` — add focus-visible ring
 - Modify: `src/components/ui/input.tsx` — add aria-invalid, aria-describedby
 - Modify: `src/components/ui/tabs.tsx` — add aria-controls, aria-labelledby, arrow keys
@@ -1018,10 +1007,14 @@ const errorId = error ? `${props.id || "input"}-error` : undefined;
   aria-invalid={error ? true : undefined}
   aria-describedby={errorId}
   // ... rest
-/>
-{error && (
-  <p id={errorId} className="mt-1 text-xs text-red-400" role="alert">{error}</p>
-)}
+/>;
+{
+  error && (
+    <p id={errorId} className="mt-1 text-xs text-red-400" role="alert">
+      {error}
+    </p>
+  );
+}
 ```
 
 **Step 3: Fix Tabs — aria-controls, aria-labelledby, arrow key navigation**
@@ -1040,9 +1033,7 @@ function handleKeyDown(e: React.KeyboardEvent) {
   if (current === -1) return;
 
   e.preventDefault();
-  const next = e.key === "ArrowRight"
-    ? (current + 1) % tabs.length
-    : (current - 1 + tabs.length) % tabs.length;
+  const next = e.key === "ArrowRight" ? (current + 1) % tabs.length : (current - 1 + tabs.length) % tabs.length;
   tabs[next].focus();
   tabs[next].click();
 }
@@ -1053,17 +1044,20 @@ Add `onKeyDown={handleKeyDown}` to the TabsList `<div>`.
 **Step 4: Fix Header nav**
 
 In `header.tsx`:
+
 - Add `aria-label="Main navigation"` to the `<nav>` element
 - Add `aria-current={pathname === link.href ? "page" : undefined}` to each nav link
 
 **Step 5: Fix Footer nav**
 
 In `footer.tsx`:
+
 - Add `aria-label="Footer navigation"` to the `<nav>` element
 
 **Step 6: Fix event card — article wrapper**
 
 In `event-card.tsx`:
+
 - Find the outermost wrapper element (likely a `<div>` or `<Link>`) and change to `<article>` or wrap in `<article>`
 
 **Step 7: Verify build and tests**
@@ -1083,6 +1077,7 @@ git commit -m "feat: ARIA improvements - focus rings, labels, keyboard nav, land
 ### Task 12: Extract BottomSheetModal and modals from create-event page
 
 **Files:**
+
 - Create: `src/components/modals/bottom-sheet-modal.tsx`
 - Create: `src/components/modals/date-time-modal.tsx`
 - Create: `src/components/modals/location-modal.tsx`
@@ -1124,11 +1119,7 @@ export function BottomSheetModal({ isOpen, onClose, title, children }: BottomShe
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div
         ref={trapRef}
         role="dialog"
@@ -1206,6 +1197,7 @@ git commit -m "refactor: extract 6 bottom-sheet modals from create-event page"
 ### Task 13: Extract shared CityDropdown component
 
 **Files:**
+
 - Create: `src/components/ui/city-dropdown.tsx`
 - Modify: `src/app/page.tsx` — use shared CityDropdown
 - Modify: `src/app/events/page.tsx` — use shared CityDropdown
@@ -1285,6 +1277,7 @@ git commit -m "refactor: extract shared CityDropdown component from home and eve
 ### Task 14: Lazy loading heavy components with next/dynamic
 
 **Files:**
+
 - Modify: `src/app/events/create/page.tsx` — lazy load the form
 - Modify pages that use heavy widgets — lazy load CommunityInsights, ReferralLeaderboard, AI wizard
 
@@ -1314,8 +1307,8 @@ Where `CommunityInsights`, `ReferralLeaderboard`, or AI widgets are imported, wr
 
 ```tsx
 const CommunityInsights = dynamic(
-  () => import("@/components/ui/community-insights").then(m => ({ default: m.CommunityInsights })),
-  { ssr: false, loading: () => <Skeleton className="h-48 w-full rounded-xl" /> }
+  () => import("@/components/ui/community-insights").then((m) => ({ default: m.CommunityInsights })),
+  { ssr: false, loading: () => <Skeleton className="h-48 w-full rounded-xl" /> },
 );
 ```
 
@@ -1336,6 +1329,7 @@ git commit -m "feat: lazy load create-event form and sidebar widgets"
 ### Task 15: RSC migration for events and home pages
 
 **Files:**
+
 - Modify: `src/app/events/page.tsx` — convert to server component with client child
 - Modify: `src/app/page.tsx` — convert to server component with client child
 
@@ -1346,6 +1340,7 @@ Both use `useEffect` + `useState` in `"use client"` components.
 **Step 2: Migrate events page**
 
 Split `src/app/events/page.tsx` into:
+
 - `page.tsx` (server component) — fetches initial events from API
 - `events-client.tsx` (client component) — receives initial data, handles interactivity
 

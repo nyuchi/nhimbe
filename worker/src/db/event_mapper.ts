@@ -22,6 +22,7 @@ interface SupabaseEventRow {
   location: Record<string, unknown> | null;
   organizer: Record<string, unknown> | null;
   organizer_person_id: string | null;
+  organization_id: string | null;
   offers: Record<string, unknown> | null;
   image: string[] | null;
   category: string | null;
@@ -32,7 +33,45 @@ interface SupabaseEventRow {
   slug: string | null;
   created_at: string | null;
   updated_at: string | null;
+  /** Linked Kraal (circles.circle.id) — drives the "View kraal" CTA on EventDetail. */
+  event_circle_id: string | null;
+  /** schema.org/contributor jsonb — drives the "Contributions board" chips on EventDetail. */
+  contributor: Record<string, unknown> | unknown[] | null;
+  /** ISO 8601 duration ("PT2H") — surfaced on the "When" tile when set. */
+  duration: string | null;
+  /** Event timezone (defaults to UTC on insert). */
+  timezone: string | null;
+  /** FK to places.places — drives the "Where" tile + Weather lookup keyed on place_id. */
+  place_id: string | null;
+  /** Free-form per-event metadata jsonb. Outdoor events store
+   *  {elevation_m, distance_km, route_summary, profile?}. Other categories
+   *  may store their own shapes; EventSpecifics narrows defensively. */
+  about: Record<string, unknown> | null;
+  /** FK to campfire.conversation — drives the on-page event chat. */
+  campfire_conversation_id: string | null;
 }
+
+// The platform-db CHECK constraints on events.event require fully-qualified
+// schema.org URLs for `eventstatus` and `eventattendancemode`
+// (e.g. "https://schema.org/EventScheduled"). The legacy nhimbe API exposes
+// short forms (e.g. "EventScheduled"). These two helpers normalise at the
+// worker boundary: stripSchemaPrefix on read, addSchemaPrefix on write.
+const SCHEMA_PREFIX = "https://schema.org/";
+export function stripSchemaPrefix(v: string | null | undefined): string | null {
+  if (!v) return null;
+  return v.startsWith(SCHEMA_PREFIX) ? v.slice(SCHEMA_PREFIX.length) : v;
+}
+export function addSchemaPrefix(v: string | null | undefined): string | null {
+  if (!v) return null;
+  return v.startsWith(SCHEMA_PREFIX) ? v : SCHEMA_PREFIX + v;
+}
+
+// events.rsvp_action.rsvpresponse CHECK constraint values. Exported so every
+// worker route compares against and writes the same string the DB actually
+// stores. Avoid passing literal "rsvpYes"/"rsvpNo" — they fail the constraint.
+export const RSVP_YES = "https://schema.org/RsvpResponseYes";
+export const RSVP_NO = "https://schema.org/RsvpResponseNo";
+export const RSVP_MAYBE = "https://schema.org/RsvpResponseMaybe";
 
 function formatDateFragments(startdate: string) {
   const d = new Date(startdate);
@@ -84,8 +123,8 @@ export function mapSupabaseEventToApi(row: SupabaseEventRow): Event {
     image: (row.image && row.image[0]) || undefined,
     attendeeCount: row.attendee_count ?? 0,
     maximumAttendeeCapacity: row.maximumattendeecapacity ?? undefined,
-    eventAttendanceMode: row.eventattendancemode ?? undefined,
-    eventStatus: row.eventstatus ?? undefined,
+    eventAttendanceMode: stripSchemaPrefix(row.eventattendancemode) ?? undefined,
+    eventStatus: stripSchemaPrefix(row.eventstatus) ?? undefined,
     isPublished: row.visibility === "public",
     organizer: {
       name: (org.name as string) ?? "",
@@ -104,11 +143,21 @@ export function mapSupabaseEventToApi(row: SupabaseEventRow): Event {
       : undefined,
     dateCreated: row.created_at ?? undefined,
     dateModified: row.updated_at ?? undefined,
+    // New design surfaces — opt-in fields that EventDetail uses for the
+    // 3-up info tiles + host card branching + Kraal CTA + contributions.
+    placeId: row.place_id ?? undefined,
+    organizationId: row.organization_id ?? undefined,
+    eventCircleId: row.event_circle_id ?? undefined,
+    duration: row.duration ?? undefined,
+    timezone: row.timezone ?? undefined,
+    contributor: row.contributor ?? undefined,
+    about: row.about ?? undefined,
+    campfireConversationId: row.campfire_conversation_id ?? undefined,
   };
 }
 
 const EVENT_COLUMNS =
-  "id,name,description,startdate,enddate,eventattendancemode,eventstatus,eventtype,location,organizer,organizer_person_id,offers,image,category,keywords,maximumattendeecapacity,attendee_count,visibility,slug,created_at,updated_at";
+  "id,name,description,startdate,enddate,eventattendancemode,eventstatus,eventtype,location,organizer,organizer_person_id,organization_id,offers,image,category,keywords,maximumattendeecapacity,attendee_count,visibility,slug,created_at,updated_at,event_circle_id,contributor,duration,timezone,place_id,about,campfire_conversation_id";
 
 /**
  * Fetch events by id from Supabase. Returns events in API shape, preserving

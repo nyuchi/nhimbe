@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sparkles, ArrowRight, ArrowLeft, Loader2, RefreshCw, Check, X } from "lucide-react";
 import { Button } from "./button";
 import { Textarea } from "./textarea";
@@ -10,6 +10,12 @@ import {
   type DescriptionContext,
   type GeneratedDescription,
 } from "@/lib/api";
+import { useAuth } from "@/components/auth/auth-context";
+import {
+  logShamwariFeedback,
+  logShamwariToolUsage,
+  startShamwariConversation,
+} from "@/lib/shamwari";
 
 interface WizardStep {
   question: string;
@@ -60,6 +66,8 @@ export function AIDescriptionWizard({
   onDescriptionGenerated,
   onClose,
 }: AIDescriptionWizardProps) {
+  const { user } = useAuth();
+  const viewerPersonId = (user as { person_id?: string } | null)?.person_id ?? null;
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isGenerating, setIsGenerating] = useState(false);
@@ -67,6 +75,29 @@ export function AIDescriptionWizard({
   const [error, setError] = useState<string | null>(null);
   const [regenerateFeedback, setRegenerateFeedback] = useState("");
   const [showRegenerateInput, setShowRegenerateInput] = useState(false);
+  // Shamwari conversation id is lazy-init'd on the first Generate call
+  // so we don't create an empty conversation when the user opens then
+  // immediately closes the wizard. Held in a ref because it never
+  // triggers a re-render.
+  const conversationIdRef = useRef<string | null>(null);
+  // Track whether the user explicitly accepted ("Use This") so the close
+  // handler can record a thumbs_down when they bail without accepting.
+  const acceptedRef = useRef(false);
+
+  // Best-effort thumbs_down on close-without-accept. Only fires when a
+  // generation actually happened (the user saw a result).
+  useEffect(() => {
+    return () => {
+      if (acceptedRef.current) return;
+      if (!conversationIdRef.current || !viewerPersonId) return;
+      void logShamwariFeedback({
+        personId: viewerPersonId,
+        conversationId: conversationIdRef.current,
+        feedbackType: "thumbs_down",
+        feedbackText: "closed without accepting",
+      });
+    };
+  }, [viewerPersonId]);
 
   const step = WIZARD_STEPS[currentStep];
   const isLastStep = currentStep === WIZARD_STEPS.length - 1;
@@ -103,11 +134,41 @@ export function AIDescriptionWizard({
       highlights: answers.highlights,
     };
 
+    // Lazy-init the Shamwari conversation on the first generate.
+    if (viewerPersonId && !conversationIdRef.current) {
+      conversationIdRef.current = await startShamwariConversation(viewerPersonId);
+    }
+
+    const startedAt = performance.now();
     try {
       const result = await generateEventDescription(context);
       setGeneratedResult(result);
+      if (viewerPersonId) {
+        void logShamwariToolUsage({
+          personId: viewerPersonId,
+          conversationId: conversationIdRef.current,
+          toolParameters: context as unknown as Record<string, unknown>,
+          toolResult: {
+            description: result.description,
+            suggestions: result.suggestions,
+          },
+          status: "success",
+          executionTimeMs: Math.round(performance.now() - startedAt),
+        });
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate description");
+      const message = err instanceof Error ? err.message : "Failed to generate description";
+      setError(message);
+      if (viewerPersonId) {
+        void logShamwariToolUsage({
+          personId: viewerPersonId,
+          conversationId: conversationIdRef.current,
+          toolParameters: context as unknown as Record<string, unknown>,
+          status: "failed",
+          errorMessage: message,
+          executionTimeMs: Math.round(performance.now() - startedAt),
+        });
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -129,13 +190,53 @@ export function AIDescriptionWizard({
       highlights: answers.highlights,
     };
 
+    const startedAt = performance.now();
+    const feedbackText = regenerateFeedback; // captured before reset
     try {
-      const result = await regenerateEventDescription(context, regenerateFeedback);
+      const result = await regenerateEventDescription(context, feedbackText);
       setGeneratedResult(result);
       setShowRegenerateInput(false);
       setRegenerateFeedback("");
+      if (viewerPersonId) {
+        void logShamwariToolUsage({
+          personId: viewerPersonId,
+          conversationId: conversationIdRef.current,
+          toolParameters: {
+            ...(context as unknown as Record<string, unknown>),
+            adjust_feedback: feedbackText,
+          },
+          toolResult: {
+            description: result.description,
+            suggestions: result.suggestions,
+          },
+          status: "success",
+          executionTimeMs: Math.round(performance.now() - startedAt),
+        });
+        // The "Adjust" interaction is itself a form of feedback — record it
+        // so we can rank prompts by which ones need refinement.
+        void logShamwariFeedback({
+          personId: viewerPersonId,
+          conversationId: conversationIdRef.current,
+          feedbackType: "suggestion",
+          feedbackText,
+        });
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to regenerate description");
+      const message = err instanceof Error ? err.message : "Failed to regenerate description";
+      setError(message);
+      if (viewerPersonId) {
+        void logShamwariToolUsage({
+          personId: viewerPersonId,
+          conversationId: conversationIdRef.current,
+          toolParameters: {
+            ...(context as unknown as Record<string, unknown>),
+            adjust_feedback: feedbackText,
+          },
+          status: "failed",
+          errorMessage: message,
+          executionTimeMs: Math.round(performance.now() - startedAt),
+        });
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -143,6 +244,14 @@ export function AIDescriptionWizard({
 
   const handleAccept = () => {
     if (generatedResult) {
+      acceptedRef.current = true;
+      if (viewerPersonId) {
+        void logShamwariFeedback({
+          personId: viewerPersonId,
+          conversationId: conversationIdRef.current,
+          feedbackType: "thumbs_up",
+        });
+      }
       onDescriptionGenerated(generatedResult.description);
       onClose();
     }

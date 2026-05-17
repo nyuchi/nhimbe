@@ -99,14 +99,14 @@ Used by all `loading.tsx` files to create layout-preserving placeholders.
 
 Use `next/dynamic` with `ssr: false` for heavy client-only pages/components:
 
-| Component | Reason |
-|-----------|--------|
-| `events/create` form | 979 lines, client-only, heavy |
-| Admin dashboard widgets | Admin-only, rarely loaded |
-| Calendar grid | Date-heavy, client-only |
-| AI Description Wizard | AI-specific, optional feature |
-| CommunityInsights | Sidebar widget, non-critical |
-| ReferralLeaderboard | Sidebar widget, non-critical |
+| Component               | Reason                        |
+| ----------------------- | ----------------------------- |
+| `events/create` form    | 979 lines, client-only, heavy |
+| Admin dashboard widgets | Admin-only, rarely loaded     |
+| Calendar grid           | Date-heavy, client-only       |
+| AI Description Wizard   | AI-specific, optional feature |
+| CommunityInsights       | Sidebar widget, non-critical  |
+| ReferralLeaderboard     | Sidebar widget, non-critical  |
 
 ---
 
@@ -131,14 +131,16 @@ app.use("*", async (c, next) => {
   const start = Date.now();
   await next();
   const duration = Date.now() - start;
-  console.log(JSON.stringify({
-    level: c.res.status >= 500 ? "error" : c.res.status >= 400 ? "warn" : "info",
-    requestId: c.get("requestId"),
-    method: c.req.method,
-    path: c.req.path,
-    status: c.res.status,
-    durationMs: duration,
-  }));
+  console.log(
+    JSON.stringify({
+      level: c.res.status >= 500 ? "error" : c.res.status >= 400 ? "warn" : "info",
+      requestId: c.get("requestId"),
+      method: c.req.method,
+      path: c.req.path,
+      status: c.res.status,
+      durationMs: duration,
+    }),
+  );
 });
 ```
 
@@ -149,7 +151,10 @@ Wire up the existing `RATE_LIMITER` binding:
 ```typescript
 // worker/src/middleware/rate-limit.ts
 export const rateLimit = createMiddleware<{ Bindings: Env }>(async (c, next) => {
-  if (!c.env.RATE_LIMITER) { await next(); return; }
+  if (!c.env.RATE_LIMITER) {
+    await next();
+    return;
+  }
   const key = c.req.header("CF-Connecting-IP") || "unknown";
   const { success } = await c.env.RATE_LIMITER.limit({ key });
   if (!success) return c.json({ error: "Rate limit exceeded" }, 429);
@@ -224,7 +229,9 @@ function LiveRegionProvider({ children }) {
   return (
     <LiveRegionContext.Provider value={setMessage}>
       {children}
-      <div aria-live="polite" aria-atomic="true" className="sr-only">{message}</div>
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {message}
+      </div>
     </LiveRegionContext.Provider>
   );
 }

@@ -82,38 +82,6 @@ export interface VectorizeDeleteResult {
   ids: string[];
 }
 
-// D1 Database Types
-export interface D1Database {
-  prepare(query: string): D1PreparedStatement;
-  dump(): Promise<ArrayBuffer>;
-  batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
-  exec(query: string): Promise<D1ExecResult>;
-}
-
-export interface D1PreparedStatement {
-  bind(...values: unknown[]): D1PreparedStatement;
-  first<T = unknown>(colName?: string): Promise<T | null>;
-  run(): Promise<D1Result>;
-  all<T = unknown>(): Promise<D1Result<T>>;
-  raw<T = unknown>(): Promise<T[]>;
-}
-
-export interface D1Result<T = unknown> {
-  results: T[];
-  success: boolean;
-  meta: {
-    duration: number;
-    changes: number;
-    last_row_id: number;
-    served_by: string;
-  };
-}
-
-export interface D1ExecResult {
-  count: number;
-  duration: number;
-}
-
 // KV Namespace Types
 export interface KVNamespace {
   get(key: string, options?: KVGetOptions): Promise<string | null>;
@@ -336,14 +304,12 @@ export interface Env {
   // WorkOS's JWKS (https://api.workos.com/sso/jwks/<client_id>). No WorkOS API
   // secret is required on the worker side for the auth path.
   WORKOS_CLIENT_ID: string;
-  // MongoDB Atlas — primary database (set via `wrangler secret put MONGODB_URI`)
-  MONGODB_URI?: string;
-  // Supabase (nyuchi_platform_db) — replaces D1 reads for identity/role lookups.
-  // SUPABASE_URL is the project REST root, SUPABASE_SERVICE_ROLE_KEY bypasses
+  // Supabase (nyuchi_platform_db) — primary datastore.
+  // SUPABASE_URL is the project REST root, SUPABASE_SECRET_KEY bypasses
   // RLS for trusted server-side reads. Set the URL as a `[vars]` value and the
-  // key via `wrangler secret put SUPABASE_SERVICE_ROLE_KEY`.
+  // key via `wrangler secret put SUPABASE_SECRET_KEY`.
   SUPABASE_URL?: string;
-  SUPABASE_SERVICE_ROLE_KEY?: string;
+  SUPABASE_SECRET_KEY?: string;
   // api.mukoko.com — public API gateway (FastAPI on fly.io). The worker is
   // one consumer among many (third-party apps also hit it). It owns API-key
   // management and brokers access to private back-end stores (pay-db,
@@ -444,6 +410,29 @@ export interface Event {
   offers?: EventOffers;                  // schema.org Event.offers
   dateCreated?: string;                  // schema.org CreativeWork.dateCreated
   dateModified?: string;                 // schema.org CreativeWork.dateModified
+  // ─── EventDetail design surfaces (Nhimbe.html prototype) ──────────────
+  /** FK to places.places.id — when set, the design's "Where" tile + Weather
+   *  tile prefer joined place data over the legacy `location` jsonb. */
+  placeId?: string;
+  /** FK to business.organization.id — when set, host card renders the org
+   *  branch instead of the person branch (still falls back to organizer
+   *  when neither this nor organizer.identifier resolves). */
+  organizationId?: string;
+  /** FK to circles.circle.id — drives the "View kraal" CTA on EventDetail
+   *  and the cross-link from /kraal/[id] back to its parent event. */
+  eventCircleId?: string;
+  /** ISO-8601 duration (e.g. "PT2H30M") for the "When" tile subtitle. */
+  duration?: string;
+  /** Event timezone (IANA name like "Africa/Harare"). */
+  timezone?: string;
+  /** schema.org/contributor jsonb — chips on the contributions board. */
+  contributor?: unknown;
+  /** Free-form per-event metadata jsonb. Outdoor events store
+   *  {elevation_m, distance_km, route_summary}; other categories use
+   *  their own shape. EventSpecifics narrows defensively. */
+  about?: unknown;
+  /** FK to campfire.conversation — drives the on-page event chat. */
+  campfireConversationId?: string;
 }
 
 // Search Types

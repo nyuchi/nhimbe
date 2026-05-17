@@ -67,10 +67,24 @@ export interface Event {
   dateModified?: string;
   /**
    * UUID of the linked Kraal circle (events.event.event_circle_id in the
-   * platform DB). Populated once the backend exposes it; until then the
-   * sidebar's "View kraal" CTA falls back to the Kraal index.
+   * platform DB). When present, EventDetail surfaces a "View kraal" CTA.
    */
   eventCircleId?: string;
+  /** FK to places.places.id — drives the design's Where tile + Weather. */
+  placeId?: string;
+  /** FK to business.organization.id — when set, host card renders org branch. */
+  organizationId?: string;
+  /** ISO-8601 duration (e.g. "PT2H30M"). */
+  duration?: string;
+  /** Event timezone (IANA name). */
+  timezone?: string;
+  /** schema.org/contributor jsonb — chips on the contributions board. */
+  contributor?: unknown;
+  /** Free-form per-event metadata jsonb. Outdoor events store
+   *  {elevation_m, distance_km, route_summary, profile?}. */
+  about?: unknown;
+  /** FK to campfire.conversation — drives the on-page event chat. */
+  campfireConversationId?: string;
 }
 
 export interface EventsResponse {
@@ -97,19 +111,9 @@ export interface CitiesResponse {
   cities: { addressLocality: string; addressCountry: string }[];
 }
 
-// Get session JWT from Stytch (when available in browser)
-function getSessionJwt(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    // Stytch stores session JWT in a cookie; we retrieve it via the SDK
-    // This is a lightweight check — the actual token comes from StytchProvider
-    return null; // Will be passed explicitly by callers
-  } catch {
-    return null;
-  }
-}
-
-// API fetch wrapper
+// API fetch wrapper. The session JWT (WorkOS access token) is always passed
+// explicitly by callers — the AuthKit provider owns it and there's no
+// browser-cookie path to retrieve it from here.
 async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -122,10 +126,8 @@ async function apiFetch<T>(
     ...(options.headers as Record<string, string>),
   };
 
-  // Attach auth token for authenticated requests
-  const token = sessionJwt || getSessionJwt();
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  if (sessionJwt) {
+    headers["Authorization"] = `Bearer ${sessionJwt}`;
   }
 
   const response = await fetch(url, {

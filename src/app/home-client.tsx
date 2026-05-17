@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { Loader2, ArrowRight, Globe, Sun, Cloud, CloudRain, CloudLightning, CloudSnow, CloudFog, CloudSun, TrendingUp, Flame, Clock, Users } from "lucide-react";
+import { Loader2, ArrowRight, Globe, Sun, Cloud, CloudRain, CloudLightning, CloudSnow, CloudFog, CloudSun, TrendingUp, Flame, Clock, Users, Search, Sparkles } from "lucide-react";
 import dynamic from "next/dynamic";
 import { EventCardHorizontal } from "@/components/ui/event-card-horizontal";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,7 +41,11 @@ function formatCount(n: number): string {
   return String(n);
 }
 
-// Community Stats Bar Component
+// Community Stats Bar — 4-col grid with mineral-tinted icons + serif numerals.
+// Mirrors Discover.jsx's StatBar from the Claude Design handoff: each cell is
+// (icon + uppercase caption) above a serif numeral; cells separated by 1px
+// borders inside a single muted container. The icon tint maps a stat to a
+// mineral so the eye reads "category" before "number".
 function CommunityStatsBar({ eventCount, stats }: { eventCount: number; stats: CommunityStats | null }) {
   const topTrending = stats?.trendingCategories?.[0];
   const trendingLabel = topTrending
@@ -50,51 +54,35 @@ function CommunityStatsBar({ eventCount, stats }: { eventCount: number; stats: C
   const peakTime = stats?.peakTime || "—";
   const communitySize = stats ? formatCount(stats.totalAttendees) : "—";
 
+  const cells = [
+    { label: "Live", value: String(eventCount), Icon: Flame, tint: "var(--nh-lead)" },
+    { label: "Trending", value: trendingLabel, Icon: TrendingUp, tint: "var(--nh-accent)" },
+    { label: "Peak", value: peakTime, Icon: Clock, tint: "var(--nh-secondary)" },
+    { label: "Community", value: `${communitySize}`, Icon: Users, tint: "var(--color-cobalt, var(--mineral-cobalt-raw))" },
+  ];
+
   return (
-    <div className="flex flex-wrap items-center gap-4 py-3 px-4 bg-surface rounded-xl mb-6">
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
-          <Flame className="w-4 h-4 text-primary" aria-hidden="true" />
-          <span className="sr-only">Active events</span>
+    <div
+      data-slot="stat-bar"
+      className="grid grid-cols-2 md:grid-cols-4 gap-0 px-4 py-4 mb-6 rounded-[var(--radius-lg)] bg-muted"
+    >
+      {cells.map((s, i) => (
+        <div
+          key={s.label}
+          className="flex flex-col gap-1 px-3"
+          style={{
+            borderLeft: i === 0 ? "none" : "1px solid var(--border)",
+          }}
+        >
+          <span className="inline-flex items-center gap-1.5" style={{ color: s.tint }}>
+            <s.Icon className="w-3 h-3" strokeWidth={2.2} aria-hidden />
+            <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+              {s.label}
+            </span>
+          </span>
+          <span className="font-serif text-lg font-bold leading-none text-foreground">{s.value}</span>
         </div>
-        <div>
-          <div className="text-xs text-text-tertiary">Active Events</div>
-          <div className="font-semibold">{eventCount}</div>
-        </div>
-      </div>
-      <div className="h-8 w-px bg-elevated hidden sm:block" />
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
-          <TrendingUp className="w-4 h-4 text-accent" aria-hidden="true" />
-          <span className="sr-only">Trending category</span>
-        </div>
-        <div>
-          <div className="text-xs text-text-tertiary">Trending</div>
-          <div className="font-semibold text-green-400">{trendingLabel}</div>
-        </div>
-      </div>
-      <div className="h-8 w-px bg-elevated hidden sm:block" />
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-secondary/20 flex items-center justify-center">
-          <Clock className="w-4 h-4 text-secondary" aria-hidden="true" />
-          <span className="sr-only">Peak time</span>
-        </div>
-        <div>
-          <div className="text-xs text-text-tertiary">Peak Time</div>
-          <div className="font-semibold">{peakTime}</div>
-        </div>
-      </div>
-      <div className="h-8 w-px bg-elevated hidden sm:block" />
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
-          <Users className="w-4 h-4 text-green-400" aria-hidden="true" />
-          <span className="sr-only">Community size</span>
-        </div>
-        <div>
-          <div className="text-xs text-text-tertiary">Community</div>
-          <div className="font-semibold">{communitySize} attendees</div>
-        </div>
-      </div>
+      ))}
     </div>
   );
 }
@@ -245,6 +233,29 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
             <p className="text-lg text-text-secondary max-w-150 mb-8">
               From cultural celebrations and faith gatherings to tech meetups, comedy nights, music festivals and family days — find what brings your community together. Powered by Ubuntu philosophy.
             </p>
+            {/* AI search pill — primary entry point per Nhimbe.html design.
+                Full-width button styled like an input with a malachite "AI"
+                chip at the right; tap routes to /search where Shamwari (the
+                AI assistant) takes over. */}
+            <div className="max-w-150 mb-6">
+              <Link
+                href="/search"
+                aria-label="Ask Shamwari (AI) to find an event"
+                data-slot="ai-search-pill"
+                className="flex items-center gap-2.5 h-[var(--touch-target)] w-full px-5 rounded-full border border-border bg-card text-left text-muted-foreground hover:bg-muted transition-colors"
+              >
+                <Search className="w-[17px] h-[17px] shrink-0" aria-hidden />
+                <span className="text-sm">Search gatherings, kraals, places&hellip;</span>
+                <span className="flex-1" />
+                <span
+                  className="inline-flex items-center gap-1 h-[22px] px-2 rounded-full text-[10px] font-semibold tracking-[0.03em]"
+                  style={{ background: "var(--nh-lead-soft)", color: "var(--nh-lead)" }}
+                >
+                  <Sparkles className="w-[11px] h-[11px]" strokeWidth={2.2} aria-hidden />
+                  AI
+                </span>
+              </Link>
+            </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button asChild className="rounded-full h-[var(--touch-target-lg)] px-6">
                 <Link href="/events/create">
@@ -252,13 +263,6 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
                   <ArrowRight className="w-4 h-4" aria-hidden />
                 </Link>
               </Button>
-              <Link
-                href="/search"
-                className="inline-flex items-center gap-2 px-5 h-[var(--touch-target)] rounded-full border border-elevated bg-surface/60 backdrop-blur-md text-sm font-medium hover:bg-surface transition-colors"
-              >
-                <span aria-hidden>✨</span>
-                Ask Shamwari to find an event
-              </Link>
             </div>
           </div>
         </section>
@@ -324,6 +328,8 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
                       location={event.location}
                       coverImage={event.image}
                       coverGradient={event.coverGradient}
+                      attendeeCount={event.attendeeCount}
+                      maximumAttendeeCapacity={event.maximumAttendeeCapacity}
                     />
                   ))}
                 </div>
@@ -339,6 +345,8 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
                       location={event.location}
                       coverImage={event.image}
                       coverGradient={event.coverGradient}
+                      attendeeCount={event.attendeeCount}
+                      maximumAttendeeCapacity={event.maximumAttendeeCapacity}
                     />
                   ))}
                 </div>

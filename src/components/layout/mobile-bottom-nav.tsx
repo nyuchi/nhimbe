@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, CalendarDays, Ticket, User } from "lucide-react";
+import { Home, CalendarDays, Map as MapIcon, Ticket, User } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
 
 const mobileNavItems = [
   { href: "/", label: "Discover", icon: Home },
-  { href: "/my-events", label: "My Events", icon: Ticket },
+  { href: "/map", label: "Map", icon: MapIcon },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/my-events", label: "My Events", icon: Ticket },
   { href: "/profile", label: "Profile", icon: User },
 ];
 

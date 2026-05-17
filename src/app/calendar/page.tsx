@@ -2,9 +2,10 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, MapPin, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, Loader2, Moon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MoonPhase } from "@/components/ui/moon-phase";
 import { getEvents, type Event } from "@/lib/api";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -149,6 +150,16 @@ export default function CalendarPage() {
         </Button>
       </div>
 
+      {/* Lunar tag — calendar surfaces moon phase per day (top-right of each
+          cell). Sub-Saharan gathering traditions often plan by moonlight, so
+          phase is exposed as an ambient cue. From the Nhimbe.html design. */}
+      <div className="flex justify-end mb-2">
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+          <Moon className="w-3 h-3" strokeWidth={2.2} aria-hidden />
+          Lunar
+        </span>
+      </div>
+
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -174,12 +185,16 @@ export default function CalendarPage() {
               {calendarDays.map((day, index) => (
                 <div
                   key={index}
-                  className={`min-h-30 p-2 border-b border-r border-elevated ${
+                  className={`min-h-30 p-2 border-b border-r border-elevated relative ${
                     day === null ? "bg-elevated/30" : ""
                   } ${index % 7 === 6 ? "border-r-0" : ""}`}
                 >
                   {day !== null && (
                     <>
+                      {/* Lunar phase marker — top-right corner */}
+                      <span className="absolute top-1.5 right-1.5" aria-hidden>
+                        <MoonPhase date={new Date(year, month, day)} size={9} />
+                      </span>
                       <div
                         className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium mb-1 ${
                           isToday(day)

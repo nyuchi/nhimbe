@@ -11,7 +11,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 let cached: SupabaseClient | null = null;
 
@@ -26,12 +26,12 @@ export function setSupabaseAccessToken(token: string | null): void {
 
 export function getSupabaseBrowserClient(): SupabaseClient {
   if (cached) return cached;
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     throw new Error(
-      "[mukoko] Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "[mukoko] Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
     );
   }
-  cached = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  cached = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -44,7 +44,7 @@ export function getSupabaseBrowserClient(): SupabaseClient {
         const headers = new Headers(init?.headers);
         if (accessToken) {
           headers.set("Authorization", `Bearer ${accessToken}`);
-          headers.set("apikey", SUPABASE_ANON_KEY);
+          headers.set("apikey", SUPABASE_PUBLISHABLE_KEY);
         }
         return fetch(input, { ...init, headers });
       },

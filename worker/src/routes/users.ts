@@ -5,6 +5,7 @@ import { generateReferralCode } from "../utils/ids";
 import { writeAuth } from "../middleware/auth";
 import { logAudit } from "../utils/audit";
 import { supabaseFetch } from "../db/supabase";
+import { RSVP_NO } from "../db/event_mapper";
 
 export const users = new Hono<{ Bindings: Env }>();
 users.use("*", writeAuth);
@@ -243,25 +244,25 @@ users.get("/:id/reputation", async (c) => {
 });
 
 // DELETE /api/users/:id — Soft-delete + PII anonymization.
-// identity.person doesn't have a `deleted_at` column; we encode soft-deletion
-// by overwriting PII to anonymized placeholders and pinning role='deleted'.
-// (Surface design follows: anything sensitive is gone; consumers should treat
-// role='deleted' as "do not show".)
+// identity.person.deleted_at carries the soft-delete signal; role is left
+// untouched (role = "what kind of user" is orthogonal to "is this user
+// still live?"). Consumers should filter `deleted_at IS NULL` for visibility.
 users.delete("/:id", async (c) => {
   const userId = c.req.param("id");
 
-  const user = await supabaseFetch<{ id: string; email: string | null; role: string }>(c.env, {
+  const user = await supabaseFetch<{ id: string; email: string | null; deleted_at: string | null }>(c.env, {
     schema: "identity",
     path: "person",
-    query: `id=eq.${encodeURIComponent(userId)}&select=id,email,role`,
+    query: `id=eq.${encodeURIComponent(userId)}&select=id,email,deleted_at`,
     single: true,
   });
 
-  if (!user || user.role === "deleted") {
+  if (!user || user.deleted_at) {
     return c.json({ error: "User not found" }, 404);
   }
 
   const anonymizedEmail = `deleted_${await hashEmail(user.email ?? userId)}@deleted.nhimbe.com`;
+  const now = new Date().toISOString();
 
   await supabaseFetch(c.env, {
     schema: "identity",
@@ -275,17 +276,17 @@ users.delete("/:id", async (c) => {
       image: null,
       knowsabout: [],
       address: null,
-      role: "deleted",
+      deleted_at: now,
     },
   });
 
-  // Cancel future RSVPs by switching response to rsvpNo.
+  // Cancel future RSVPs by switching rsvpresponse to RSVP_NO.
   await supabaseFetch(c.env, {
     schema: "events",
     path: "rsvp_action",
-    query: `agent_person_id=eq.${encodeURIComponent(userId)}&rsvpresponse=neq.rsvpNo`,
+    query: `agent_person_id=eq.${encodeURIComponent(userId)}&rsvpresponse=neq.${encodeURIComponent(RSVP_NO)}`,
     method: "PATCH",
-    body: { rsvpresponse: "rsvpNo", updated_at: new Date().toISOString() },
+    body: { rsvpresponse: RSVP_NO, updated_at: now },
   });
 
   const ipAddress = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || null;

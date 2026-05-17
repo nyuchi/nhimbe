@@ -7,6 +7,7 @@
 ## Goals
 
 Continue building nhimbe with focus on:
+
 1. Backend architecture refactor (Hono migration)
 2. Email notifications (Resend)
 3. Social sharing & invites (WhatsApp-first)
@@ -61,44 +62,47 @@ worker/src/
 ### Entry Point (index.ts)
 
 ```typescript
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-import type { Env } from './types'
-import { events } from './routes/events'
-import { auth } from './routes/auth'
-import { search } from './routes/search'
-import { ai } from './routes/ai'
-import { users } from './routes/users'
-import { registrations } from './routes/registrations'
-import { media } from './routes/media'
-import { reviews } from './routes/reviews'
-import { referrals } from './routes/referrals'
-import { stats } from './routes/stats'
-import { admin } from './routes/admin'
-import { seed } from './routes/seed'
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import type { Env } from "./types";
+import { events } from "./routes/events";
+import { auth } from "./routes/auth";
+import { search } from "./routes/search";
+import { ai } from "./routes/ai";
+import { users } from "./routes/users";
+import { registrations } from "./routes/registrations";
+import { media } from "./routes/media";
+import { reviews } from "./routes/reviews";
+import { referrals } from "./routes/referrals";
+import { stats } from "./routes/stats";
+import { admin } from "./routes/admin";
+import { seed } from "./routes/seed";
 
-const app = new Hono<{ Bindings: Env }>()
+const app = new Hono<{ Bindings: Env }>();
 
-app.use('*', cors({
-  origin: '*',
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
-}))
+app.use(
+  "*",
+  cors({
+    origin: "*",
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization", "X-API-Key"],
+  }),
+);
 
-app.route('/api/events', events)
-app.route('/api/auth', auth)
-app.route('/api/search', search)
-app.route('/api/ai', ai)
-app.route('/api/users', users)
-app.route('/api/registrations', registrations)
-app.route('/api/media', media)
-app.route('/api/reviews', reviews)
-app.route('/api/referrals', referrals)
-app.route('/api/community', stats)
-app.route('/api/admin', admin)
-app.route('/api', seed)
+app.route("/api/events", events);
+app.route("/api/auth", auth);
+app.route("/api/search", search);
+app.route("/api/ai", ai);
+app.route("/api/users", users);
+app.route("/api/registrations", registrations);
+app.route("/api/media", media);
+app.route("/api/reviews", reviews);
+app.route("/api/referrals", referrals);
+app.route("/api/community", stats);
+app.route("/api/admin", admin);
+app.route("/api", seed);
 
-export default app
+export default app;
 ```
 
 ### Route Module Pattern
@@ -107,57 +111,77 @@ Each route module exports a Hono sub-app:
 
 ```typescript
 // worker/src/routes/events.ts
-import { Hono } from 'hono'
-import type { Env } from '../types'
+import { Hono } from "hono";
+import type { Env } from "../types";
 
-export const events = new Hono<{ Bindings: Env }>()
+export const events = new Hono<{ Bindings: Env }>();
 
-events.get('/', async (c) => { /* list events */ })
-events.get('/trending', async (c) => { /* trending events */ })
-events.get('/:id', async (c) => { /* get event by id */ })
-events.post('/', async (c) => { /* create event */ })
-events.put('/:id', async (c) => { /* update event */ })
-events.delete('/:id', async (c) => { /* delete event */ })
-events.post('/:id/view', async (c) => { /* track view */ })
-events.get('/:id/reviews', async (c) => { /* event reviews */ })
-events.get('/:id/stats', async (c) => { /* event stats */ })
-events.get('/:id/referrals', async (c) => { /* event referrals */ })
+events.get("/", async (c) => {
+  /* list events */
+});
+events.get("/trending", async (c) => {
+  /* trending events */
+});
+events.get("/:id", async (c) => {
+  /* get event by id */
+});
+events.post("/", async (c) => {
+  /* create event */
+});
+events.put("/:id", async (c) => {
+  /* update event */
+});
+events.delete("/:id", async (c) => {
+  /* delete event */
+});
+events.post("/:id/view", async (c) => {
+  /* track view */
+});
+events.get("/:id/reviews", async (c) => {
+  /* event reviews */
+});
+events.get("/:id/stats", async (c) => {
+  /* event stats */
+});
+events.get("/:id/referrals", async (c) => {
+  /* event referrals */
+});
 ```
 
 ### Middleware
 
 ```typescript
 // worker/src/middleware/auth.ts
-import { createMiddleware } from 'hono/factory'
-import type { Env } from '../types'
-import { getAuthenticatedUser } from '../auth/stytch'
+import { createMiddleware } from "hono/factory";
+import type { Env } from "../types";
+import { getAuthenticatedUser } from "../auth/stytch";
 
 // JWT authentication middleware
 export const jwtAuth = createMiddleware<{ Bindings: Env }>(async (c, next) => {
-  const result = await getAuthenticatedUser(c.req.raw, c.env)
+  const result = await getAuthenticatedUser(c.req.raw, c.env);
   if (!result.authenticated) {
-    return c.json({ error: 'Unauthorized', reason: result.failureReason }, 401)
+    return c.json({ error: "Unauthorized", reason: result.failureReason }, 401);
   }
-  c.set('user', result.user)
-  await next()
-})
+  c.set("user", result.user);
+  await next();
+});
 
 // API key validation middleware
 export const apiKeyAuth = createMiddleware<{ Bindings: Env }>(async (c, next) => {
-  const apiKey = c.req.header('X-API-Key') || c.req.header('Authorization')?.replace('Bearer ', '')
+  const apiKey = c.req.header("X-API-Key") || c.req.header("Authorization")?.replace("Bearer ", "");
   if (apiKey !== c.env.API_KEY) {
-    return c.json({ error: 'Invalid API key' }, 403)
+    return c.json({ error: "Invalid API key" }, 403);
   }
-  await next()
-})
+  await next();
+});
 
 // Origin check middleware
 export const originAuth = createMiddleware<{ Bindings: Env }>(async (c, next) => {
   if (!isAllowedOrigin(c.req.raw, c.env)) {
-    return c.json({ error: 'Origin not allowed' }, 403)
+    return c.json({ error: "Origin not allowed" }, 403);
   }
-  await next()
-})
+  await next();
+});
 ```
 
 ### Key Decisions
@@ -170,11 +194,11 @@ export const originAuth = createMiddleware<{ Bindings: Env }>(async (c, next) =>
 
 ### Risks & Mitigations
 
-| Risk | Mitigation |
-|------|------------|
-| Route order matters (e.g., `/trending` vs `/:id`) | Define specific routes before parameterized ones |
-| Queue handlers use different export pattern | Hono supports `export default { fetch, queue, scheduled }` |
-| Tests import from `index.ts` | Update imports or re-export app |
+| Risk                                              | Mitigation                                                 |
+| ------------------------------------------------- | ---------------------------------------------------------- |
+| Route order matters (e.g., `/trending` vs `/:id`) | Define specific routes before parameterized ones           |
+| Queue handlers use different export pattern       | Hono supports `export default { fetch, queue, scheduled }` |
+| Tests import from `index.ts`                      | Update imports or re-export app                            |
 
 ---
 
@@ -186,14 +210,14 @@ Resend sends transactional emails. Uses the existing `EMAIL_QUEUE` binding and `
 
 ### Email Types
 
-| Trigger | Email | Priority |
-|---------|-------|----------|
-| Registration confirmed | "You're registered for [Event]" | P0 |
-| Event reminder (24h) | "Reminder: [Event] is tomorrow" | P0 |
-| Event cancelled | "[Event] has been cancelled" | P0 |
-| Registration cancelled | "You've cancelled your registration" | P1 |
-| New review on event | "Someone reviewed [Event]" | P1 |
-| Host: new registration | "[Name] registered for your event" | P1 |
+| Trigger                | Email                                | Priority |
+| ---------------------- | ------------------------------------ | -------- |
+| Registration confirmed | "You're registered for [Event]"      | P0       |
+| Event reminder (24h)   | "Reminder: [Event] is tomorrow"      | P0       |
+| Event cancelled        | "[Event] has been cancelled"         | P0       |
+| Registration cancelled | "You've cancelled your registration" | P1       |
+| New review on event    | "Someone reviewed [Event]"           | P1       |
+| Host: new registration | "[Name] registered for your event"   | P1       |
 
 ### File Structure
 
@@ -220,6 +244,7 @@ worker/src/email/
 ### Scheduled Reminders
 
 Cloudflare Workers scheduled handler (cron trigger) runs daily:
+
 1. Query events happening in next 24 hours
 2. Query registrations for those events
 3. Enqueue reminder emails for each attendee
@@ -257,6 +282,7 @@ https://wa.me/?text=Check%20out%20this%20event%3A%20%0A%0A{title}%0A{date}%20%E2
 ### OG Metadata Enhancements
 
 Ensure `/api/og/route.tsx` generates cards optimized for:
+
 - WhatsApp (1200x630px, `og:image`, `og:title`, `og:description`)
 - Twitter Cards (`twitter:card`, `twitter:image`)
 - General social (Open Graph standard tags)
@@ -264,6 +290,7 @@ Ensure `/api/og/route.tsx` generates cards optimized for:
 ### Backend
 
 Mostly frontend work. Backend already supports:
+
 - Short codes (`/e/[shortCode]`)
 - Referral tracking (`/api/referrals/track`)
 - User referral codes (`/api/users/:id/referral-code`)
@@ -329,11 +356,11 @@ GET    /api/series/:id/events   # List events in series
 
 ### Provider Evaluation
 
-| Provider | Pros | Cons | Recommendation |
-|----------|------|------|----------------|
-| **Paynow** | Most popular in Zim, EcoCash/OneMoney/Telecash/Visa/Mastercard | Older API style | Best for broadest coverage |
-| **Pesepay** | Modern REST API, webhooks, good docs | Smaller market share | Best developer experience |
-| **DPO Pay** | Pan-African, international cards | Complex, higher fees | Best for international |
+| Provider    | Pros                                                           | Cons                 | Recommendation             |
+| ----------- | -------------------------------------------------------------- | -------------------- | -------------------------- |
+| **Paynow**  | Most popular in Zim, EcoCash/OneMoney/Telecash/Visa/Mastercard | Older API style      | Best for broadest coverage |
+| **Pesepay** | Modern REST API, webhooks, good docs                           | Smaller market share | Best developer experience  |
+| **DPO Pay** | Pan-African, international cards                               | Complex, higher fees | Best for international     |
 
 **Recommendation:** Start with Paynow for broadest mobile money coverage in Zimbabwe. Pesepay as alternative if Paynow's API proves difficult.
 

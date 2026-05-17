@@ -200,13 +200,13 @@ describe('JWT claim validation', () => {
     expect(now < payload.nbf).toBe(false);
   });
 
-  it('validates issuer matches project', () => {
-    const expectedIssuer = `stytch.com/${projectId}`;
-    expect(`stytch.com/${projectId}`).toBe(expectedIssuer);
-    expect('stytch.com/wrong-project').not.toBe(expectedIssuer);
+  it('validates issuer matches WorkOS', () => {
+    const expectedIssuer = 'https://api.workos.com';
+    expect('https://api.workos.com').toBe(expectedIssuer);
+    expect('https://api.stytch.com').not.toBe(expectedIssuer);
   });
 
-  it('validates audience contains project ID', () => {
+  it('validates audience contains client ID', () => {
     const validAud = [projectId, 'other-audience'];
     const invalidAud = ['other-audience'];
     expect(validAud.includes(projectId)).toBe(true);

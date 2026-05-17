@@ -203,9 +203,222 @@ export async function getInterestCategories(): Promise<InterestCategoryRow[]> {
 }
 
 // ─── Venues ──────────────────────────────────────────────────────────────
-// `places.places` is the unified venue/place table. Use this for the
-// debounced venue picker in the creation wizard — typing "harare" returns
-// venues whose name OR address_locality matches.
+// `places.places` is the unified venue/place table — OSM-backed at the data
+// layer (each row can carry an osm_changeset_id linking back to the original
+// OpenStreetMap edit). Use this for the debounced venue picker in the
+// creation wizard, the EventDetail venue card, and the Map's real-coords pin.
+
+/** Rich place data for EventDetail / Map. Subset of places.places, plus the
+ *  OSM provenance fields so the UI can show the "from OSM" attribution and
+ *  link back to the original changeset. */
+export interface PlaceDetail {
+  id: string;
+  name: string;
+  slug: string | null;
+  description: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  elevation: number | null;
+  addressLocality: string | null;
+  addressRegion: string | null;
+  streetAddress: string | null;
+  postalCode: string | null;
+  website: string | null;
+  coverImage: string | null;
+  image: string[] | null;
+  openingHoursText: string | null;
+  accessibilityFeature: string[] | null;
+  tourismType: string[] | null;
+  activity: string[] | null;
+  aggregateRatingValue: number | null;
+  aggregateRatingCount: number | null;
+  // OSM provenance — when osmContributed is true, surface the attribution
+  // chip + link to https://www.openstreetmap.org/changeset/{osmChangesetId}.
+  osmContributed: boolean;
+  osmChangesetId: string | null;
+  osmContributedAt: string | null;
+  dataOrigin: string | null;
+  dataConfidence: string | null;
+  communityConfirmations: number | null;
+}
+
+/** Transit route serving a venue — joined view of
+ *  transport.transit_route + transport.transit_stop via route_stop. */
+export interface TransitOption {
+  routeId: string;
+  routeName: string;
+  routeNumber: string | null;
+  routeType: string | null;
+  operator: string | null;
+  baseFare: number | null;
+  fareCurrency: string | null;
+  frequencyMinutes: number | null;
+  daysOfOperation: string[] | null;
+  /** Nearest stop name + distance bucket. */
+  stopName: string;
+  stopDistanceM: number;
+  osmRelationId: string | null;
+}
+
+/** Returns transit routes that pass through stops near a venue.
+ *
+ *  Strategy: we query transport.transit_stop within a coarse bounding box
+ *  around the venue (~3 km / 0.027°), join via transport.route_stop to
+ *  transport.transit_route, and rank by Haversine distance. PostgREST
+ *  doesn't expose PostGIS distance directly without an RPC, so we use a
+ *  lat/lng bounding box + compute distance client-side. This is good
+ *  enough for the "Getting there" panel — picks the 5 closest routes.
+ */
+export async function getTransitForPlace(
+  placeId: string,
+  lat: number,
+  lng: number,
+): Promise<TransitOption[]> {
+  if (!placeId || typeof lat !== "number" || typeof lng !== "number") return [];
+  const supabase = getSupabaseBrowserClient();
+  // 0.027° ≈ 3 km in latitude. Longitude scaling depends on latitude;
+  // at 30°S it's about 0.031°/3km. We use a slightly looser bound so
+  // edge stops aren't clipped.
+  const dLat = 0.027;
+  const dLng = 0.032 / Math.cos((lat * Math.PI) / 180);
+  const { data: stops } = await supabase
+    .schema("transport")
+    .from("transit_stop")
+    .select("id,name,latitude,longitude,osm_node_id")
+    .eq("is_active", true)
+    .gte("latitude", lat - dLat)
+    .lte("latitude", lat + dLat)
+    .gte("longitude", lng - dLng)
+    .lte("longitude", lng + dLng)
+    .limit(40);
+  type Stop = { id: string; name: string; latitude: number; longitude: number };
+  const stopRows = ((stops as Stop[] | null) ?? [])
+    .map((s) => ({ ...s, distance: haversineMeters(lat, lng, s.latitude, s.longitude) }))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 20);
+  if (stopRows.length === 0) return [];
+
+  const stopIds = stopRows.map((s) => s.id);
+  const { data: rsRows } = await supabase
+    .schema("transport")
+    .from("route_stop")
+    .select("transit_route_id,transit_stop_id")
+    .in("transit_stop_id", stopIds);
+  type RS = { transit_route_id: string; transit_stop_id: string };
+  const routeStop = (rsRows as RS[] | null) ?? [];
+  if (routeStop.length === 0) return [];
+
+  const routeIds = Array.from(new Set(routeStop.map((r) => r.transit_route_id)));
+  const { data: routes } = await supabase
+    .schema("transport")
+    .from("transit_route")
+    .select("id,name,route_number,route_type,operator_name,base_fare,fare_currency,frequency_minutes,days_of_operation,osm_relation_id")
+    .in("id", routeIds)
+    .eq("is_active", true);
+  type R = {
+    id: string; name: string; route_number: string | null; route_type: string | null;
+    operator_name: string | null; base_fare: number | null; fare_currency: string | null;
+    frequency_minutes: number | null; days_of_operation: string[] | null; osm_relation_id: string | null;
+  };
+  const routeMap = new Map<string, R>(((routes as R[] | null) ?? []).map((r) => [r.id, r]));
+  // Best stop per route = closest stop on that route.
+  const bestStop = new Map<string, { stopId: string; distance: number }>();
+  routeStop.forEach((rs) => {
+    const stop = stopRows.find((s) => s.id === rs.transit_stop_id);
+    if (!stop) return;
+    const cur = bestStop.get(rs.transit_route_id);
+    if (!cur || stop.distance < cur.distance) {
+      bestStop.set(rs.transit_route_id, { stopId: stop.id, distance: stop.distance });
+    }
+  });
+  const options: TransitOption[] = [];
+  for (const [routeId, { stopId, distance }] of bestStop) {
+    const route = routeMap.get(routeId);
+    const stop = stopRows.find((s) => s.id === stopId);
+    if (!route || !stop) continue;
+    options.push({
+      routeId: route.id,
+      routeName: route.name,
+      routeNumber: route.route_number,
+      routeType: route.route_type,
+      operator: route.operator_name,
+      baseFare: route.base_fare ? Number(route.base_fare) : null,
+      fareCurrency: route.fare_currency,
+      frequencyMinutes: route.frequency_minutes,
+      daysOfOperation: route.days_of_operation,
+      stopName: stop.name,
+      stopDistanceM: Math.round(distance),
+      osmRelationId: route.osm_relation_id,
+    });
+  }
+  options.sort((a, b) => a.stopDistanceM - b.stopDistanceM);
+  return options.slice(0, 5);
+}
+
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** Read the rich place data for a venue. Returns null when the place was
+ *  not found or the read is blocked by RLS. */
+export async function getPlaceById(placeId: string): Promise<PlaceDetail | null> {
+  if (!placeId) return null;
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .schema("places")
+    .from("places")
+    .select(
+      "id,name,slug,description,latitude,longitude,elevation," +
+        "address_locality,address_region,street_address,postal_code," +
+        "website,cover_image,image,opening_hours_text,accessibility_feature," +
+        "tourist_type,activity,aggregate_rating_value,aggregate_rating_count," +
+        "osm_contributed,osm_contributed_at,osm_changeset_id," +
+        "data_origin,data_confidence,community_confirmations",
+    )
+    .eq("id", placeId)
+    .maybeSingle();
+  if (error || !data) return null;
+  // The publishable-key client doesn't know the places schema; treat the
+  // row as unknown and narrow defensively.
+  const r = data as unknown as Record<string, unknown>;
+  const numOrNull = (v: unknown): number | null =>
+    typeof v === "number" ? v : v == null ? null : Number(v);
+  return {
+    id: r.id as string,
+    name: (r.name as string) ?? "",
+    slug: (r.slug as string | null) ?? null,
+    description: (r.description as string | null) ?? null,
+    latitude: numOrNull(r.latitude),
+    longitude: numOrNull(r.longitude),
+    elevation: (r.elevation as number | null) ?? null,
+    addressLocality: (r.address_locality as string | null) ?? null,
+    addressRegion: (r.address_region as string | null) ?? null,
+    streetAddress: (r.street_address as string | null) ?? null,
+    postalCode: (r.postal_code as string | null) ?? null,
+    website: (r.website as string | null) ?? null,
+    coverImage: (r.cover_image as string | null) ?? null,
+    image: (r.image as string[] | null) ?? null,
+    openingHoursText: (r.opening_hours_text as string | null) ?? null,
+    accessibilityFeature: (r.accessibility_feature as string[] | null) ?? null,
+    tourismType: (r.tourist_type as string[] | null) ?? null,
+    activity: (r.activity as string[] | null) ?? null,
+    aggregateRatingValue: numOrNull(r.aggregate_rating_value),
+    aggregateRatingCount: (r.aggregate_rating_count as number | null) ?? null,
+    osmContributed: Boolean(r.osm_contributed),
+    osmChangesetId: (r.osm_changeset_id as string | null) ?? null,
+    osmContributedAt: (r.osm_contributed_at as string | null) ?? null,
+    dataOrigin: (r.data_origin as string | null) ?? null,
+    dataConfidence: (r.data_confidence as string | null) ?? null,
+    communityConfirmations: (r.community_confirmations as number | null) ?? null,
+  };
+}
 
 export async function searchVenues(query: string, limit = 8): Promise<PlaceRow[]> {
   const trimmed = query.trim();
@@ -413,8 +626,10 @@ export async function createEventOnSupabase(input: CreateEventOnSupabaseInput): 
     slug: slug || null,
     description: input.description,
     eventtype: "Event",
-    eventstatus: "EventScheduled",
-    eventattendancemode: input.attendanceMode,
+    // events.event CHECK constraint requires fully-qualified schema.org URLs
+    // for eventstatus and eventattendancemode.
+    eventstatus: "https://schema.org/EventScheduled",
+    eventattendancemode: `https://schema.org/${input.attendanceMode}`,
     startdate: input.startdate,
     enddate: input.enddate,
     timezone: input.timezone,
@@ -434,7 +649,8 @@ export async function createEventOnSupabase(input: CreateEventOnSupabaseInput): 
     maximumattendeecapacity: input.maximumAttendeeCapacity,
     requires_approval: input.requiresApproval,
     visibility: input.visibility,
-    calendar_type: "event",
+    // events.event.calendar_type CHECK constraint: personal | business | circle | nhimbe.
+    calendar_type: "nhimbe",
     owner_type: ownerType,
     owner_id: ownerId,
   };

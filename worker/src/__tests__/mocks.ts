@@ -96,7 +96,7 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
     ALLOWED_ORIGINS: 'http://localhost:3000',
     WORKOS_CLIENT_ID: 'project-test-12345',
     SUPABASE_URL: 'https://test-project.supabase.co',
-    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
+    SUPABASE_SECRET_KEY: 'test-secret-key',
     MUKOKO_API_URL: 'https://api.mukoko.test',
     MUKOKO_API_KEY: 'test-mukoko-api-key',
     AI: createMockAI(),
@@ -145,4 +145,125 @@ export function createApiKeyRequest(
   const headers = new Headers(options.headers);
   headers.set('X-API-Key', apiKey);
   return createRequest(url, { ...options, headers });
+}
+
+// ============================================
+// Layer 4: PostgREST fetch-stub router
+// ============================================
+//
+// Worker routes hit Supabase via supabaseFetch(), which calls global fetch.
+// Tests stub that fetch with a small URL-pattern router. Use pgrstMatch() to
+// match a specific table+method, json()/noContent() to build canned responses,
+// and makeFetchStub() to wire them together.
+//
+// Auth note: writeAuth's validateApiKey() uses crypto.subtle.timingSafeEqual,
+// a Workers-runtime extension absent in Node. Tests should authenticate via
+// Origin: http://localhost:3000 (whitelisted by isAllowedOrigin) rather than
+// X-API-Key. trustedOriginHeaders() returns the right shape.
+
+interface FetchStubRoute {
+  match: (url: URL, method: string) => boolean;
+  handle: (req: {
+    url: URL;
+    method: string;
+    body: unknown;
+    headers: Headers;
+  }) => Response | Promise<Response>;
+}
+
+export interface FetchStubCall {
+  url: string;
+  method: string;
+  body: unknown;
+  headers: Record<string, string>;
+}
+
+export function makeFetchStub(routes: FetchStubRoute[]): {
+  stub: ReturnType<typeof vi.fn>;
+  calls: FetchStubCall[];
+} {
+  const calls: FetchStubCall[] = [];
+
+  const stub = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const urlString =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      const url = new URL(urlString);
+      const method = (init?.method ?? 'GET').toUpperCase();
+      let body: unknown = null;
+      if (init?.body) {
+        try {
+          body = JSON.parse(init.body as string);
+        } catch {
+          body = init.body;
+        }
+      }
+      const headers = new Headers(init?.headers);
+      const headerObj: Record<string, string> = {};
+      headers.forEach((v, k) => {
+        headerObj[k] = v;
+      });
+      calls.push({ url: urlString, method, body, headers: headerObj });
+
+      for (const route of routes) {
+        if (route.match(url, method)) {
+          return route.handle({ url, method, body, headers });
+        }
+      }
+      throw new Error(`[fetch-stub] No route matched ${method} ${urlString}`);
+    },
+  );
+
+  return { stub, calls };
+}
+
+/**
+ * Match a PostgREST request by table name + method. Hostname matches the URL
+ * used by createMockEnv() — `https://test-project.supabase.co`.
+ */
+export function pgrstMatch(
+  table: string,
+  methods: string[] = ['GET', 'POST', 'PATCH', 'DELETE'],
+): (url: URL, method: string) => boolean {
+  return (url, method) =>
+    url.hostname === 'test-project.supabase.co' &&
+    url.pathname === `/rest/v1/${table}` &&
+    methods.includes(method);
+}
+
+/** Build a JSON Response. */
+export function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/** Build a 204 No Content response (Node forbids a body on 204). */
+export function noContent(): Response {
+  return new Response(null, { status: 204 });
+}
+
+/** Build the 406 PostgREST returns when single=true matches no rows. */
+export function notFoundSingle(): Response {
+  return new Response(null, { status: 406 });
+}
+
+/**
+ * Headers that authenticate via the trusted-origin path. Use these for
+ * writeAuth-protected routes — Node's crypto.subtle lacks the timingSafeEqual
+ * extension that validateApiKey() relies on.
+ */
+export function trustedOriginHeaders(
+  extra: Record<string, string> = {},
+): HeadersInit {
+  return {
+    'Content-Type': 'application/json',
+    Origin: 'http://localhost:3000',
+    ...extra,
+  };
 }

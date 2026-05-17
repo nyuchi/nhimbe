@@ -1,3 +1,16 @@
+# Thin caller for the org's reusable lint workflow.
+#
+# The five jobs (actionlint, JSON validity, prettier, markdownlint,
+# yamllint) are defined ONCE in nyuchi/.github/.github/workflows/
+# reusable-lint.yml and consumed identically by every repo in the
+# org. Branch protection requires status from each — adding this
+# caller is what makes the `lint / actionlint`, `lint / JSON validity`,
+# `lint / prettier`, `lint / markdownlint`, and `lint / yamllint`
+# checks report status on each PR.
+#
+# Do not inline the jobs here — drift between repos defeats the point.
+# If a tool version or config needs to change, do it in the reusable.
+
 name: lint
 
 on:
@@ -6,60 +19,13 @@ on:
     branches: [main]
   merge_group:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
 jobs:
-  actionlint:
-    name: lint / actionlint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: reviewdog/action-actionlint@v1
-        with:
-          fail_on_error: true
-          reporter: github-check
-
-  json-validity:
-    name: lint / JSON validity
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Validate every tracked .json file
-        run: |
-          set -euo pipefail
-          fail=0
-          while IFS= read -r f; do
-            if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$f" 2>/tmp/jsonerr; then
-              echo "::error file=$f::Invalid JSON: $(cat /tmp/jsonerr)"
-              fail=1
-            fi
-          done < <(git ls-files '*.json' '*.jsonc' ':!*.gen.ts')
-          exit $fail
-
-  markdownlint:
-    name: lint / markdownlint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: DavidAnson/markdownlint-cli2-action@v18
-
-  prettier:
-    name: lint / prettier
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - run: npx --yes prettier@3 --check . --ignore-path .prettierignore
-
-  yamllint:
-    name: lint / yamllint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install yamllint
-        run: pip install --quiet yamllint==1.35.1
-      - name: Run yamllint
-        run: yamllint -c .yamllint.yml .github/
+  lint:
+    uses: nyuchi/.github/.github/workflows/reusable-lint.yml@main

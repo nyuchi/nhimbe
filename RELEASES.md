@@ -7,6 +7,7 @@ nhimbe uses continuous deployment with manual version tagging for milestones.
 ### Frontend (Vercel)
 
 Deploys automatically on push to `main`:
+
 - Preview deployments for all PRs
 - Production deployment on merge to `main`
 - Rollback available via Vercel dashboard
@@ -42,6 +43,7 @@ We use [Semantic Versioning](https://semver.org/):
 1. Ensure `main` is stable and all CI checks pass
 
 2. Create a git tag:
+
    ```bash
    git tag -a v1.0.0 -m "v1.0.0: Launch release"
    git push origin v1.0.0
@@ -57,18 +59,23 @@ We use [Semantic Versioning](https://semver.org/):
 
 ```markdown
 ## What's New
+
 - Feature description (#PR)
 
 ## Bug Fixes
+
 - Fix description (#PR)
 
 ## Security
+
 - Security improvement (#PR)
 
 ## Infrastructure
+
 - CI/deployment changes (#PR)
 
 ## Breaking Changes
+
 - Description of what changed and migration steps
 ```
 

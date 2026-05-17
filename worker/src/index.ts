@@ -9,6 +9,7 @@ import type { Env, AnalyticsQueueMessage, EmailQueueMessage, AppVariables } from
 import { requestId as requestIdMiddleware, requestLogger } from "./middleware/observability";
 import { rateLimit } from "./middleware/rate-limit";
 import { processAnalyticsMessage, processEmailMessage } from "./queues/handlers";
+import { CircuitOpenError } from "./utils/circuit-breaker";
 
 // Route modules
 import { health } from "./routes/health";
@@ -64,10 +65,15 @@ app.use("*", async (c, next) => {
   if (!envValidated) {
     envValidated = true;
     const missing: string[] = [];
+    // A var is "missing" if it's unset, empty, or still holds a REPLACE_WITH_*
+    // placeholder from wrangler.toml — the latter would otherwise silently
+    // route every JWT validation to a 404 JWKS endpoint.
+    const isPlaceholder = (v: string | undefined): boolean =>
+      !v || v.startsWith("REPLACE_WITH_") || v === "CHANGE_ME";
     if (!c.env.API_KEY) missing.push("API_KEY");
-    if (!c.env.WORKOS_CLIENT_ID) missing.push("WORKOS_CLIENT_ID");
-    if (!c.env.SUPABASE_URL) missing.push("SUPABASE_URL");
-    if (!c.env.SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+    if (isPlaceholder(c.env.WORKOS_CLIENT_ID)) missing.push("WORKOS_CLIENT_ID");
+    if (isPlaceholder(c.env.SUPABASE_URL)) missing.push("SUPABASE_URL");
+    if (!c.env.SUPABASE_SECRET_KEY) missing.push("SUPABASE_SECRET_KEY");
     if (!c.env.CACHE) missing.push("CACHE (KV binding)");
     if (!c.env.RATE_LIMITER) missing.push("RATE_LIMITER binding");
     if (missing.length > 0) {
@@ -147,6 +153,18 @@ app.onError((err, c) => {
     error: err instanceof Error ? err.message : "Unknown error",
     stack: err instanceof Error ? err.stack : undefined,
   }));
+  // CircuitOpenError → 503 so the client knows to retry, not surface as
+  // a generic Internal Server Error.
+  if (err instanceof CircuitOpenError) {
+    return c.json(
+      {
+        error: "Service temporarily unavailable",
+        provider: err.provider,
+        requestId: reqId,
+      },
+      503,
+    );
+  }
   return c.json(
     {
       error: "Internal Server Error",

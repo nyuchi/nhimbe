@@ -6,8 +6,9 @@ import { getAuthenticatedUser } from "../auth/workos";
 import { indexEvent, removeEventFromIndex } from "../ai/embeddings";
 import { toCsv } from "../utils/export";
 import { logAudit } from "../utils/audit";
+import { unauthorized, notFound, badRequest, forbidden, conflict } from "../utils/response";
 import { supabaseFetch } from "../db/supabase";
-import { fetchEventsByIds, mapSupabaseEventToApi, EVENT_COLUMNS, type SupabaseEventRow } from "../db/event_mapper";
+import { fetchEventsByIds, mapSupabaseEventToApi, EVENT_COLUMNS, addSchemaPrefix, RSVP_NO, type SupabaseEventRow } from "../db/event_mapper";
 
 export const events = new Hono<{ Bindings: Env }>();
 events.use("*", writeAuth);
@@ -21,7 +22,7 @@ events.get("/", async (c) => {
 
   const filters = [
     "visibility=eq.public",
-    "eventstatus=eq.EventScheduled",
+    `eventstatus=eq.${encodeURIComponent("https://schema.org/EventScheduled")}`,
   ];
   if (city) filters.push(`location->>addresslocality=eq.${encodeURIComponent(city)}`);
   if (category) filters.push(`category=eq.${encodeURIComponent(category)}`);
@@ -48,7 +49,7 @@ events.get("/trending", async (c) => {
 
   const filters = [
     "visibility=eq.public",
-    "eventstatus=eq.EventScheduled",
+    `eventstatus=eq.${encodeURIComponent("https://schema.org/EventScheduled")}`,
     `startdate=gte.${encodeURIComponent(new Date().toISOString())}`,
   ];
   if (city) filters.push(`location->>addresslocality=eq.${encodeURIComponent(city)}`);
@@ -95,7 +96,7 @@ events.get("/:id", async (c) => {
   }
 
   if (!row) {
-    return c.json({ error: "Event not found" }, 404);
+    return notFound(c, "Event");
   }
 
   return c.json({ event: mapSupabaseEventToApi(row) });
@@ -108,20 +109,20 @@ events.post("/", async (c) => {
   const slug = body.slug || slugify(body.name || "");
   const organizerPersonId = body.organizerPersonId || body.organizer?.identifier;
   if (!organizerPersonId) {
-    return c.json({ error: "organizerPersonId or organizer.identifier required" }, 400);
+    return badRequest(c, "organizerPersonId or organizer.identifier required");
   }
 
   const insertBody: Record<string, unknown> = {
     name: body.name,
     description: body.description ?? null,
     eventtype: "Event",
-    eventstatus: body.eventStatus || "EventScheduled",
-    eventattendancemode: body.eventAttendanceMode || "OfflineEventAttendanceMode",
+    eventstatus: addSchemaPrefix(body.eventStatus || "EventScheduled"),
+    eventattendancemode: addSchemaPrefix(body.eventAttendanceMode || "OfflineEventAttendanceMode"),
     startdate: body.startDate,
     enddate: body.endDate ?? null,
     timezone: "UTC",
     visibility: body.isPublished === false ? "private" : "public",
-    calendar_type: "events",
+    calendar_type: "nhimbe",
     owner_type: "person",
     owner_id: organizerPersonId,
     organizer_person_id: organizerPersonId,
@@ -184,7 +185,7 @@ events.put("/:id", async (c) => {
   if (body.description) patch.description = body.description;
   if (body.category) patch.category = body.category;
   if (body.keywords) patch.keywords = body.keywords;
-  if (body.eventStatus) patch.eventstatus = body.eventStatus;
+  if (body.eventStatus) patch.eventstatus = addSchemaPrefix(body.eventStatus);
 
   const updated = await supabaseFetch<SupabaseEventRow[]>(c.env, {
     schema: "events",
@@ -212,9 +213,9 @@ events.post("/:id/cancel", async (c) => {
     single: true,
   });
 
-  if (!existing) return c.json({ error: "Event not found" }, 404);
-  if (existing.eventstatus === "EventCancelled") {
-    return c.json({ error: "Event is already cancelled" }, 400);
+  if (!existing) return notFound(c, "Event");
+  if (existing.eventstatus === "https://schema.org/EventCancelled") {
+    return badRequest(c, "Event is already cancelled");
   }
 
   await supabaseFetch(c.env, {
@@ -222,7 +223,7 @@ events.post("/:id/cancel", async (c) => {
     path: "event",
     query: `id=eq.${encodeURIComponent(eventId)}`,
     method: "PATCH",
-    body: { eventstatus: "EventCancelled" },
+    body: { eventstatus: "https://schema.org/EventCancelled" },
   });
 
   await logAudit(c.env, { action: "event.cancelled", resourceType: "event", resourceId: eventId });
@@ -247,24 +248,17 @@ events.delete("/:id", async (c) => {
 });
 
 // POST /api/events/:id/view — bump view_count on the row.
+// Uses the atomic SECURITY DEFINER function so concurrent views don't lose
+// increments to the read-modify-write race.
 events.post("/:id/view", async (c) => {
   const eventId = c.req.param("id");
   try {
-    const event = await supabaseFetch<{ view_count: number | null }>(c.env, {
+    await supabaseFetch(c.env, {
       schema: "events",
-      path: "event",
-      query: `id=eq.${encodeURIComponent(eventId)}&select=view_count`,
-      single: true,
+      path: "rpc/increment_view_count",
+      method: "POST",
+      body: { p_event_id: eventId },
     });
-    if (event) {
-      await supabaseFetch(c.env, {
-        schema: "events",
-        path: "event",
-        query: `id=eq.${encodeURIComponent(eventId)}`,
-        method: "PATCH",
-        body: { view_count: (event.view_count ?? 0) + 1 },
-      });
-    }
     return c.json({ message: "View tracked" });
   } catch (error) {
     console.error("Failed to track view:", error);
@@ -339,7 +333,7 @@ events.post("/:id/reviews", async (c) => {
   };
 
   if (!body.userId || !body.rating || body.rating < 1 || body.rating > 5) {
-    return c.json({ error: "userId and rating (1-5) required" }, 400);
+    return badRequest(c, "userId and rating (1-5) required");
   }
 
   try {
@@ -371,7 +365,7 @@ events.post("/:id/reviews", async (c) => {
 
     return c.json({ id: inserted?.[0]?.id, message: "Review submitted successfully" }, 201);
   } catch {
-    return c.json({ error: "You have already reviewed this event" }, 409);
+    return conflict(c, "You have already reviewed this event");
   }
 });
 
@@ -389,7 +383,7 @@ events.get("/:id/stats", async (c) => {
     supabaseFetch<{ id: string }[]>(c.env, {
       schema: "events",
       path: "rsvp_action",
-      query: `event_id=eq.${encodeURIComponent(eventId)}&rsvpresponse=neq.rsvpNo&select=id`,
+      query: `event_id=eq.${encodeURIComponent(eventId)}&rsvpresponse=neq.${encodeURIComponent(RSVP_NO)}&select=id`,
     }),
     supabaseFetch<{ id: string }[]>(c.env, {
       schema: "events",
@@ -424,12 +418,12 @@ events.get("/:id/registrations/export", async (c) => {
   const format = c.req.query("format") || "csv";
 
   if (format !== "csv") {
-    return c.json({ error: "Only CSV format is currently supported" }, 400);
+    return badRequest(c, "Only CSV format is currently supported");
   }
 
   const authResult = await getAuthenticatedUser(c.req.raw, c.env);
   if (!authResult.user) {
-    return c.json({ error: "Authentication required" }, 401);
+    return unauthorized(c);
   }
 
   const event = await supabaseFetch<{ id: string; organizer_person_id: string | null }>(c.env, {
@@ -439,7 +433,7 @@ events.get("/:id/registrations/export", async (c) => {
     single: true,
   });
 
-  if (!event) return c.json({ error: "Event not found" }, 404);
+  if (!event) return notFound(c, "Event");
 
   const requester = await supabaseFetch<{ id: string }>(c.env, {
     schema: "identity",
@@ -449,7 +443,7 @@ events.get("/:id/registrations/export", async (c) => {
   });
 
   if (!requester || event.organizer_person_id !== requester.id) {
-    return c.json({ error: "Only the event host can export registrations" }, 403);
+    return forbidden(c, "Only the event host can export registrations");
   }
 
   interface RsvpRow {
@@ -482,7 +476,7 @@ events.get("/:id/registrations/export", async (c) => {
     user_id: r.agent_person_id,
     user_name: personById.get(r.agent_person_id)?.name ?? null,
     user_email: personById.get(r.agent_person_id)?.email ?? null,
-    status: r.confirmation_status || (r.rsvpresponse === "rsvpNo" ? "cancelled" : "registered"),
+    status: r.confirmation_status || (r.rsvpresponse === RSVP_NO ? "cancelled" : "registered"),
     registered_at: r.created_at,
     checked_in_at: null,
   }));

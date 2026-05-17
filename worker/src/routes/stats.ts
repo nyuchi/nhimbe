@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env, CommunityStats } from "../types";
 import { supabaseFetch } from "../db/supabase";
+import { RSVP_NO } from "../db/event_mapper";
 
 export const stats = new Hono<{ Bindings: Env }>();
 
@@ -30,7 +31,7 @@ stats.get("/stats", async (c) => {
     path: "event",
     query:
       "select=id,category,attendee_count,organizer_person_id,startdate,location,created_at" +
-      "&visibility=eq.public&eventstatus=eq.EventScheduled" +
+      `&visibility=eq.public&eventstatus=eq.${encodeURIComponent("https://schema.org/EventScheduled")}` +
       cityFilter +
       "&limit=2000",
   }) ?? [];
@@ -122,7 +123,7 @@ stats.get("/events/:eventId/analytics", async (c) => {
     supabaseFetch<{ id: string }[]>(c.env, {
       schema: "events",
       path: "rsvp_action",
-      query: `event_id=eq.${encodeURIComponent(eventId)}&rsvpresponse=neq.rsvpNo&select=id`,
+      query: `event_id=eq.${encodeURIComponent(eventId)}&rsvpresponse=neq.${encodeURIComponent(RSVP_NO)}&select=id`,
     }),
     supabaseFetch<{ id: string }[]>(c.env, {
       schema: "engagement",
