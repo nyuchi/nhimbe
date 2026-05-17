@@ -214,24 +214,26 @@ export interface CreateEventInput {
   offers?: EventOffers;
 }
 
-// Create a new event
-export async function createEvent(event: CreateEventInput, sessionJwt?: string): Promise<{ event: Event; message: string }> {
+// Create a new event. The WorkOS access token is required — every write
+// endpoint on the worker derives the actor identity from the JWT now, and
+// `sessionJwt` is the only path to provide it.
+export async function createEvent(event: CreateEventInput, sessionJwt: string): Promise<{ event: Event; message: string }> {
   return apiFetch<{ event: Event; message: string }>("/api/events", {
     method: "POST",
     body: JSON.stringify(event),
   }, sessionJwt);
 }
 
-// Update an event
-export async function updateEvent(id: string, updates: Partial<CreateEventInput>, sessionJwt?: string): Promise<{ message: string }> {
+// Update an event. Caller must be the event organizer (worker enforces).
+export async function updateEvent(id: string, updates: Partial<CreateEventInput>, sessionJwt: string): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/api/events/${id}`, {
     method: "PUT",
     body: JSON.stringify(updates),
   }, sessionJwt);
 }
 
-// Delete an event
-export async function deleteEvent(id: string, sessionJwt?: string): Promise<{ message: string }> {
+// Delete an event. Caller must be the event organizer (worker enforces).
+export async function deleteEvent(id: string, sessionJwt: string): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/api/events/${id}`, {
     method: "DELETE",
   }, sessionJwt);
@@ -274,36 +276,40 @@ export async function getUserRegistrations(userId: string): Promise<Registration
   return response.registrations;
 }
 
-// Register for an event (RSVP)
+// Register for an event (RSVP). The worker derives the registrant identity
+// from the JWT; `userId` in the body is accepted for back-compat but ignored
+// server-side.
 export async function registerForEvent(data: {
   eventId: string;
-  userId: string;
+  userId?: string;
   ticketType?: string;
   ticketPrice?: number;
   ticketCurrency?: string;
-}, sessionJwt?: string): Promise<{ id: string; message: string }> {
+}, sessionJwt: string): Promise<{ id: string; message: string }> {
   return apiFetch<{ id: string; message: string }>("/api/registrations", {
     method: "POST",
     body: JSON.stringify(data),
   }, sessionJwt);
 }
 
-// Update registration status (approve/reject)
+// Update registration status (approve/reject). Host-only — worker checks
+// the JWT against the event organizer.
 export async function updateRegistrationStatus(
   registrationId: string,
-  status: "approved" | "rejected" | "pending" | "registered"
+  status: "approved" | "rejected" | "pending" | "registered",
+  sessionJwt: string,
 ): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/api/registrations/${registrationId}`, {
     method: "PUT",
     body: JSON.stringify({ status }),
-  });
+  }, sessionJwt);
 }
 
-// Cancel a registration
-export async function cancelRegistration(registrationId: string): Promise<{ message: string }> {
+// Cancel a registration. Caller must be the registrant or event organizer.
+export async function cancelRegistration(registrationId: string, sessionJwt: string): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/api/registrations/${registrationId}`, {
     method: "DELETE",
-  });
+  }, sessionJwt);
 }
 
 // ============================================
@@ -560,26 +566,28 @@ export async function getEventReviews(eventId: string): Promise<EventReviewsResp
   return apiFetch<EventReviewsResponse>(`/api/events/${eventId}/reviews`);
 }
 
-// Submit a review for an event
+// Submit a review for an event. Author identity is derived from the JWT
+// server-side; `userId` in the body is ignored.
 export async function submitEventReview(
   eventId: string,
-  data: { userId: string; rating: number; reviewBody?: string }
+  data: { userId?: string; rating: number; reviewBody?: string },
+  sessionJwt: string,
 ): Promise<{ id: string; message: string }> {
   return apiFetch<{ id: string; message: string }>(`/api/events/${eventId}/reviews`, {
     method: "POST",
     body: JSON.stringify(data),
-  });
+  }, sessionJwt);
 }
 
-// Mark a review as helpful
+// Mark a review as helpful. Voter identity is derived from the JWT.
 export async function markReviewHelpful(
   reviewId: string,
-  userId: string
+  sessionJwt: string,
 ): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/api/reviews/${reviewId}/helpful`, {
     method: "POST",
-    body: JSON.stringify({ userId }),
-  });
+    body: JSON.stringify({}),
+  }, sessionJwt);
 }
 
 // Event Stats Types
@@ -609,17 +617,18 @@ export interface TrackedLink {
   url: string; // relative: /r/{code}
 }
 
-// Create a tracked link that redirects through nhimbe for click analytics
+// Create a tracked link that redirects through nhimbe for click analytics.
+// `createdBy` is derived from the JWT server-side; passing it in the body
+// has no effect.
 export async function createTrackedLink(data: {
   targetUrl: string;
   eventId: string;
   linkType: "meeting_url" | "directions" | "ticket" | "website";
-  createdBy?: string;
-}): Promise<TrackedLink> {
+}, sessionJwt: string): Promise<TrackedLink> {
   return apiFetch<TrackedLink>("/api/links", {
     method: "POST",
     body: JSON.stringify(data),
-  });
+  }, sessionJwt);
 }
 
 // Get the full tracked URL for a code
@@ -637,14 +646,18 @@ export interface CheckinStats {
   rate: number;
 }
 
-// Check in a registration at an event
+// Check in a registration at an event. Only the event organizer may call
+// this — the worker enforces the JWT-derived identity against the event row.
+// (Kiosk devices use a separate session-token flow via /api/kiosk.)
 export async function checkinRegistration(
   eventId: string,
-  registrationId: string
+  registrationId: string,
+  sessionJwt: string,
 ): Promise<{ message: string; registrationId: string }> {
   return apiFetch<{ message: string; registrationId: string }>(
     `/api/events/${eventId}/checkin`,
-    { method: "POST", body: JSON.stringify({ registrationId }) }
+    { method: "POST", body: JSON.stringify({ registrationId }) },
+    sessionJwt,
   );
 }
 
