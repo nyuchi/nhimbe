@@ -410,6 +410,23 @@ export interface Event {
   offers?: EventOffers;                  // schema.org Event.offers
   dateCreated?: string;                  // schema.org CreativeWork.dateCreated
   dateModified?: string;                 // schema.org CreativeWork.dateModified
+  // ─── EventDetail design surfaces (Nhimbe.html prototype) ──────────────
+  /** FK to places.places.id — when set, the design's "Where" tile + Weather
+   *  tile prefer joined place data over the legacy `location` jsonb. */
+  placeId?: string;
+  /** FK to business.organization.id — when set, host card renders the org
+   *  branch instead of the person branch (still falls back to organizer
+   *  when neither this nor organizer.identifier resolves). */
+  organizationId?: string;
+  /** FK to circles.circle.id — drives the "View kraal" CTA on EventDetail
+   *  and the cross-link from /kraal/[id] back to its parent event. */
+  eventCircleId?: string;
+  /** ISO-8601 duration (e.g. "PT2H30M") for the "When" tile subtitle. */
+  duration?: string;
+  /** Event timezone (IANA name like "Africa/Harare"). */
+  timezone?: string;
+  /** schema.org/contributor jsonb — chips on the contributions board. */
+  contributor?: unknown;
 }
 
 // Search Types

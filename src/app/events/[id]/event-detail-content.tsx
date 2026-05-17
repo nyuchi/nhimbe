@@ -17,6 +17,13 @@ import { EventWeather } from "./event-weather";
 import { EventCover } from "./event-cover";
 import { EventSidebar } from "./event-sidebar";
 import { RSVPButton } from "./rsvp-button";
+import {
+  EventInfoTiles,
+  EventPulseStrip,
+  EventKraalCta,
+  EventContributionsBoard,
+} from "./event-info-tiles";
+import { EventEntityHostCard } from "./event-entity-host-card";
 import { useAuth } from "@/components/auth/auth-context";
 import { getUserReferralCode, generateUserReferralCode, getEventStats, getEventReviews, type UserReferralCode, type EventStats, type ReviewStats } from "@/lib/api";
 import type { Event } from "@/lib/api";
@@ -117,6 +124,27 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
 
             <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold leading-tight mb-2">{event.name}</h1>
 
+            {/* Live attendance pulse strip — signature visual from Nhimbe.html */}
+            <EventPulseStrip event={event} />
+
+            {/* 3-up info tiles — When / Where / Weather. The weather slot is
+                rendered by the existing EventWeather component (lazy-loaded) so
+                this tile cell stays light unless the event has a place + date.*/}
+            <EventInfoTiles
+              event={event}
+              weatherSlot={
+                event.location.addressLocality && event.location.addressLocality !== "Online" ? (
+                  <EventWeather
+                    city={event.location.addressLocality}
+                    eventDate={event.startDate}
+                  />
+                ) : undefined
+              }
+            />
+
+            {/* "View kraal" CTA when events.event.event_circle_id is set */}
+            <EventKraalCta event={event} />
+
             {/* Compact host link under title */}
             <Link href="#hosted-by" className="flex items-center gap-2 mb-5 sm:mb-6 group">
               <div
@@ -181,6 +209,9 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
                 <p key={index} className="text-[15px] leading-relaxed text-foreground/60 mb-4">{paragraph}</p>
               ))}
             </div>
+
+            {/* Contributions board — chips from events.event.contributor jsonb */}
+            <EventContributionsBoard event={event} />
 
             {/* Location Section - Luma style: heading, venue, address, map */}
             {isInPerson && (

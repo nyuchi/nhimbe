@@ -67,10 +67,19 @@ export interface Event {
   dateModified?: string;
   /**
    * UUID of the linked Kraal circle (events.event.event_circle_id in the
-   * platform DB). Populated once the backend exposes it; until then the
-   * sidebar's "View kraal" CTA falls back to the Kraal index.
+   * platform DB). When present, EventDetail surfaces a "View kraal" CTA.
    */
   eventCircleId?: string;
+  /** FK to places.places.id — drives the design's Where tile + Weather. */
+  placeId?: string;
+  /** FK to business.organization.id — when set, host card renders org branch. */
+  organizationId?: string;
+  /** ISO-8601 duration (e.g. "PT2H30M"). */
+  duration?: string;
+  /** Event timezone (IANA name). */
+  timezone?: string;
+  /** schema.org/contributor jsonb — chips on the contributions board. */
+  contributor?: unknown;
 }
 
 export interface EventsResponse {

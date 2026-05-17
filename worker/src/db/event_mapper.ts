@@ -22,6 +22,7 @@ interface SupabaseEventRow {
   location: Record<string, unknown> | null;
   organizer: Record<string, unknown> | null;
   organizer_person_id: string | null;
+  organization_id: string | null;
   offers: Record<string, unknown> | null;
   image: string[] | null;
   category: string | null;
@@ -32,6 +33,16 @@ interface SupabaseEventRow {
   slug: string | null;
   created_at: string | null;
   updated_at: string | null;
+  /** Linked Kraal (circles.circle.id) — drives the "View kraal" CTA on EventDetail. */
+  event_circle_id: string | null;
+  /** schema.org/contributor jsonb — drives the "Contributions board" chips on EventDetail. */
+  contributor: Record<string, unknown> | unknown[] | null;
+  /** ISO 8601 duration ("PT2H") — surfaced on the "When" tile when set. */
+  duration: string | null;
+  /** Event timezone (defaults to UTC on insert). */
+  timezone: string | null;
+  /** FK to places.places — drives the "Where" tile + Weather lookup keyed on place_id. */
+  place_id: string | null;
 }
 
 // The platform-db CHECK constraints on events.event require fully-qualified
@@ -126,11 +137,19 @@ export function mapSupabaseEventToApi(row: SupabaseEventRow): Event {
       : undefined,
     dateCreated: row.created_at ?? undefined,
     dateModified: row.updated_at ?? undefined,
+    // New design surfaces — opt-in fields that EventDetail uses for the
+    // 3-up info tiles + host card branching + Kraal CTA + contributions.
+    placeId: row.place_id ?? undefined,
+    organizationId: row.organization_id ?? undefined,
+    eventCircleId: row.event_circle_id ?? undefined,
+    duration: row.duration ?? undefined,
+    timezone: row.timezone ?? undefined,
+    contributor: row.contributor ?? undefined,
   };
 }
 
 const EVENT_COLUMNS =
-  "id,name,description,startdate,enddate,eventattendancemode,eventstatus,eventtype,location,organizer,organizer_person_id,offers,image,category,keywords,maximumattendeecapacity,attendee_count,visibility,slug,created_at,updated_at";
+  "id,name,description,startdate,enddate,eventattendancemode,eventstatus,eventtype,location,organizer,organizer_person_id,organization_id,offers,image,category,keywords,maximumattendeecapacity,attendee_count,visibility,slug,created_at,updated_at,event_circle_id,contributor,duration,timezone,place_id";
 
 /**
  * Fetch events by id from Supabase. Returns events in API shape, preserving
