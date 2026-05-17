@@ -53,12 +53,12 @@ series.post("/", async (c) => {
     body: {
       name: body.name,
       eventtype: "Event",
-      eventstatus: "EventScheduled",
-      eventattendancemode: "OfflineEventAttendanceMode",
+      eventstatus: "https://schema.org/EventScheduled",
+      eventattendancemode: "https://schema.org/OfflineEventAttendanceMode",
       startdate: new Date().toISOString(),
       timezone: "UTC",
       visibility: "private",
-      calendar_type: "events",
+      calendar_type: "nhimbe",
       owner_type: "person",
       owner_id: body.hostId,
       organizer_person_id: body.hostId,
@@ -154,7 +154,7 @@ series.delete("/:id", async (c) => {
     path: "event",
     query: `series_parent_id=eq.${encodeURIComponent(id)}&startdate=gt.${encodeURIComponent(now)}`,
     method: "PATCH",
-    body: { eventstatus: "EventCancelled" },
+    body: { eventstatus: "https://schema.org/EventCancelled" },
   });
 
   const cleared = await supabaseFetch<{ id: string }[]>(c.env, {

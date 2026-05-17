@@ -220,7 +220,7 @@ describe("POST /api/registrations", () => {
           maximumattendeecapacity: 100,
           attendee_count: 0,
           visibility: "draft",
-          eventstatus: "EventScheduled",
+          eventstatus: "https://schema.org/EventScheduled",
         }),
       },
     ]);
@@ -246,7 +246,7 @@ describe("POST /api/registrations", () => {
           maximumattendeecapacity: 10,
           attendee_count: 10,
           visibility: "public",
-          eventstatus: "EventScheduled",
+          eventstatus: "https://schema.org/EventScheduled",
         }),
       },
     ]);
@@ -268,7 +268,7 @@ describe("POST /api/registrations", () => {
       {
         match: pgrstMatch("event", ["GET"]),
         handle: () => json({
-          id: "e", maximumattendeecapacity: 100, attendee_count: 5, visibility: "public", eventstatus: "EventScheduled",
+          id: "e", maximumattendeecapacity: 100, attendee_count: 5, visibility: "public", eventstatus: "https://schema.org/EventScheduled",
         }),
       },
       {
@@ -294,7 +294,7 @@ describe("POST /api/registrations", () => {
       {
         match: pgrstMatch("event", ["GET"]),
         handle: () => json({
-          id: "e", maximumattendeecapacity: 100, attendee_count: 5, visibility: "public", eventstatus: "EventScheduled",
+          id: "e", maximumattendeecapacity: 100, attendee_count: 5, visibility: "public", eventstatus: "https://schema.org/EventScheduled",
         }),
       },
       {
@@ -343,7 +343,7 @@ describe("POST /api/registrations", () => {
       {
         match: pgrstMatch("event", ["GET"]),
         handle: () => json({
-          id: "e", maximumattendeecapacity: 100, attendee_count: 99, visibility: "public", eventstatus: "EventScheduled",
+          id: "e", maximumattendeecapacity: 100, attendee_count: 99, visibility: "public", eventstatus: "https://schema.org/EventScheduled",
         }),
       },
       { match: pgrstMatch("rsvp_action", ["GET"]), handle: () => notFoundSingle() },

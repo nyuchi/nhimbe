@@ -8,7 +8,7 @@ import { toCsv } from "../utils/export";
 import { logAudit } from "../utils/audit";
 import { unauthorized, notFound, badRequest, forbidden, conflict } from "../utils/response";
 import { supabaseFetch } from "../db/supabase";
-import { fetchEventsByIds, mapSupabaseEventToApi, EVENT_COLUMNS, type SupabaseEventRow } from "../db/event_mapper";
+import { fetchEventsByIds, mapSupabaseEventToApi, EVENT_COLUMNS, addSchemaPrefix, type SupabaseEventRow } from "../db/event_mapper";
 
 export const events = new Hono<{ Bindings: Env }>();
 events.use("*", writeAuth);
@@ -22,7 +22,7 @@ events.get("/", async (c) => {
 
   const filters = [
     "visibility=eq.public",
-    "eventstatus=eq.EventScheduled",
+    `eventstatus=eq.${encodeURIComponent("https://schema.org/EventScheduled")}`,
   ];
   if (city) filters.push(`location->>addresslocality=eq.${encodeURIComponent(city)}`);
   if (category) filters.push(`category=eq.${encodeURIComponent(category)}`);
@@ -49,7 +49,7 @@ events.get("/trending", async (c) => {
 
   const filters = [
     "visibility=eq.public",
-    "eventstatus=eq.EventScheduled",
+    `eventstatus=eq.${encodeURIComponent("https://schema.org/EventScheduled")}`,
     `startdate=gte.${encodeURIComponent(new Date().toISOString())}`,
   ];
   if (city) filters.push(`location->>addresslocality=eq.${encodeURIComponent(city)}`);
@@ -116,13 +116,13 @@ events.post("/", async (c) => {
     name: body.name,
     description: body.description ?? null,
     eventtype: "Event",
-    eventstatus: body.eventStatus || "EventScheduled",
-    eventattendancemode: body.eventAttendanceMode || "OfflineEventAttendanceMode",
+    eventstatus: addSchemaPrefix(body.eventStatus || "EventScheduled"),
+    eventattendancemode: addSchemaPrefix(body.eventAttendanceMode || "OfflineEventAttendanceMode"),
     startdate: body.startDate,
     enddate: body.endDate ?? null,
     timezone: "UTC",
     visibility: body.isPublished === false ? "private" : "public",
-    calendar_type: "events",
+    calendar_type: "nhimbe",
     owner_type: "person",
     owner_id: organizerPersonId,
     organizer_person_id: organizerPersonId,
@@ -185,7 +185,7 @@ events.put("/:id", async (c) => {
   if (body.description) patch.description = body.description;
   if (body.category) patch.category = body.category;
   if (body.keywords) patch.keywords = body.keywords;
-  if (body.eventStatus) patch.eventstatus = body.eventStatus;
+  if (body.eventStatus) patch.eventstatus = addSchemaPrefix(body.eventStatus);
 
   const updated = await supabaseFetch<SupabaseEventRow[]>(c.env, {
     schema: "events",
@@ -214,7 +214,7 @@ events.post("/:id/cancel", async (c) => {
   });
 
   if (!existing) return notFound(c, "Event");
-  if (existing.eventstatus === "EventCancelled") {
+  if (existing.eventstatus === "https://schema.org/EventCancelled") {
     return badRequest(c, "Event is already cancelled");
   }
 
@@ -223,7 +223,7 @@ events.post("/:id/cancel", async (c) => {
     path: "event",
     query: `id=eq.${encodeURIComponent(eventId)}`,
     method: "PATCH",
-    body: { eventstatus: "EventCancelled" },
+    body: { eventstatus: "https://schema.org/EventCancelled" },
   });
 
   await logAudit(c.env, { action: "event.cancelled", resourceType: "event", resourceId: eventId });

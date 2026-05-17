@@ -261,7 +261,7 @@ admin.get("/events", async (c) => {
   const now = new Date().toISOString();
   if (status === "upcoming") filters.push(`startdate=gte.${encodeURIComponent(now)}`);
   else if (status === "past") filters.push(`startdate=lt.${encodeURIComponent(now)}`);
-  else if (status === "cancelled") filters.push("eventstatus=eq.EventCancelled");
+  else if (status === "cancelled") filters.push(`eventstatus=eq.${encodeURIComponent("https://schema.org/EventCancelled")}`);
 
   const filterQuery = filters.join("&");
   const rows = await supabaseFetch<SupabaseEventRow[]>(c.env, {

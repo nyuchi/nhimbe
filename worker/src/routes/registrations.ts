@@ -100,7 +100,7 @@ registrations.post("/", async (c) => {
   });
 
   if (!event) return notFound(c, "Event");
-  if (event.visibility !== "public" || event.eventstatus !== "EventScheduled") {
+  if (event.visibility !== "public" || event.eventstatus !== "https://schema.org/EventScheduled") {
     return badRequest(c, "Event is not available for registration");
   }
   if (event.maximumattendeecapacity && (event.attendee_count ?? 0) >= event.maximumattendeecapacity) {

@@ -50,7 +50,7 @@ function eventRow(overrides: Record<string, unknown> = {}) {
     startdate: "2026-06-01T10:00:00Z",
     enddate: "2026-06-01T12:00:00Z",
     eventattendancemode: "OfflineEventAttendanceMode",
-    eventstatus: "EventScheduled",
+    eventstatus: "https://schema.org/EventScheduled",
     eventtype: "Event",
     location: { addresslocality: "Harare", addresscountry: "ZW" },
     organizer: { name: "Host", initials: "H" },
@@ -330,7 +330,7 @@ describe("POST /api/events/:id/cancel", () => {
     const { stub } = makeFetchStub([
       {
         match: pgrstMatch("event", ["GET"]),
-        handle: () => json({ id: "evt-1", eventstatus: "EventCancelled" }),
+        handle: () => json({ id: "evt-1", eventstatus: "https://schema.org/EventCancelled" }),
       },
     ]);
     vi.stubGlobal("fetch", stub);
@@ -348,7 +348,7 @@ describe("POST /api/events/:id/cancel", () => {
     const { stub, calls } = makeFetchStub([
       {
         match: pgrstMatch("event", ["GET"]),
-        handle: () => json({ id: "evt-1", eventstatus: "EventScheduled" }),
+        handle: () => json({ id: "evt-1", eventstatus: "https://schema.org/EventScheduled" }),
       },
       { match: pgrstMatch("event", ["PATCH"]), handle: () => noContent() },
       { match: pgrstMatch("activity_logs", ["POST"]), handle: () => json([{ id: "log" }], 201) },
@@ -362,7 +362,7 @@ describe("POST /api/events/:id/cancel", () => {
     });
     expect(res.status).toBe(200);
     const patch = calls.find(c => c.method === "PATCH");
-    expect(patch!.body).toEqual({ eventstatus: "EventCancelled" });
+    expect(patch!.body).toEqual({ eventstatus: "https://schema.org/EventCancelled" });
     const audit = calls.find(c => c.method === "POST" && c.url.includes("/activity_logs"));
     expect(audit!.body).toMatchObject({ action: "event.cancelled" });
   });

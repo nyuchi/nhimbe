@@ -413,8 +413,10 @@ export async function createEventOnSupabase(input: CreateEventOnSupabaseInput): 
     slug: slug || null,
     description: input.description,
     eventtype: "Event",
-    eventstatus: "EventScheduled",
-    eventattendancemode: input.attendanceMode,
+    // events.event CHECK constraint requires fully-qualified schema.org URLs
+    // for eventstatus and eventattendancemode.
+    eventstatus: "https://schema.org/EventScheduled",
+    eventattendancemode: `https://schema.org/${input.attendanceMode}`,
     startdate: input.startdate,
     enddate: input.enddate,
     timezone: input.timezone,
@@ -434,7 +436,8 @@ export async function createEventOnSupabase(input: CreateEventOnSupabaseInput): 
     maximumattendeecapacity: input.maximumAttendeeCapacity,
     requires_approval: input.requiresApproval,
     visibility: input.visibility,
-    calendar_type: "event",
+    // events.event.calendar_type CHECK constraint: personal | business | circle | nhimbe.
+    calendar_type: "nhimbe",
     owner_type: ownerType,
     owner_id: ownerId,
   };

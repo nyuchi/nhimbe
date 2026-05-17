@@ -30,7 +30,7 @@ stats.get("/stats", async (c) => {
     path: "event",
     query:
       "select=id,category,attendee_count,organizer_person_id,startdate,location,created_at" +
-      "&visibility=eq.public&eventstatus=eq.EventScheduled" +
+      `&visibility=eq.public&eventstatus=eq.${encodeURIComponent("https://schema.org/EventScheduled")}` +
       cityFilter +
       "&limit=2000",
   }) ?? [];

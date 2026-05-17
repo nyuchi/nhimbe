@@ -34,6 +34,21 @@ interface SupabaseEventRow {
   updated_at: string | null;
 }
 
+// The platform-db CHECK constraints on events.event require fully-qualified
+// schema.org URLs for `eventstatus` and `eventattendancemode`
+// (e.g. "https://schema.org/EventScheduled"). The legacy nhimbe API exposes
+// short forms (e.g. "EventScheduled"). These two helpers normalise at the
+// worker boundary: stripSchemaPrefix on read, addSchemaPrefix on write.
+const SCHEMA_PREFIX = "https://schema.org/";
+export function stripSchemaPrefix(v: string | null | undefined): string | null {
+  if (!v) return null;
+  return v.startsWith(SCHEMA_PREFIX) ? v.slice(SCHEMA_PREFIX.length) : v;
+}
+export function addSchemaPrefix(v: string | null | undefined): string | null {
+  if (!v) return null;
+  return v.startsWith(SCHEMA_PREFIX) ? v : SCHEMA_PREFIX + v;
+}
+
 function formatDateFragments(startdate: string) {
   const d = new Date(startdate);
   if (isNaN(d.getTime())) {
@@ -84,8 +99,8 @@ export function mapSupabaseEventToApi(row: SupabaseEventRow): Event {
     image: (row.image && row.image[0]) || undefined,
     attendeeCount: row.attendee_count ?? 0,
     maximumAttendeeCapacity: row.maximumattendeecapacity ?? undefined,
-    eventAttendanceMode: row.eventattendancemode ?? undefined,
-    eventStatus: row.eventstatus ?? undefined,
+    eventAttendanceMode: stripSchemaPrefix(row.eventattendancemode) ?? undefined,
+    eventStatus: stripSchemaPrefix(row.eventstatus) ?? undefined,
     isPublished: row.visibility === "public",
     organizer: {
       name: (org.name as string) ?? "",
