@@ -6,6 +6,7 @@ import { Rating } from "@/components/ui/rating";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getEventReviews, markReviewHelpful, type EventReview as ApiReview, type ReviewStats } from "@/lib/api";
+import { useAuth } from "@/components/auth/auth-context";
 
 interface Review {
   id: string;
@@ -49,6 +50,7 @@ export function EventRatings({
   const [loading, setLoading] = useState(true);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [stats, setStats] = useState<ReviewStats | null>(null);
+  const { accessToken, getAccessToken } = useAuth();
 
   useEffect(() => {
     async function fetchReviews() {
@@ -95,8 +97,12 @@ export function EventRatings({
     // Call API if user is logged in
     if (currentUserId) {
       try {
-        await markReviewHelpful(reviewId, currentUserId);
-      } catch (error) {
+        const token = accessToken ?? (await getAccessToken());
+        if (!token) {
+          throw new Error("Sign in required");
+        }
+        await markReviewHelpful(reviewId, token);
+      } catch {
         // Revert on failure
         setHelpfulClicked((prev) => {
           const newSet = new Set(prev);
