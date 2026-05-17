@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Layers, ArrowLeft, MapPin, Mountain } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import type { Event } from "@/lib/api";
+import { getPlaceById } from "@/lib/supabase/api";
 
 /**
  * Map-first discovery view. Uses OpenStreetMap raster tiles directly (no API
@@ -123,10 +124,49 @@ export function MapClient({ initialEvents }: MapClientProps) {
   const tileLayerRef = useRef<unknown>(null);
   const markersGroupRef = useRef<unknown>(null);
 
+  // Initial placement from event-side fallback (city centroid). The places
+  // resolver below upgrades these to real venue coords when a place_id is set.
+  const [resolvedCoords, setResolvedCoords] = useState<Map<string, [number, number]>>(new Map());
   const placedEvents = useMemo(() => {
     return initialEvents
-      .map((ev) => ({ ev, ll: eventLatLng(ev) }))
+      .map((ev) => {
+        const resolved = resolvedCoords.get(ev.id);
+        const ll = resolved ?? eventLatLng(ev);
+        return { ev, ll };
+      })
       .filter((e): e is { ev: Event; ll: [number, number] } => e.ll !== null);
+  }, [initialEvents, resolvedCoords]);
+
+  // Resolve real coordinates for any event with a placeId. Runs once on
+  // mount (the initial events payload is stable) — when a place row carries
+  // lat/lng we merge it into the resolvedCoords map, which triggers a
+  // marker re-render in the dedicated effect below.
+  useEffect(() => {
+    const toResolve = initialEvents
+      .filter((ev) => ev.placeId)
+      .map((ev) => ({ id: ev.id, placeId: ev.placeId as string }));
+    if (toResolve.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const results = await Promise.all(
+        toResolve.map(async ({ id, placeId }) => {
+          const place = await getPlaceById(placeId);
+          if (place?.latitude != null && place?.longitude != null) {
+            return [id, [place.latitude, place.longitude] as [number, number]] as const;
+          }
+          return null;
+        }),
+      );
+      if (cancelled) return;
+      const next = new Map<string, [number, number]>();
+      for (const r of results) {
+        if (r) next.set(r[0], r[1]);
+      }
+      if (next.size > 0) setResolvedCoords(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [initialEvents]);
 
   // Boot Leaflet once on mount.
@@ -152,28 +192,10 @@ export function MapClient({ initialEvents }: MapClientProps) {
         maxZoom: cfg.maxZoom,
       }).addTo(map);
 
-      const markers = L.layerGroup().addTo(map);
-      markersGroupRef.current = markers;
-
-      placedEvents.forEach(({ ev, ll }) => {
-        const color = pinColor(ev.category);
-        // Custom divIcon so we can colour-tint per category (the design's
-        // "terrain-banded clusters" effect). 18px circle + 8px tail.
-        const html = `<span style="
-          display:block;width:18px;height:18px;border-radius:9999px;
-          background:${color};
-          box-shadow:0 0 0 3px color-mix(in srgb, ${color} 25%, transparent), 0 4px 10px rgba(0,0,0,0.25);
-          border:2px solid #fff;
-        "></span>`;
-        const icon = L.divIcon({ className: "nhimbe-pin", html, iconSize: [18, 18], iconAnchor: [9, 9] });
-        const marker = L.marker(ll, { icon }).addTo(markers);
-        marker.on("click", () => setSelected(ev));
-      });
-
-      if (placedEvents.length > 1) {
-        const bounds = L.latLngBounds(placedEvents.map((p) => p.ll));
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
-      }
+      // Empty marker group — the placedEvents effect below populates it
+      // (and re-populates on resolved-coord updates) so we have one
+      // source of truth for pin rendering.
+      markersGroupRef.current = L.layerGroup().addTo(map);
 
       onResize = () => map.invalidateSize();
       window.addEventListener("resize", onResize);
@@ -189,6 +211,36 @@ export function MapClient({ initialEvents }: MapClientProps) {
     // are handled by the dedicated effects below to avoid re-creating the map.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Re-place pins when the resolved-coords map updates. We clear the
+  // existing marker group and rebuild — cheap given the list size and
+  // avoids tracking marker identity by id.
+  useEffect(() => {
+    const map = mapRef.current as { fitBounds?: (b: unknown, opts?: unknown) => void } | null;
+    const group = markersGroupRef.current as { clearLayers?: () => void; addLayer?: (l: unknown) => void } | null;
+    if (!map || !group) return;
+    (async () => {
+      const L = (await import("leaflet")).default;
+      group.clearLayers?.();
+      placedEvents.forEach(({ ev, ll }) => {
+        const color = pinColor(ev.category);
+        const html = `<span style="
+          display:block;width:18px;height:18px;border-radius:9999px;
+          background:${color};
+          box-shadow:0 0 0 3px color-mix(in srgb, ${color} 25%, transparent), 0 4px 10px rgba(0,0,0,0.25);
+          border:2px solid #fff;
+        "></span>`;
+        const icon = L.divIcon({ className: "nhimbe-pin", html, iconSize: [18, 18], iconAnchor: [9, 9] });
+        const marker = L.marker(ll, { icon });
+        marker.on("click", () => setSelected(ev));
+        group.addLayer?.(marker);
+      });
+      if (placedEvents.length > 1) {
+        const bounds = L.latLngBounds(placedEvents.map((p) => p.ll));
+        map.fitBounds?.(bounds, { padding: [40, 40], maxZoom: 12 });
+      }
+    })();
+  }, [placedEvents]);
 
   // Swap base layer when the user picks a different tile style.
   useEffect(() => {

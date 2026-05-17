@@ -25,6 +25,7 @@ import {
 } from "./event-info-tiles";
 import { EventEntityHostCard } from "./event-entity-host-card";
 import { EventSpecifics } from "./event-specifics";
+import { EventVenueCard } from "./event-venue-card";
 import { useAuth } from "@/components/auth/auth-context";
 import { getUserReferralCode, generateUserReferralCode, getEventStats, getEventReviews, type UserReferralCode, type EventStats, type ReviewStats } from "@/lib/api";
 import type { Event } from "@/lib/api";
@@ -214,6 +215,13 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
                 <p key={index} className="text-[15px] leading-relaxed text-foreground/60 mb-4">{paragraph}</p>
               ))}
             </div>
+
+            {/* Rich venue card backed by places.places (OSM-tied) — surfaces
+                the real venue name, address, cover, elevation, accessibility,
+                opening hours, activity tags, and an OSM attribution chip
+                when the place came from OpenStreetMap. Renders nothing when
+                the event has no place_id. */}
+            <EventVenueCard placeId={event.placeId} />
 
             {/* Type-aware specifics — terrain band for outdoor categories,
                 programme card for events with rows in events.programme_item.

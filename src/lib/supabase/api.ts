@@ -203,9 +203,98 @@ export async function getInterestCategories(): Promise<InterestCategoryRow[]> {
 }
 
 // ─── Venues ──────────────────────────────────────────────────────────────
-// `places.places` is the unified venue/place table. Use this for the
-// debounced venue picker in the creation wizard — typing "harare" returns
-// venues whose name OR address_locality matches.
+// `places.places` is the unified venue/place table — OSM-backed at the data
+// layer (each row can carry an osm_changeset_id linking back to the original
+// OpenStreetMap edit). Use this for the debounced venue picker in the
+// creation wizard, the EventDetail venue card, and the Map's real-coords pin.
+
+/** Rich place data for EventDetail / Map. Subset of places.places, plus the
+ *  OSM provenance fields so the UI can show the "from OSM" attribution and
+ *  link back to the original changeset. */
+export interface PlaceDetail {
+  id: string;
+  name: string;
+  slug: string | null;
+  description: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  elevation: number | null;
+  addressLocality: string | null;
+  addressRegion: string | null;
+  streetAddress: string | null;
+  postalCode: string | null;
+  website: string | null;
+  coverImage: string | null;
+  image: string[] | null;
+  openingHoursText: string | null;
+  accessibilityFeature: string[] | null;
+  tourismType: string[] | null;
+  activity: string[] | null;
+  aggregateRatingValue: number | null;
+  aggregateRatingCount: number | null;
+  // OSM provenance — when osmContributed is true, surface the attribution
+  // chip + link to https://www.openstreetmap.org/changeset/{osmChangesetId}.
+  osmContributed: boolean;
+  osmChangesetId: string | null;
+  osmContributedAt: string | null;
+  dataOrigin: string | null;
+  dataConfidence: string | null;
+  communityConfirmations: number | null;
+}
+
+/** Read the rich place data for a venue. Returns null when the place was
+ *  not found or the read is blocked by RLS. */
+export async function getPlaceById(placeId: string): Promise<PlaceDetail | null> {
+  if (!placeId) return null;
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .schema("places")
+    .from("places")
+    .select(
+      "id,name,slug,description,latitude,longitude,elevation," +
+        "address_locality,address_region,street_address,postal_code," +
+        "website,cover_image,image,opening_hours_text,accessibility_feature," +
+        "tourist_type,activity,aggregate_rating_value,aggregate_rating_count," +
+        "osm_contributed,osm_contributed_at,osm_changeset_id," +
+        "data_origin,data_confidence,community_confirmations",
+    )
+    .eq("id", placeId)
+    .maybeSingle();
+  if (error || !data) return null;
+  // The publishable-key client doesn't know the places schema; treat the
+  // row as unknown and narrow defensively.
+  const r = data as unknown as Record<string, unknown>;
+  const numOrNull = (v: unknown): number | null =>
+    typeof v === "number" ? v : v == null ? null : Number(v);
+  return {
+    id: r.id as string,
+    name: (r.name as string) ?? "",
+    slug: (r.slug as string | null) ?? null,
+    description: (r.description as string | null) ?? null,
+    latitude: numOrNull(r.latitude),
+    longitude: numOrNull(r.longitude),
+    elevation: (r.elevation as number | null) ?? null,
+    addressLocality: (r.address_locality as string | null) ?? null,
+    addressRegion: (r.address_region as string | null) ?? null,
+    streetAddress: (r.street_address as string | null) ?? null,
+    postalCode: (r.postal_code as string | null) ?? null,
+    website: (r.website as string | null) ?? null,
+    coverImage: (r.cover_image as string | null) ?? null,
+    image: (r.image as string[] | null) ?? null,
+    openingHoursText: (r.opening_hours_text as string | null) ?? null,
+    accessibilityFeature: (r.accessibility_feature as string[] | null) ?? null,
+    tourismType: (r.tourist_type as string[] | null) ?? null,
+    activity: (r.activity as string[] | null) ?? null,
+    aggregateRatingValue: numOrNull(r.aggregate_rating_value),
+    aggregateRatingCount: (r.aggregate_rating_count as number | null) ?? null,
+    osmContributed: Boolean(r.osm_contributed),
+    osmChangesetId: (r.osm_changeset_id as string | null) ?? null,
+    osmContributedAt: (r.osm_contributed_at as string | null) ?? null,
+    dataOrigin: (r.data_origin as string | null) ?? null,
+    dataConfidence: (r.data_confidence as string | null) ?? null,
+    communityConfirmations: (r.community_confirmations as number | null) ?? null,
+  };
+}
 
 export async function searchVenues(query: string, limit = 8): Promise<PlaceRow[]> {
   const trimmed = query.trim();
