@@ -142,13 +142,23 @@ payments.post("/webhook", async (c) => {
     return badRequest(c, "Invalid webhook payload");
   }
 
-  const VALID_STATUSES = ["completed", "refunded", "pending", "failed", "cancelled"];
-  if (!VALID_STATUSES.includes(result.status)) {
+  // Map provider-internal PaymentStatus to wallet.payment_intents.status
+  // CHECK constraint values: pending | authorized | captured | cancelled |
+  // refunded | expired. "completed" → captured, "failed" → cancelled.
+  const PROVIDER_TO_DB_STATUS: Record<string, string> = {
+    completed: "captured",
+    refunded: "refunded",
+    pending: "pending",
+    failed: "cancelled",
+    cancelled: "cancelled",
+  };
+  const dbStatus = PROVIDER_TO_DB_STATUS[result.status];
+  if (!dbStatus) {
     return badRequest(c, "Invalid payment status");
   }
 
-  const patch: Record<string, unknown> = { status: result.status };
-  if (result.status === "completed") patch.completed_at = new Date().toISOString();
+  const patch: Record<string, unknown> = { status: dbStatus };
+  if (dbStatus === "captured") patch.completed_at = new Date().toISOString();
 
   await supabaseFetch(c.env, {
     schema: "wallet",
@@ -184,10 +194,22 @@ payments.get("/:id/status", writeAuth, async (c) => {
     return notFound(c, "Payment");
   }
 
+  // Reverse-map the DB enum back to the API surface the frontend knows
+  // (mirror of PROVIDER_TO_DB_STATUS in the webhook handler).
+  const DB_TO_API_STATUS: Record<string, string> = {
+    pending: "pending",
+    authorized: "pending",
+    captured: "completed",
+    cancelled: "failed",
+    refunded: "refunded",
+    expired: "failed",
+  };
+  const apiStatus = payment.status ? DB_TO_API_STATUS[payment.status] ?? payment.status : null;
+
   return c.json({
     payment: {
       id: payment.id,
-      status: payment.status,
+      status: apiStatus,
       amount_cents: Math.round(Number(payment.amount) * 100),
       currency: payment.currency_code,
       provider: "paynow",

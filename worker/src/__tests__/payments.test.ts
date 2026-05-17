@@ -272,14 +272,18 @@ describe("POST /api/payments/webhook", () => {
     expect(res.status).toBe(400);
   });
 
+  // Paynow status → PaynowProvider internal status → wallet.payment_intents
+  // CHECK-constraint value (the DB-stored "captured | cancelled | refunded |
+  // pending | authorized | expired" enum). Paynow's "paid/delivered" maps
+  // to captured, its "failed/cancelled" to cancelled, "refunded" to refunded.
   it.each([
-    ["paid", "completed"],
-    ["awaiting delivery", "completed"],
-    ["delivered", "completed"],
+    ["paid", "captured"],
+    ["awaiting delivery", "captured"],
+    ["delivered", "captured"],
     ["refunded", "refunded"],
-    ["cancelled", "failed"],
-    ["failed", "failed"],
-  ])("maps Paynow status '%s' to internal '%s'", async (paynowStatus, internalStatus) => {
+    ["cancelled", "cancelled"],
+    ["failed", "cancelled"],
+  ])("maps Paynow status '%s' to DB status '%s'", async (paynowStatus, dbStatus) => {
     const env = createMockEnv({
       PAYNOW_INTEGRATION_ID: "int-id",
       PAYNOW_INTEGRATION_KEY: integrationKey,
@@ -307,8 +311,8 @@ describe("POST /api/payments/webhook", () => {
     expect(await res.json()).toEqual({ received: true });
 
     const patch = calls[0];
-    expect(patch.body).toMatchObject({ status: internalStatus });
-    if (internalStatus === "completed") {
+    expect(patch.body).toMatchObject({ status: dbStatus });
+    if (dbStatus === "captured") {
       expect((patch.body as { completed_at?: string }).completed_at).toBeTruthy();
     }
   });
@@ -338,7 +342,8 @@ describe("GET /api/payments/:id/status", () => {
         match: pgrstMatch("payment_intents", ["GET"]),
         handle: () => json({
           id: "pay-1",
-          status: "completed",
+          // DB stores "captured"; route reverse-maps to "completed" on the wire.
+          status: "captured",
           amount: 15.5,
           currency_code: "USD",
           created_at: "2026-05-01T00:00:00Z",
