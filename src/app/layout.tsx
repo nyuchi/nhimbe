@@ -21,7 +21,8 @@ import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // Don't set maximumScale — blocking pinch-zoom violates WCAG 1.4.4 (Resize
+  // Text). Next.js defaults allow user scaling, which is the correct behavior.
   viewportFit: "cover",
 };
 
@@ -201,10 +202,10 @@ export default function RootLayout({
         </ErrorBoundary>
         <Analytics />
         <ServiceWorkerRegister />
-        <Script id="intercom-settings" strategy="afterInteractive">
+        <Script id="intercom-settings" strategy="lazyOnload">
           {`window.intercomSettings = { api_base: "https://api-iam.intercom.io", app_id: "f1vga504" };`}
         </Script>
-        <Script id="intercom-loader" strategy="afterInteractive">
+        <Script id="intercom-loader" strategy="lazyOnload">
           {`(function(){var w=window;var ic=w.Intercom;if(typeof ic==="function"){ic('reattach_activator');ic('update',w.intercomSettings);}else{var d=document;var i=function(){i.c(arguments);};i.q=[];i.c=function(args){i.q.push(args);};w.Intercom=i;var l=function(){var s=d.createElement('script');s.type='text/javascript';s.async=true;s.src='https://widget.intercom.io/widget/f1vga504';var x=d.getElementsByTagName('script')[0];x.parentNode.insertBefore(s,x);};if(document.readyState==='complete'){l();}else if(w.attachEvent){w.attachEvent('onload',l);}else{w.addEventListener('load',l,false);}}})();`}
         </Script>
       </body>
