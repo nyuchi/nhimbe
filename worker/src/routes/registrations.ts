@@ -34,33 +34,75 @@ interface RsvpRow {
   confirmed_at: string | null;
 }
 
+interface CheckInRow {
+  event_id: string;
+  person_id: string;
+  checked_in_at: string | null;
+}
+
+// Attendance is stored in events.check_in keyed on (event_id, person_id),
+// not on rsvp_action. Derive the "attended" status by joining the two,
+// rather than storing it twice. checkedIns is a map from "event_id|person_id"
+// → checked_in_at timestamp.
+function attendanceKey(eventId: string, personId: string): string {
+  return `${eventId}|${personId}`;
+}
+
 // Map events.rsvp_action → legacy registration shape. The frontend reads
-// `status` as the lifecycle ("registered","approved","rejected","cancelled"),
-// which we derive from rsvpresponse + confirmation_status.
-function deriveStatus(row: RsvpRow): string {
+// `status` as the lifecycle ("registered","approved","rejected","cancelled",
+// "attended","waitlisted"), which we derive from rsvpresponse +
+// confirmation_status + join against events.check_in.
+function deriveStatus(row: RsvpRow, checkedIns: Map<string, string>): string {
   if (row.rsvpresponse === RSVP_NO) return "cancelled";
+  if (checkedIns.has(attendanceKey(row.event_id, row.agent_person_id))) return "attended";
   if (row.confirmation_status === "confirmed") return "approved";
   if (row.confirmation_status === "declined") return "rejected";
   if (row.confirmation_status === "waitlisted") return "waitlisted";
   return "registered";
 }
 
-function mapRow(row: RsvpRow) {
+function mapRow(row: RsvpRow, checkedIns: Map<string, string>) {
+  const checkedInAt = checkedIns.get(attendanceKey(row.event_id, row.agent_person_id)) ?? null;
   return {
     id: row.id,
     eventId: row.event_id,
     userId: row.agent_person_id,
-    status: deriveStatus(row),
+    status: deriveStatus(row, checkedIns),
     ticketType: null,
     ticketPrice: null,
     ticketCurrency: null,
     registeredAt: row.created_at,
     cancelledAt: row.rsvpresponse === RSVP_NO ? row.updated_at : null,
-    checkedInAt: null,
+    checkedInAt,
   };
 }
 
 const RSVP_COLS = "id,event_id,agent_person_id,rsvpresponse,created_at,updated_at,confirmation_status,confirmed_at";
+
+// Fetch check-ins for the scope of an rsvp result set. Either scoped by a
+// single event (when filtered by event_id) or by a set of (event,person) pairs.
+async function loadAttendance(env: Env, eventId: string | null, rsvps: RsvpRow[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (rsvps.length === 0) return map;
+
+  // When the query was event-scoped, one filter on event_id suffices.
+  // Otherwise we batch by person_id (the rsvp list is small enough that
+  // PostgREST in.() is fine).
+  const filter = eventId
+    ? `event_id=eq.${encodeURIComponent(eventId)}`
+    : `person_id=in.(${Array.from(new Set(rsvps.map(r => r.agent_person_id))).map(encodeURIComponent).join(",")})`;
+
+  const rows = await supabaseFetch<CheckInRow[]>(env, {
+    schema: "events",
+    path: "check_in",
+    query: `${filter}&select=event_id,person_id,checked_in_at`,
+  }) ?? [];
+
+  for (const ci of rows) {
+    if (ci.checked_in_at) map.set(attendanceKey(ci.event_id, ci.person_id), ci.checked_in_at);
+  }
+  return map;
+}
 
 export const registrations = new Hono<{ Bindings: Env }>();
 registrations.use("*", writeAuth);
@@ -84,7 +126,8 @@ registrations.get("/", async (c) => {
     query: `${filter}&select=${RSVP_COLS}`,
   }) ?? [];
 
-  return c.json({ registrations: rows.map(mapRow) });
+  const checkedIns = await loadAttendance(c.env, eventId ?? null, rows);
+  return c.json({ registrations: rows.map((r) => mapRow(r, checkedIns)) });
 });
 
 // POST /api/registrations — atomic capacity check + RSVP insert.

@@ -409,7 +409,7 @@ describe("DELETE /api/users/:id", () => {
     const { stub } = makeFetchStub([
       {
         match: pgrstMatch("person", ["GET"]),
-        handle: () => json({ id: "person-1", email: "x@y.z", role: "deleted" }),
+        handle: () => json({ id: "person-1", email: "x@y.z", deleted_at: "2026-05-10T00:00:00Z" }),
       },
     ]);
     vi.stubGlobal("fetch", stub);
@@ -427,7 +427,7 @@ describe("DELETE /api/users/:id", () => {
     const { stub, calls } = makeFetchStub([
       {
         match: pgrstMatch("person", ["GET"]),
-        handle: () => json({ id: "person-1", email: "real@user.com", role: "user" }),
+        handle: () => json({ id: "person-1", email: "real@user.com", deleted_at: null }),
       },
       { match: pgrstMatch("person", ["PATCH"]), handle: () => noContent() },
       { match: pgrstMatch("rsvp_action", ["PATCH"]), handle: () => noContent() },
@@ -448,8 +448,8 @@ describe("DELETE /api/users/:id", () => {
     expect(patch!.body).toMatchObject({
       name: "Deleted User",
       alternatename: null,
-      role: "deleted",
     });
+    expect((patch!.body as { deleted_at: string }).deleted_at).toBeTruthy();
     const patchBody = patch!.body as { email: string };
     expect(patchBody.email).toMatch(/^deleted_[a-f0-9]{16}@deleted\.nhimbe\.com$/);
 
@@ -469,7 +469,7 @@ describe("DELETE /api/users/:id", () => {
     const { stub } = makeFetchStub([
       {
         match: pgrstMatch("person", ["GET"]),
-        handle: () => json({ id: "person-1", email: "real@user.com", role: "user" }),
+        handle: () => json({ id: "person-1", email: "real@user.com", deleted_at: null }),
       },
       { match: pgrstMatch("person", ["PATCH"]), handle: () => noContent() },
       { match: pgrstMatch("rsvp_action", ["PATCH"]), handle: () => noContent() },

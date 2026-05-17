@@ -89,6 +89,7 @@ describe("GET /api/registrations", () => {
           },
         ]),
       },
+      { match: pgrstMatch("check_in", ["GET"]), handle: () => json([]) },
     ]);
     vi.stubGlobal("fetch", stub);
 
@@ -104,10 +105,15 @@ describe("GET /api/registrations", () => {
       status: "registered",
     });
 
-    expect(calls).toHaveLength(1);
+    // Two GETs: rsvp_action, then events.check_in for the attendance join.
+    expect(calls).toHaveLength(2);
     expect(calls[0].method).toBe("GET");
-    const queriedUrl = new URL(calls[0].url);
-    expect(queriedUrl.searchParams.get("event_id")).toBe("eq.evt-1");
+    const rsvpUrl = new URL(calls[0].url);
+    expect(rsvpUrl.pathname).toContain("/rsvp_action");
+    expect(rsvpUrl.searchParams.get("event_id")).toBe("eq.evt-1");
+    const checkInUrl = new URL(calls[1].url);
+    expect(checkInUrl.pathname).toContain("/check_in");
+    expect(checkInUrl.searchParams.get("event_id")).toBe("eq.evt-1");
   });
 
   it("queries rsvp_action by user_id when event_id is absent", async () => {
@@ -127,10 +133,11 @@ describe("GET /api/registrations", () => {
     expect(queriedUrl.searchParams.has("event_id")).toBe(false);
   });
 
-  it("derives status correctly from DB-stored values", async () => {
+  it("derives status correctly including 'attended' from check_in join", async () => {
     // DB confirmation_status values are pending/confirmed/waitlisted/declined.
-    // The mapper translates: confirmed→approved, declined→rejected,
-    // RsvpResponseNo→cancelled, anything else→registered.
+    // "attended" is NOT stored on rsvp_action — it's derived by joining
+    // events.check_in on (event_id, person_id). When a check_in row exists
+    // for the pair, the status is "attended" regardless of confirmation_status.
     const env = createMockEnv();
     const { stub } = makeFetchStub([
       {
@@ -140,6 +147,13 @@ describe("GET /api/registrations", () => {
           { id: "2", event_id: "e", agent_person_id: "p2", rsvpresponse: "https://schema.org/RsvpResponseYes", created_at: "t", updated_at: null, confirmation_status: "confirmed", confirmed_at: "c" },
           { id: "3", event_id: "e", agent_person_id: "p3", rsvpresponse: "https://schema.org/RsvpResponseYes", created_at: "t", updated_at: null, confirmation_status: "waitlisted", confirmed_at: null },
           { id: "4", event_id: "e", agent_person_id: "p4", rsvpresponse: "https://schema.org/RsvpResponseYes", created_at: "t", updated_at: null, confirmation_status: "declined", confirmed_at: "c" },
+          { id: "5", event_id: "e", agent_person_id: "p5", rsvpresponse: "https://schema.org/RsvpResponseYes", created_at: "t", updated_at: null, confirmation_status: "confirmed", confirmed_at: "c" },
+        ]),
+      },
+      {
+        match: pgrstMatch("check_in", ["GET"]),
+        handle: () => json([
+          { event_id: "e", person_id: "p5", checked_in_at: "2026-05-02T10:00:00Z" },
         ]),
       },
     ]);
@@ -147,9 +161,10 @@ describe("GET /api/registrations", () => {
 
     const app = buildApp(env);
     const res = await app.fetch("/api/registrations?event_id=e");
-    const body = await res.json() as { registrations: Array<{ status: string; cancelledAt: string | null }> };
-    expect(body.registrations.map(r => r.status)).toEqual(["cancelled", "approved", "waitlisted", "rejected"]);
+    const body = await res.json() as { registrations: Array<{ status: string; cancelledAt: string | null; checkedInAt: string | null }> };
+    expect(body.registrations.map(r => r.status)).toEqual(["cancelled", "approved", "waitlisted", "rejected", "attended"]);
     expect(body.registrations[0].cancelledAt).toBe("u");
+    expect(body.registrations[4].checkedInAt).toBe("2026-05-02T10:00:00Z");
   });
 });
 

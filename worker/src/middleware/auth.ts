@@ -110,10 +110,12 @@ export async function getAdminUser(request: Request, env: Env, requiredRole: Use
   // service-role key (bypasses RLS — this is a trusted server-side lookup).
   // Replaces the previous D1 `users` table query; the worker no longer
   // owns a copy of the user record.
+  // Filter out soft-deleted accounts at the query level so a stale JWT
+  // for a removed admin can't reach this code path.
   const rows = await supabaseFetch<IdentityPersonRow[]>(env, {
     schema: "identity",
     path: "person",
-    query: `workos_user_id=eq.${encodeURIComponent(authUser.userId)}&select=id,email,name,role&limit=1`,
+    query: `workos_user_id=eq.${encodeURIComponent(authUser.userId)}&deleted_at=is.null&select=id,email,name,role&limit=1`,
   });
   const person = rows && rows.length > 0 ? rows[0] : null;
   if (!person) return null;

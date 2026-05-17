@@ -134,12 +134,13 @@ admin.get("/users", async (c) => {
     alternatename: string | null; image: string | null;
     address: Record<string, unknown> | null;
     role: string; created_at: string | null;
+    deleted_at: string | null;
   }
 
   const rows = await supabaseFetch<PersonRow[]>(c.env, {
     schema: "identity",
     path: "person",
-    query: `select=id,email,name,alternatename,image,address,role,created_at&order=created_at.desc&limit=${limit}&offset=${offset}${filter ? `&${filter}` : ""}`,
+    query: `select=id,email,name,alternatename,image,address,role,created_at,deleted_at&order=created_at.desc&limit=${limit}&offset=${offset}${filter ? `&${filter}` : ""}`,
   }) ?? [];
 
   const users = rows.map((u) => {
@@ -155,7 +156,7 @@ admin.get("/users", async (c) => {
       eventsAttended: 0,
       eventsHosted: 0,
       role: u.role,
-      status: u.role === "deleted" ? "suspended" : "active" as const,
+      status: u.deleted_at ? "suspended" : ("active" as const),
       dateCreated: u.created_at,
     };
   });
@@ -197,12 +198,16 @@ async function handleAdminUserAction(
 
   switch (action) {
     case "suspend": {
+      // Suspend uses the same lifecycle signal as soft-delete (deleted_at).
+      // Future iteration: split into mit_status='suspended' for recoverable
+      // suspensions vs deleted_at for terminal removal — for now both share
+      // the column so consumers have a single "is this account live?" filter.
       await supabaseFetch(c.env, {
         schema: "identity",
         path: "person",
         query: `id=eq.${encodeURIComponent(userId)}`,
         method: "PATCH",
-        body: { role: "deleted" },
+        body: { deleted_at: new Date().toISOString() },
       });
       await logAudit(c.env, { actorId: adminUser.id, action: "user.suspended", resourceType: "user", resourceId: userId });
       return c.json({ message: "User suspended" });
@@ -213,7 +218,7 @@ async function handleAdminUserAction(
         path: "person",
         query: `id=eq.${encodeURIComponent(userId)}`,
         method: "PATCH",
-        body: { role: "user" },
+        body: { deleted_at: null },
       });
       await logAudit(c.env, { actorId: adminUser.id, action: "user.activated", resourceType: "user", resourceId: userId });
       return c.json({ message: "User activated" });
