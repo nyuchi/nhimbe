@@ -24,6 +24,7 @@ import {
   EventContributionsBoard,
 } from "./event-info-tiles";
 import { EventEntityHostCard } from "./event-entity-host-card";
+import { EventSpecifics } from "./event-specifics";
 import { useAuth } from "@/components/auth/auth-context";
 import { getUserReferralCode, generateUserReferralCode, getEventStats, getEventReviews, type UserReferralCode, type EventStats, type ReviewStats } from "@/lib/api";
 import type { Event } from "@/lib/api";
@@ -213,6 +214,11 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
                 <p key={index} className="text-[15px] leading-relaxed text-foreground/60 mb-4">{paragraph}</p>
               ))}
             </div>
+
+            {/* Type-aware specifics — terrain band for outdoor categories,
+                programme card for events with rows in events.programme_item.
+                Collapses cleanly for categories with neither. */}
+            <EventSpecifics event={event} />
 
             {/* Contributions board — chips from events.event.contributor jsonb */}
             <EventContributionsBoard event={event} />

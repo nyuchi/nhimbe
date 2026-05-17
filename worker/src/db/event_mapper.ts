@@ -43,6 +43,10 @@ interface SupabaseEventRow {
   timezone: string | null;
   /** FK to places.places — drives the "Where" tile + Weather lookup keyed on place_id. */
   place_id: string | null;
+  /** Free-form per-event metadata jsonb. Outdoor events store
+   *  {elevation_m, distance_km, route_summary, profile?}. Other categories
+   *  may store their own shapes; EventSpecifics narrows defensively. */
+  about: Record<string, unknown> | null;
 }
 
 // The platform-db CHECK constraints on events.event require fully-qualified
@@ -145,11 +149,12 @@ export function mapSupabaseEventToApi(row: SupabaseEventRow): Event {
     duration: row.duration ?? undefined,
     timezone: row.timezone ?? undefined,
     contributor: row.contributor ?? undefined,
+    about: row.about ?? undefined,
   };
 }
 
 const EVENT_COLUMNS =
-  "id,name,description,startdate,enddate,eventattendancemode,eventstatus,eventtype,location,organizer,organizer_person_id,organization_id,offers,image,category,keywords,maximumattendeecapacity,attendee_count,visibility,slug,created_at,updated_at,event_circle_id,contributor,duration,timezone,place_id";
+  "id,name,description,startdate,enddate,eventattendancemode,eventstatus,eventtype,location,organizer,organizer_person_id,organization_id,offers,image,category,keywords,maximumattendeecapacity,attendee_count,visibility,slug,created_at,updated_at,event_circle_id,contributor,duration,timezone,place_id,about";
 
 /**
  * Fetch events by id from Supabase. Returns events in API shape, preserving

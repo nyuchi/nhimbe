@@ -80,6 +80,9 @@ export interface Event {
   timezone?: string;
   /** schema.org/contributor jsonb — chips on the contributions board. */
   contributor?: unknown;
+  /** Free-form per-event metadata jsonb. Outdoor events store
+   *  {elevation_m, distance_km, route_summary, profile?}. */
+  about?: unknown;
 }
 
 export interface EventsResponse {
