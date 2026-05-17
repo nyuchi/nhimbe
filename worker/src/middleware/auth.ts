@@ -32,8 +32,14 @@ export function isAllowedOrigin(request: Request, env: Env): boolean {
 }
 
 // Validate API key from request (timing-safe comparison)
+//
+// IMPORTANT: only the dedicated `X-API-Key` header is consulted. The
+// historical fallback to `Authorization: Bearer` was removed because it
+// conflated machine API keys with per-user WorkOS access tokens — a tampered
+// browser request could send its access token in the API-key slot and bypass
+// origin checks. Keep machine keys on the dedicated header only.
 export function validateApiKey(request: Request, env: Env): boolean {
-  const apiKey = request.headers.get("X-API-Key") || request.headers.get("Authorization")?.replace("Bearer ", "");
+  const apiKey = request.headers.get("X-API-Key");
   if (!apiKey || !env.API_KEY) return false;
 
   const encoder = new TextEncoder();
@@ -45,9 +51,11 @@ export function validateApiKey(request: Request, env: Env): boolean {
   return crypto.subtle.timingSafeEqual(a, b);
 }
 
-// Middleware: require API key or allowed origin for write operations
+// Middleware: require API key or allowed origin for write operations.
+// PATCH is included alongside POST/PUT/DELETE — any mutating verb needs to
+// pass the auth gate.
 export const writeAuth = createMiddleware<{ Bindings: Env }>(async (c, next) => {
-  if (["POST", "PUT", "DELETE"].includes(c.req.method)) {
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)) {
     if (!validateApiKey(c.req.raw, c.env) && !isAllowedOrigin(c.req.raw, c.env)) {
       return c.json({ error: "Unauthorized" }, 401);
     }
