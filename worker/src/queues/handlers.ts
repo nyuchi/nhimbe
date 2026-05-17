@@ -16,24 +16,15 @@ export async function processAnalyticsMessage(message: AnalyticsQueueMessage, en
 
   switch (message.type) {
     case "view": {
-      // Increment events.event.view_count. Read-then-write — acceptable race
-      // for analytics counters; precision is best-effort.
+      // Atomic increment via SECURITY DEFINER function — concurrent views
+      // don't lose increments to the read-modify-write race.
       try {
-        const event = await supabaseFetch<{ view_count: number | null }>(env, {
+        await supabaseFetch(env, {
           schema: "events",
-          path: "event",
-          query: `id=eq.${encodeURIComponent(message.eventId)}&select=view_count`,
-          single: true,
+          path: "rpc/increment_view_count",
+          method: "POST",
+          body: { p_event_id: message.eventId },
         });
-        if (event) {
-          await supabaseFetch(env, {
-            schema: "events",
-            path: "event",
-            query: `id=eq.${encodeURIComponent(message.eventId)}`,
-            method: "PATCH",
-            body: { view_count: (event.view_count ?? 0) + 1 },
-          });
-        }
       } catch (err) {
         console.error("[mukoko:queue] Failed to bump view_count:", err);
       }

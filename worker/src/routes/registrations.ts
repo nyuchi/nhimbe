@@ -118,9 +118,11 @@ registrations.post("/", async (c) => {
   }
 
   // No equivalent of the D1 UPDATE…WHERE attendee_count<capacity atomic
-  // increment via PostgREST; we do a best-effort recount/patch after the
-  // RSVP insert. This leaves a brief window for an over-capacity registration
-  // under concurrent load — to be replaced with a SQL function in a follow-up.
+  // increment via PostgREST raw, so we delegate to the SECURITY DEFINER
+  // function events.try_register_attendee, which performs the conditional
+  // UPDATE in a single statement. The pre-check above is kept for the nice
+  // error message; the RPC is the authoritative gate against over-capacity
+  // under concurrent load.
   const inserted = await supabaseFetch<{ id: string }[]>(c.env, {
     schema: "events",
     path: "rsvp_action",
@@ -135,13 +137,28 @@ registrations.post("/", async (c) => {
     },
   });
 
-  await supabaseFetch(c.env, {
+  const newCount = await supabaseFetch<number | null>(c.env, {
     schema: "events",
-    path: "event",
-    query: `id=eq.${encodeURIComponent(eventId)}`,
-    method: "PATCH",
-    body: { attendee_count: (event.attendee_count ?? 0) + 1 },
+    path: "rpc/try_register_attendee",
+    method: "POST",
+    body: { p_event_id: eventId },
   });
+
+  if (newCount === null) {
+    // RPC's conditional UPDATE matched no rows — event either disappeared
+    // between our pre-check and now, or another concurrent registration
+    // pushed it over capacity. Roll back the RSVP we just inserted.
+    const insertedId = inserted?.[0]?.id;
+    if (insertedId) {
+      await supabaseFetch(c.env, {
+        schema: "events",
+        path: "rsvp_action",
+        query: `id=eq.${encodeURIComponent(insertedId)}`,
+        method: "DELETE",
+      });
+    }
+    return badRequest(c, "Event is at capacity");
+  }
 
   return c.json({ id: inserted?.[0]?.id, message: "Registration successful" }, 201);
 });
@@ -240,21 +257,13 @@ registrations.delete("/:id", async (c) => {
       body: { rsvpresponse: "rsvpNo", updated_at: new Date().toISOString() },
     });
 
-    const event = await supabaseFetch<{ attendee_count: number | null }>(c.env, {
+    // Atomic decrement via SECURITY DEFINER function (GREATEST clamps at 0).
+    await supabaseFetch(c.env, {
       schema: "events",
-      path: "event",
-      query: `id=eq.${encodeURIComponent(reg.event_id)}&select=attendee_count`,
-      single: true,
+      path: "rpc/decrement_attendee_count",
+      method: "POST",
+      body: { p_event_id: reg.event_id },
     });
-    if (event && (event.attendee_count ?? 0) > 0) {
-      await supabaseFetch(c.env, {
-        schema: "events",
-        path: "event",
-        query: `id=eq.${encodeURIComponent(reg.event_id)}`,
-        method: "PATCH",
-        body: { attendee_count: (event.attendee_count ?? 0) - 1 },
-      });
-    }
   }
 
   return c.json({ message: "Registration cancelled" });

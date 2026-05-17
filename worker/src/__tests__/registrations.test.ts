@@ -288,7 +288,7 @@ describe("POST /api/registrations", () => {
     expect(await res.json()).toEqual({ error: "User is already registered for this event" });
   });
 
-  it("inserts RSVP and bumps attendee_count on the happy path", async () => {
+  it("inserts RSVP and bumps attendee_count atomically on the happy path", async () => {
     const env = createMockEnv();
     const { stub, calls } = makeFetchStub([
       {
@@ -306,8 +306,8 @@ describe("POST /api/registrations", () => {
         handle: () => json([{ id: "new-rsvp" }], 201),
       },
       {
-        match: pgrstMatch("event", ["PATCH"]),
-        handle: () => noContent(),
+        match: pgrstMatch("rpc/try_register_attendee", ["POST"]),
+        handle: () => json(6),
       },
     ]);
     vi.stubGlobal("fetch", stub);
@@ -329,9 +329,42 @@ describe("POST /api/registrations", () => {
       rsvpresponse: "rsvpYes",
     });
 
-    const patch = calls.find(c => c.method === "PATCH" && c.url.includes("/event"));
-    expect(patch).toBeDefined();
-    expect(patch!.body).toEqual({ attendee_count: 6 });
+    const rpc = calls.find(c => c.method === "POST" && c.url.includes("/rpc/try_register_attendee"));
+    expect(rpc).toBeDefined();
+    expect(rpc!.body).toEqual({ p_event_id: "e" });
+  });
+
+  it("rolls back the RSVP when the atomic capacity RPC rejects (race lost)", async () => {
+    // Pre-check passes, but a concurrent registration filled the last seat
+    // between then and the RPC call. RPC returns null → we delete the RSVP
+    // we just inserted and return 400.
+    const env = createMockEnv();
+    const { stub, calls } = makeFetchStub([
+      {
+        match: pgrstMatch("event", ["GET"]),
+        handle: () => json({
+          id: "e", maximumattendeecapacity: 100, attendee_count: 99, visibility: "public", eventstatus: "EventScheduled",
+        }),
+      },
+      { match: pgrstMatch("rsvp_action", ["GET"]), handle: () => notFoundSingle() },
+      { match: pgrstMatch("rsvp_action", ["POST"]), handle: () => json([{ id: "doomed-rsvp" }], 201) },
+      { match: pgrstMatch("rpc/try_register_attendee", ["POST"]), handle: () => json(null) },
+      { match: pgrstMatch("rsvp_action", ["DELETE"]), handle: () => noContent() },
+    ]);
+    vi.stubGlobal("fetch", stub);
+
+    const app = buildApp(env);
+    const res = await app.fetch("/api/registrations", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ eventId: "e", userId: "u" }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Event is at capacity" });
+
+    const del = calls.find(c => c.method === "DELETE" && c.url.includes("/rsvp_action"));
+    expect(del).toBeDefined();
+    expect(new URL(del!.url).searchParams.get("id")).toBe("eq.doomed-rsvp");
   });
 });
 
@@ -503,29 +536,15 @@ describe("PUT /api/registrations/:id", () => {
 // ============================================
 
 describe("DELETE /api/registrations/:id", () => {
-  it("soft-cancels the RSVP and decrements attendee_count", async () => {
+  it("soft-cancels the RSVP and decrements attendee_count atomically", async () => {
     const env = createMockEnv();
-    let attendeeCount = 5;
     const { stub, calls } = makeFetchStub([
       {
         match: pgrstMatch("rsvp_action", ["GET"]),
         handle: () => json({ id: "r", event_id: "e", rsvpresponse: "rsvpYes" }),
       },
-      {
-        match: pgrstMatch("rsvp_action", ["PATCH"]),
-        handle: () => noContent(),
-      },
-      {
-        match: pgrstMatch("event", ["GET"]),
-        handle: () => json({ attendee_count: attendeeCount }),
-      },
-      {
-        match: pgrstMatch("event", ["PATCH"]),
-        handle: ({ body }) => {
-          attendeeCount = (body as { attendee_count: number }).attendee_count;
-          return noContent();
-        },
-      },
+      { match: pgrstMatch("rsvp_action", ["PATCH"]), handle: () => noContent() },
+      { match: pgrstMatch("rpc/decrement_attendee_count", ["POST"]), handle: () => json(4) },
     ]);
     vi.stubGlobal("fetch", stub);
 
@@ -536,10 +555,13 @@ describe("DELETE /api/registrations/:id", () => {
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ message: "Registration cancelled" });
-    expect(attendeeCount).toBe(4);
 
     const rsvpPatch = calls.find(c => c.method === "PATCH" && c.url.includes("/rsvp_action"));
     expect(rsvpPatch!.body).toMatchObject({ rsvpresponse: "rsvpNo" });
+
+    const rpc = calls.find(c => c.method === "POST" && c.url.includes("/rpc/decrement_attendee_count"));
+    expect(rpc).toBeDefined();
+    expect(rpc!.body).toEqual({ p_event_id: "e" });
   });
 
   it("does not double-decrement when RSVP is already cancelled", async () => {

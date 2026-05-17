@@ -248,24 +248,17 @@ events.delete("/:id", async (c) => {
 });
 
 // POST /api/events/:id/view — bump view_count on the row.
+// Uses the atomic SECURITY DEFINER function so concurrent views don't lose
+// increments to the read-modify-write race.
 events.post("/:id/view", async (c) => {
   const eventId = c.req.param("id");
   try {
-    const event = await supabaseFetch<{ view_count: number | null }>(c.env, {
+    await supabaseFetch(c.env, {
       schema: "events",
-      path: "event",
-      query: `id=eq.${encodeURIComponent(eventId)}&select=view_count`,
-      single: true,
+      path: "rpc/increment_view_count",
+      method: "POST",
+      body: { p_event_id: eventId },
     });
-    if (event) {
-      await supabaseFetch(c.env, {
-        schema: "events",
-        path: "event",
-        query: `id=eq.${encodeURIComponent(eventId)}`,
-        method: "PATCH",
-        body: { view_count: (event.view_count ?? 0) + 1 },
-      });
-    }
     return c.json({ message: "View tracked" });
   } catch (error) {
     console.error("Failed to track view:", error);

@@ -397,14 +397,10 @@ describe("DELETE /api/events/:id", () => {
 // ============================================
 
 describe("POST /api/events/:id/view", () => {
-  it("increments view_count by one", async () => {
+  it("calls the atomic increment_view_count RPC", async () => {
     const env = createMockEnv();
     const { stub, calls } = makeFetchStub([
-      {
-        match: pgrstMatch("event", ["GET"]),
-        handle: () => json({ view_count: 42 }),
-      },
-      { match: pgrstMatch("event", ["PATCH"]), handle: () => noContent() },
+      { match: pgrstMatch("rpc/increment_view_count", ["POST"]), handle: () => json(43) },
     ]);
     vi.stubGlobal("fetch", stub);
 
@@ -414,14 +410,16 @@ describe("POST /api/events/:id/view", () => {
       headers: authHeaders(),
     });
     expect(res.status).toBe(200);
-    const patch = calls.find(c => c.method === "PATCH");
-    expect(patch!.body).toEqual({ view_count: 43 });
+    const rpc = calls.find(c => c.method === "POST" && c.url.includes("/rpc/increment_view_count"));
+    expect(rpc!.body).toEqual({ p_event_id: "evt-1" });
   });
 
-  it("does not patch when the event does not exist", async () => {
+  it("returns 200 even when the RPC matches no rows (missing event)", async () => {
+    // The RPC's conditional UPDATE returns NULL when the event doesn't exist;
+    // view tracking is best-effort, so the route still returns 200.
     const env = createMockEnv();
-    const { stub, calls } = makeFetchStub([
-      { match: pgrstMatch("event", ["GET"]), handle: () => notFoundSingle() },
+    const { stub } = makeFetchStub([
+      { match: pgrstMatch("rpc/increment_view_count", ["POST"]), handle: () => json(null) },
     ]);
     vi.stubGlobal("fetch", stub);
 
@@ -431,7 +429,6 @@ describe("POST /api/events/:id/view", () => {
       headers: authHeaders(),
     });
     expect(res.status).toBe(200);
-    expect(calls.find(c => c.method === "PATCH")).toBeUndefined();
   });
 });
 
