@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
-import { writeAuth } from "../middleware/auth";
-import { getAuthenticatedUser } from "../auth/workos";
+import { writeAuth, getAdminUser } from "../middleware/auth";
+import { requireRequesterPersonId } from "../auth/identity";
 import { validateRequiredFields } from "../utils/validation";
-import { unauthorized, notFound, badRequest, forbidden } from "../utils/response";
+import { notFound, badRequest, forbidden } from "../utils/response";
 import { supabaseFetch } from "../db/supabase";
 import { RSVP_YES, RSVP_NO } from "../db/event_mapper";
+import { logAudit } from "../utils/audit";
 
 // platform-db CHECK constraints. events.rsvp_action stores the fully-qualified
 // schema.org URLs for rsvpresponse, and a narrow lifecycle enum for
@@ -108,12 +109,46 @@ export const registrations = new Hono<{ Bindings: Env }>();
 registrations.use("*", writeAuth);
 
 // GET /api/registrations?event_id= OR ?user_id=
+//
+// Authorization:
+//   - Caller must have a valid JWT (resolved to an identity.person row).
+//   - If `user_id` is supplied, it must equal the requester's person id,
+//     OR (when `event_id` is also supplied) the requester must be the
+//     event organizer, OR the requester must be an admin.
 registrations.get("/", async (c) => {
   const eventId = c.req.query("event_id");
   const userId = c.req.query("user_id");
 
   if (!eventId && !userId) {
     return badRequest(c, "event_id or user_id required");
+  }
+
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const requesterPersonId = r;
+
+  if (userId && userId !== requesterPersonId) {
+    // Allow if requester is the event organizer for the given event_id,
+    // or if the requester has admin role.
+    let allowed = false;
+    if (eventId) {
+      const eventRow = await supabaseFetch<{ organizer_person_id: string | null }>(c.env, {
+        schema: "events",
+        path: "event",
+        query: `id=eq.${encodeURIComponent(eventId)}&select=organizer_person_id`,
+        single: true,
+      });
+      if (eventRow && eventRow.organizer_person_id === requesterPersonId) {
+        allowed = true;
+      }
+    }
+    if (!allowed) {
+      const admin = await getAdminUser(c.req.raw, c.env, "admin");
+      if (admin) allowed = true;
+    }
+    if (!allowed) {
+      return forbidden(c, "Not authorized to view another user's registrations");
+    }
   }
 
   const filter = eventId
@@ -131,6 +166,8 @@ registrations.get("/", async (c) => {
 });
 
 // POST /api/registrations — atomic capacity check + RSVP insert.
+// agent_person_id is derived from the WorkOS JWT; `userId` in the body
+// is ignored.
 registrations.post("/", async (c) => {
   let body: Record<string, unknown>;
   try {
@@ -139,11 +176,14 @@ registrations.post("/", async (c) => {
     return badRequest(c, "Invalid JSON body");
   }
 
-  const err = validateRequiredFields(body, ["eventId", "userId"]);
+  const err = validateRequiredFields(body, ["eventId"]);
   if (err) return badRequest(c, err);
 
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const userId = r;
+
   const eventId = String(body.eventId);
-  const userId = String(body.userId);
 
   interface EventStateRow {
     id: string;
@@ -264,21 +304,11 @@ registrations.put("/:id", async (c) => {
     single: true,
   });
 
-  const authResult = await getAuthenticatedUser(c.req.raw, c.env);
-  if (!authResult.user) {
-    return unauthorized(c);
-  }
+  const rp = await requireRequesterPersonId(c);
+  if (typeof rp !== "string") return rp;
+  const requesterPersonId = rp;
 
-  // Map WorkOS userId → identity.person.id for authz comparisons.
-  const requester = await supabaseFetch<{ id: string }>(c.env, {
-    schema: "identity",
-    path: "person",
-    query: `workos_user_id=eq.${encodeURIComponent(authResult.user.userId)}&select=id`,
-    single: true,
-  });
-  const requesterPersonId = requester?.id ?? null;
-
-  const isHost = !!event && !!requesterPersonId && event.organizer_person_id === requesterPersonId;
+  const isHost = !!event && event.organizer_person_id === requesterPersonId;
   const isRegistrant = reg.agent_person_id === requesterPersonId;
 
   if (!isHost && ["approved", "rejected"].includes(body.status)) {
@@ -303,17 +333,41 @@ registrations.put("/:id", async (c) => {
 });
 
 // DELETE /api/registrations/:id — soft cancel + attendee_count decrement.
+// Only the registrant or the event organizer may cancel.
 registrations.delete("/:id", async (c) => {
   const regId = c.req.param("id");
 
-  const reg = await supabaseFetch<{ id: string; event_id: string; rsvpresponse: string }>(c.env, {
+  const rp = await requireRequesterPersonId(c);
+  if (typeof rp !== "string") return rp;
+  const requesterPersonId = rp;
+
+  const reg = await supabaseFetch<{ id: string; event_id: string; agent_person_id: string; rsvpresponse: string }>(c.env, {
     schema: "events",
     path: "rsvp_action",
-    query: `id=eq.${encodeURIComponent(regId)}&select=id,event_id,rsvpresponse`,
+    query: `id=eq.${encodeURIComponent(regId)}&select=id,event_id,agent_person_id,rsvpresponse`,
     single: true,
   });
+  if (!reg) return notFound(c, "Registration");
 
-  if (reg && reg.rsvpresponse !== RSVP_NO) {
+  // Authz: registrant cancelling their own RSVP, OR organizer cancelling
+  // any RSVP for their event.
+  let allowed = reg.agent_person_id === requesterPersonId;
+  if (!allowed) {
+    const event = await supabaseFetch<{ organizer_person_id: string | null }>(c.env, {
+      schema: "events",
+      path: "event",
+      query: `id=eq.${encodeURIComponent(reg.event_id)}&select=organizer_person_id`,
+      single: true,
+    });
+    if (event && event.organizer_person_id === requesterPersonId) {
+      allowed = true;
+    }
+  }
+  if (!allowed) {
+    return forbidden(c, "Only the registrant or event organizer can cancel this registration");
+  }
+
+  if (reg.rsvpresponse !== RSVP_NO) {
     await supabaseFetch(c.env, {
       schema: "events",
       path: "rsvp_action",
@@ -328,6 +382,14 @@ registrations.delete("/:id", async (c) => {
       path: "rpc/decrement_attendee_count",
       method: "POST",
       body: { p_event_id: reg.event_id },
+    });
+
+    await logAudit(c.env, {
+      actorId: requesterPersonId,
+      action: "registration.cancelled",
+      resourceType: "registration",
+      resourceId: regId,
+      details: { event_id: reg.event_id, agent_person_id: reg.agent_person_id },
     });
   }
 
