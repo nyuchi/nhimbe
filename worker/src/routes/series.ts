@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { writeAuth } from "../middleware/auth";
+import { requireRequesterPersonId } from "../auth/identity";
+import { forbidden, notFound, badRequest } from "../utils/response";
 import { supabaseFetch } from "../db/supabase";
 
 export const series = new Hono<{ Bindings: Env }>();
@@ -11,26 +13,55 @@ series.use("*", writeAuth);
 // already on the row. /api/series/:id resolves to that parent; occurrences are
 // rows where series_parent_id = :id.
 
+// Helper: load the organizer for an event row that's also a series parent
+// (rrule is not null). Used by the PUT/DELETE handlers below.
+async function loadSeriesOrganizer(env: Env, id: string): Promise<string | null | undefined> {
+  const row = await supabaseFetch<{ organizer_person_id: string | null; rrule: string | null }>(env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(id)}&select=organizer_person_id,rrule`,
+    single: true,
+  });
+  if (!row || !row.rrule) return undefined; // undefined = not found / not a series
+  return row.organizer_person_id;
+}
+
 // POST /api/series — Create the parent (template) event with an rrule.
-// Body keeps the legacy shape; we mirror it onto events.event columns.
+// hostId is derived from the WorkOS JWT.
 series.post("/", async (c) => {
   const body = await c.req.json() as {
     name: string;
     recurrenceRule: string;
-    hostId: string;
     templateEventId?: string;
     maxOccurrences?: number;
     endsAt?: string;
   };
 
-  if (!body.name || !body.recurrenceRule || !body.hostId) {
-    return c.json({ error: "name, recurrenceRule, and hostId are required" }, 400);
+  if (!body.name || !body.recurrenceRule) {
+    return badRequest(c, "name and recurrenceRule are required");
   }
 
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const hostId = r;
+
   // If the caller supplies a template event id, we just patch it with the
-  // series rrule. Otherwise we create a stub parent — the host will fill in
-  // dates/location via the regular event-edit flow.
+  // series rrule. The requester must own the template event row.
   if (body.templateEventId) {
+    const orgId = await loadSeriesOrganizer(c.env, body.templateEventId);
+    // For the patch case we don't require the template to already be a series,
+    // so re-fetch organizer directly to allow promoting a regular event row.
+    const tmplRow = await supabaseFetch<{ organizer_person_id: string | null }>(c.env, {
+      schema: "events",
+      path: "event",
+      query: `id=eq.${encodeURIComponent(body.templateEventId)}&select=organizer_person_id`,
+      single: true,
+    });
+    const ownerId = orgId ?? tmplRow?.organizer_person_id ?? undefined;
+    if (!tmplRow) return notFound(c, "Template event");
+    if (ownerId !== hostId) {
+      return forbidden(c, "Only the event organizer can promote it to a series");
+    }
     await supabaseFetch(c.env, {
       schema: "events",
       path: "event",
@@ -60,8 +91,8 @@ series.post("/", async (c) => {
       visibility: "private",
       calendar_type: "nhimbe",
       owner_type: "person",
-      owner_id: body.hostId,
-      organizer_person_id: body.hostId,
+      owner_id: hostId,
+      organizer_person_id: hostId,
       organizer: { name: "Unknown", initials: "??" },
       location: { name: "TBD", addresslocality: "TBD", addresscountry: "TBD" },
       rrule: body.recurrenceRule,
@@ -111,8 +142,20 @@ series.get("/:id", async (c) => {
 });
 
 // PUT /api/series/:id — Update name / rrule / endsAt on the parent.
+// Only the parent event's organizer may update.
 series.put("/:id", async (c) => {
   const id = c.req.param("id");
+
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const requesterPersonId = r;
+
+  const orgId = await loadSeriesOrganizer(c.env, id);
+  if (orgId === undefined) return notFound(c, "Series");
+  if (orgId !== requesterPersonId) {
+    return forbidden(c, "Only the series organizer can update this series");
+  }
+
   const body = await c.req.json() as {
     name?: string;
     recurrenceRule?: string;
@@ -126,7 +169,7 @@ series.put("/:id", async (c) => {
   if (body.endsAt !== undefined) patch.recurrence_end = body.endsAt;
 
   if (Object.keys(patch).length === 0) {
-    return c.json({ error: "No fields to update" }, 400);
+    return badRequest(c, "No fields to update");
   }
 
   const updated = await supabaseFetch<{ id: string }[]>(c.env, {
@@ -138,15 +181,27 @@ series.put("/:id", async (c) => {
   });
 
   if (!updated || updated.length === 0) {
-    return c.json({ error: "Series not found" }, 404);
+    return notFound(c, "Series");
   }
 
   return c.json({ message: "Series updated" });
 });
 
 // DELETE /api/series/:id — Cancel future occurrences then clear rrule on parent.
+// Only the parent event's organizer may delete.
 series.delete("/:id", async (c) => {
   const id = c.req.param("id");
+
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const requesterPersonId = r;
+
+  const orgId = await loadSeriesOrganizer(c.env, id);
+  if (orgId === undefined) return notFound(c, "Series");
+  if (orgId !== requesterPersonId) {
+    return forbidden(c, "Only the series organizer can delete this series");
+  }
+
   const now = new Date().toISOString();
 
   await supabaseFetch(c.env, {
@@ -166,7 +221,7 @@ series.delete("/:id", async (c) => {
   });
 
   if (!cleared || cleared.length === 0) {
-    return c.json({ error: "Series not found" }, 404);
+    return notFound(c, "Series");
   }
 
   return c.json({ message: "Series cancelled and future events updated" });

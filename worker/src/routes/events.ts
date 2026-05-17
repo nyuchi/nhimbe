@@ -2,11 +2,11 @@ import { Hono } from "hono";
 import type { Env, Event } from "../types";
 import { safeParseInt, slugify, getInitials } from "../utils/validation";
 import { writeAuth } from "../middleware/auth";
-import { getAuthenticatedUser } from "../auth/workos";
+import { requireRequesterPersonId } from "../auth/identity";
 import { indexEvent, removeEventFromIndex } from "../ai/embeddings";
 import { toCsv } from "../utils/export";
 import { logAudit } from "../utils/audit";
-import { unauthorized, notFound, badRequest, forbidden, conflict } from "../utils/response";
+import { notFound, badRequest, forbidden, conflict } from "../utils/response";
 import { supabaseFetch } from "../db/supabase";
 import { fetchEventsByIds, mapSupabaseEventToApi, EVENT_COLUMNS, addSchemaPrefix, RSVP_NO, type SupabaseEventRow } from "../db/event_mapper";
 
@@ -102,15 +102,30 @@ events.get("/:id", async (c) => {
   return c.json({ event: mapSupabaseEventToApi(row) });
 });
 
+// Helper: load an event's organizer id for authz checks. Returns null if
+// the event row doesn't exist.
+async function loadEventOrganizer(env: Env, eventId: string): Promise<string | null | undefined> {
+  const row = await supabaseFetch<{ organizer_person_id: string | null }>(env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(eventId)}&select=organizer_person_id`,
+    single: true,
+  });
+  return row ? row.organizer_person_id : undefined; // undefined = not found, null = no organizer set
+}
+
 // POST /api/events — Create an event on Supabase events.event.
+// Organizer identity is derived from the WorkOS JWT; the request body's
+// `organizerPersonId` / `organizer.identifier` are ignored to prevent
+// a caller from creating events as another user.
 events.post("/", async (c) => {
-  const body = await c.req.json() as Partial<Event> & { organizerPersonId?: string };
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const organizerPersonId = r;
+
+  const body = await c.req.json() as Partial<Event>;
 
   const slug = body.slug || slugify(body.name || "");
-  const organizerPersonId = body.organizerPersonId || body.organizer?.identifier;
-  if (!organizerPersonId) {
-    return badRequest(c, "organizerPersonId or organizer.identifier required");
-  }
 
   const insertBody: Record<string, unknown> = {
     name: body.name,
@@ -175,9 +190,20 @@ events.post("/", async (c) => {
   return c.json({ event, message: "Event created successfully" }, 201);
 });
 
-// PUT /api/events/:id
+// PUT /api/events/:id — only the event organizer may update.
 events.put("/:id", async (c) => {
   const eventId = c.req.param("id");
+
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const requesterPersonId = r;
+
+  const organizerId = await loadEventOrganizer(c.env, eventId);
+  if (organizerId === undefined) return notFound(c, "Event");
+  if (organizerId !== requesterPersonId) {
+    return forbidden(c, "Only the event organizer can update this event");
+  }
+
   const body = await c.req.json() as Partial<Event>;
 
   const patch: Record<string, unknown> = {};
@@ -202,18 +228,25 @@ events.put("/:id", async (c) => {
   return c.json({ message: "Event updated successfully" });
 });
 
-// POST /api/events/:id/cancel
+// POST /api/events/:id/cancel — only the event organizer may cancel.
 events.post("/:id/cancel", async (c) => {
   const eventId = c.req.param("id");
 
-  const existing = await supabaseFetch<{ id: string; eventstatus: string }>(c.env, {
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const requesterPersonId = r;
+
+  const existing = await supabaseFetch<{ id: string; eventstatus: string; organizer_person_id: string | null }>(c.env, {
     schema: "events",
     path: "event",
-    query: `id=eq.${encodeURIComponent(eventId)}&select=id,eventstatus`,
+    query: `id=eq.${encodeURIComponent(eventId)}&select=id,eventstatus,organizer_person_id`,
     single: true,
   });
 
   if (!existing) return notFound(c, "Event");
+  if (existing.organizer_person_id !== requesterPersonId) {
+    return forbidden(c, "Only the event organizer can cancel this event");
+  }
   if (existing.eventstatus === "https://schema.org/EventCancelled") {
     return badRequest(c, "Event is already cancelled");
   }
@@ -226,14 +259,29 @@ events.post("/:id/cancel", async (c) => {
     body: { eventstatus: "https://schema.org/EventCancelled" },
   });
 
-  await logAudit(c.env, { action: "event.cancelled", resourceType: "event", resourceId: eventId });
+  await logAudit(c.env, {
+    actorId: requesterPersonId,
+    action: "event.cancelled",
+    resourceType: "event",
+    resourceId: eventId,
+  });
 
   return c.json({ eventId, eventStatus: "EventCancelled", message: "Event cancelled successfully" });
 });
 
-// DELETE /api/events/:id
+// DELETE /api/events/:id — only the event organizer may delete.
 events.delete("/:id", async (c) => {
   const eventId = c.req.param("id");
+
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const requesterPersonId = r;
+
+  const organizerId = await loadEventOrganizer(c.env, eventId);
+  if (organizerId === undefined) return notFound(c, "Event");
+  if (organizerId !== requesterPersonId) {
+    return forbidden(c, "Only the event organizer can delete this event");
+  }
 
   await supabaseFetch(c.env, {
     schema: "events",
@@ -242,7 +290,12 @@ events.delete("/:id", async (c) => {
     method: "DELETE",
   });
   await removeEventFromIndex(c.env.VECTORIZE, eventId);
-  await logAudit(c.env, { action: "event.deleted", resourceType: "event", resourceId: eventId });
+  await logAudit(c.env, {
+    actorId: requesterPersonId,
+    action: "event.deleted",
+    resourceType: "event",
+    resourceId: eventId,
+  });
 
   return c.json({ message: "Event deleted successfully" });
 });
@@ -323,17 +376,22 @@ events.get("/:id/reviews", async (c) => {
   });
 });
 
-// POST /api/events/:id/reviews — Create a review row.
+// POST /api/events/:id/reviews — Create a review row. Author is derived
+// from the WorkOS JWT; any `userId` in the body is ignored.
 events.post("/:id/reviews", async (c) => {
   const eventId = c.req.param("id");
+
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const authorPersonId = r;
+
   const body = await c.req.json() as {
-    userId: string;
     rating: number;
     reviewBody?: string;
   };
 
-  if (!body.userId || !body.rating || body.rating < 1 || body.rating > 5) {
-    return badRequest(c, "userId and rating (1-5) required");
+  if (!body.rating || body.rating < 1 || body.rating > 5) {
+    return badRequest(c, "rating (1-5) required");
   }
 
   try {
@@ -343,7 +401,7 @@ events.post("/:id/reviews", async (c) => {
       method: "POST",
       body: {
         schema_type: "Review",
-        author: body.userId,
+        author: authorPersonId,
         item_reviewed_type: "events.event",
         item_reviewed_id: eventId,
         item_reviewed_schema: "events",
@@ -357,7 +415,7 @@ events.post("/:id/reviews", async (c) => {
       await c.env.ANALYTICS_QUEUE.send({
         type: "review",
         eventId,
-        userId: body.userId,
+        userId: authorPersonId,
         data: { rating: body.rating },
         timestamp: new Date().toISOString(),
       });
@@ -421,10 +479,9 @@ events.get("/:id/registrations/export", async (c) => {
     return badRequest(c, "Only CSV format is currently supported");
   }
 
-  const authResult = await getAuthenticatedUser(c.req.raw, c.env);
-  if (!authResult.user) {
-    return unauthorized(c);
-  }
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const requesterPersonId = r;
 
   const event = await supabaseFetch<{ id: string; organizer_person_id: string | null }>(c.env, {
     schema: "events",
@@ -435,14 +492,7 @@ events.get("/:id/registrations/export", async (c) => {
 
   if (!event) return notFound(c, "Event");
 
-  const requester = await supabaseFetch<{ id: string }>(c.env, {
-    schema: "identity",
-    path: "person",
-    query: `workos_user_id=eq.${encodeURIComponent(authResult.user.userId)}&select=id`,
-    single: true,
-  });
-
-  if (!requester || event.organizer_person_id !== requester.id) {
+  if (event.organizer_person_id !== requesterPersonId) {
     return forbidden(c, "Only the event host can export registrations");
   }
 

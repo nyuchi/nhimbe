@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { writeAuth } from "../middleware/auth";
-import { notFound, badRequest } from "../utils/response";
+import { requireRequesterPersonId } from "../auth/identity";
+import { notFound, badRequest, forbidden } from "../utils/response";
 import { PaynowProvider } from "../payments/paynow";
 import { supabaseFetch } from "../db/supabase";
 
@@ -26,6 +27,7 @@ function returnUrlIsAllowed(returnUrl: string): boolean {
 }
 
 // POST /api/payments/create — Create a payment intent.
+// Caller must be the registrant on the referenced registration.
 payments.post("/create", writeAuth, async (c) => {
   const body = await c.req.json() as {
     registrationId: string;
@@ -45,6 +47,10 @@ payments.post("/create", writeAuth, async (c) => {
     return badRequest(c, "Invalid returnUrl");
   }
 
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const requesterPersonId = r;
+
   // Look up the RSVP — payer identity comes from rsvp_action.agent_person_id;
   // payee is the event organizer.
   interface RsvpRow { id: string; agent_person_id: string }
@@ -57,6 +63,10 @@ payments.post("/create", writeAuth, async (c) => {
 
   if (!rsvp) {
     return notFound(c, "Registration");
+  }
+
+  if (rsvp.agent_person_id !== requesterPersonId) {
+    return forbidden(c, "You can only pay for your own registration");
   }
 
   interface EventRow { id: string; organizer_person_id: string | null }

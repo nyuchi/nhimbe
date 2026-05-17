@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { writeAuth } from "../middleware/auth";
+import { requireRequesterPersonId } from "../auth/identity";
 import { supabaseFetch } from "../db/supabase";
 import { RSVP_NO } from "../db/event_mapper";
+import { forbidden, notFound } from "../utils/response";
 
 export const checkin = new Hono<{ Bindings: Env }>();
 checkin.use("*", writeAuth);
@@ -11,12 +13,31 @@ checkin.use("*", writeAuth);
 // Writes a CheckInAction row scoped to the event + person. Idempotent: if
 // a non-cancelled CheckInAction already exists for (event,person) we return
 // 409 with the existing check-in time.
+//
+// Only the event organizer may use this endpoint. On-site kiosk check-ins
+// from a paired device use a separate session-token flow in routes/kiosk.ts.
 checkin.post("/events/:eventId/checkin", async (c) => {
   const eventId = c.req.param("eventId");
   const body = await c.req.json() as { registrationId: string };
 
   if (!body.registrationId) {
     return c.json({ error: "registrationId is required" }, 400);
+  }
+
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const requesterPersonId = r;
+
+  // Authz: requester must be the event organizer.
+  const event = await supabaseFetch<{ organizer_person_id: string | null }>(c.env, {
+    schema: "events",
+    path: "event",
+    query: `id=eq.${encodeURIComponent(eventId)}&select=organizer_person_id`,
+    single: true,
+  });
+  if (!event) return notFound(c, "Event");
+  if (event.organizer_person_id !== requesterPersonId) {
+    return forbidden(c, "Only the event organizer can check guests in");
   }
 
   // The frontend still passes a registration id; it maps to events.rsvp_action.id.

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { writeAuth } from "../middleware/auth";
+import { requireRequesterPersonId } from "../auth/identity";
 import { supabaseFetch } from "../db/supabase";
 
 export const reviews = new Hono<{ Bindings: Env }>();
@@ -11,13 +12,16 @@ reviews.use("*", writeAuth);
 // Bumps engagement.review.helpful_count via the SECURITY DEFINER function
 // so concurrent votes don't lose increments. Returns 404 if the function's
 // conditional UPDATE matched no rows (review missing).
+//
+// Identity is derived from the WorkOS JWT; the request body is ignored.
+// (When the underlying review table grows a one-vote-per-person constraint
+// we'll thread `requesterPersonId` into the RPC — for now it's a guard that
+// the caller is signed in.)
 reviews.post("/:id/helpful", async (c) => {
   const reviewId = c.req.param("id");
-  const body = await c.req.json() as { userId: string };
 
-  if (!body.userId) {
-    return c.json({ error: "userId required" }, 400);
-  }
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
 
   try {
     const newCount = await supabaseFetch<number | null>(c.env, {
