@@ -103,6 +103,17 @@ app.use("*", async (c, next) => {
   c.res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   c.res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   c.res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // Strict CSP for JSON/API responses — the worker is JSON-only with one
+  // exception (the HTML status page at `/` in health.ts, which uses inline
+  // styles + Google Fonts and would break under this policy). Skip CSP for
+  // HTML so the status page keeps rendering; everything else gets locked down.
+  const responseContentType = c.res.headers.get("Content-Type") || "";
+  if (!responseContentType.includes("text/html")) {
+    c.res.headers.set(
+      "Content-Security-Policy",
+      "default-src 'self'; frame-ancestors 'none'; base-uri 'self'",
+    );
+  }
 });
 
 // Observability
