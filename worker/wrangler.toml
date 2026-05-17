@@ -27,11 +27,12 @@ MUKOKO_API_URL = "https://api.mukoko.com"
 port = 8787
 local_protocol = "http"
 
-# Observability — capture invocation logs + console.error/warn in Workers
-# dashboard. Each [env.*] block also has its own observability config because
-# wrangler does not inherit top-level config into named environments.
+# Observability — mirrors the JSONC spec exactly. Top-level `enabled = false`
+# is intentional; the per-channel `[observability.logs]` enables the only
+# stream we actually want. Each [env.*] block also carries its own copy
+# because wrangler does not inherit top-level config into named environments.
 [observability]
-enabled = true
+enabled = false
 head_sampling_rate = 1
 
 [observability.logs]
@@ -128,9 +129,10 @@ routes = [
 ]
 
 # Per-environment observability — top-level [observability] is not inherited
-# into [env.*] blocks by wrangler. Each env needs its own copy.
+# into [env.*] blocks by wrangler. Each env needs its own copy. Matches the
+# JSONC spec exactly (top-level `enabled = false`; logs channel is on).
 [env.production.observability]
-enabled = true
+enabled = false
 head_sampling_rate = 1
 
 [env.production.observability.logs]
@@ -208,7 +210,7 @@ vars = { ENVIRONMENT = "staging", ALLOWED_ORIGINS = "https://staging.nhimbe.com"
 # (or as a non-secret var via the Cloudflare dashboard). Do NOT inline a placeholder here.
 
 [env.staging.observability]
-enabled = true
+enabled = false
 head_sampling_rate = 1
 
 [env.staging.observability.logs]
