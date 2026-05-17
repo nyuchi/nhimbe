@@ -123,6 +123,11 @@ app.use("/api/registrations/*", rateLimit);
 app.use("/api/admin/*", rateLimit);
 app.use("/api/series/*", rateLimit);
 app.use("/api/kiosk/*", rateLimit);
+// Categories listings are cheap (cached), but the propose/vouch/flag write
+// paths can be spammed to fill events.event_category with garbage. Rate-limit
+// the whole /api/event-categories tree to share the 100 req/min bucket.
+app.use("/api/event-categories", rateLimit);
+app.use("/api/event-categories/*", rateLimit);
 
 // Mount route modules
 app.route("/", health);

@@ -222,6 +222,14 @@ async function resolvePersonId(
   return rows?.[0]?.id ?? null;
 }
 
+// PostgREST `ilike` treats `%` and `_` as wildcards. Without escaping, a
+// user-proposed name like "foo%" would match "foobar" / "foobaz" and reject
+// every distinct name in the bucket with a spurious 409. Escape both, plus
+// the backslash that introduces the escape itself.
+function escapeLikePattern(input: string): string {
+  return input.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
 interface EventCategoryRow {
   id: string;
   name: string;
@@ -265,7 +273,7 @@ categories.get("/event-categories", async (c) => {
     filters.push(`interest_category_id=eq.${encodeURIComponent(interest)}`);
   }
   if (q && q.length >= 2) {
-    filters.push(`name=ilike.${encodeURIComponent(q + "%")}`);
+    filters.push(`name=ilike.${encodeURIComponent(escapeLikePattern(q) + "%")}`);
   }
 
   try {
@@ -353,12 +361,22 @@ categories.post("/event-categories", async (c) => {
     return unauthorized(c, "onboarded user");
   }
 
-  // Duplicate guard: case-insensitive name match in the same interest bucket
-  // (or globally if no bucket given). Returns 409 with the existing row so
-  // the wizard can offer "did you mean…?" instead of creating a near-dupe.
+  // Duplicate guard: case-insensitive *exact* name match in the same interest
+  // bucket. Restricted to live community/established rows — hidden/merged
+  // rows are surfaced via the partial unique index in the DB instead of here,
+  // so a moderator-hidden duplicate doesn't leak through this client-side
+  // check. Returns 409 with the existing row so the wizard can offer
+  // "did you mean…?" instead of creating a near-dupe.
+  //
+  // Note: this is a best-effort check. The authoritative gate against
+  // concurrent identical proposals is the partial unique index
+  // `event_category_name_lower_per_interest_unique_idx` (migration
+  // `events_event_category_unique_name_per_interest`), which fires inside
+  // the INSERT and returns 23505 → translated to 409 below.
   const dupFilters = [
-    `name=ilike.${encodeURIComponent(name)}`,
+    `name=ilike.${encodeURIComponent(escapeLikePattern(name))}`,
     "is_active=eq.true",
+    "status=in.(community,established)",
   ];
   if (body.interestCategoryId) {
     dupFilters.push(`interest_category_id=eq.${encodeURIComponent(body.interestCategoryId)}`);
@@ -397,11 +415,19 @@ categories.post("/event-categories", async (c) => {
       },
     });
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // The partial unique index on (lower(name), coalesce(interest_category_id))
+    // surfaces concurrent duplicates as Postgres 23505 → PostgREST 409. Map
+    // back to a clean 409 so two simultaneous proposers see a usable error.
+    if (msg.includes("(409)") || msg.includes("duplicate") || msg.includes("23505")) {
+      return conflict(c, "A category with that name already exists");
+    }
     console.error(JSON.stringify({
       level: "error",
       module: "event_categories",
       message: "Failed to insert event_category",
-      error: err instanceof Error ? err.message : String(err),
+      error: msg,
+      person_id: personId,
       request_id: c.get("requestId"),
     }));
     return c.json({ error: "Failed to create category" }, 500);
