@@ -24,8 +24,20 @@ import {
   jsonResponse as json,
   noContent,
   notFoundSingle,
-  trustedOriginHeaders as authHeaders,
+  trustedOriginHeaders,
+  authedOriginHeaders,
 } from "./mocks";
+
+// Pure-read endpoints don't require a JWT, so they keep using the
+// origin-only header set. Write endpoints below send a Bearer token via
+// `authedOriginHeaders()` and rely on the mocked workos validator.
+const authHeaders = trustedOriginHeaders;
+
+vi.mock("../auth/workos", () => ({
+  getAuthenticatedUser: vi.fn(),
+}));
+import { getAuthenticatedUser } from "../auth/workos";
+const mockedGetAuthenticatedUser = vi.mocked(getAuthenticatedUser);
 
 function buildApp(env: Env) {
   const app = new Hono<{ Bindings: Env }>();
@@ -38,6 +50,7 @@ function buildApp(env: Env) {
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  mockedGetAuthenticatedUser.mockReset();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -389,45 +402,104 @@ describe("GET /api/users/:id/reputation", () => {
 // ============================================
 
 describe("DELETE /api/users/:id", () => {
-  it("404s when the user does not exist", async () => {
+  it("401s when there is no JWT", async () => {
     const env = createMockEnv();
-    const { stub } = makeFetchStub([
-      { match: pgrstMatch("person", ["GET"]), handle: () => notFoundSingle() },
-    ]);
+    const { stub } = makeFetchStub([]);
     vi.stubGlobal("fetch", stub);
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: null, failureReason: "no_token" });
 
     const app = buildApp(env);
     const res = await app.fetch("/api/users/ghost", {
       method: "DELETE",
       headers: authHeaders(),
     });
+    expect(res.status).toBe(401);
+  });
+
+  it("403s when requester is not self and not admin", async () => {
+    const env = createMockEnv();
+    const { stub } = makeFetchStub([
+      // requester person lookup (in resolvePersonId)
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-other" }) },
+    ]);
+    vi.stubGlobal("fetch", stub);
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|other" } });
+
+    const app = buildApp(env);
+    const res = await app.fetch("/api/users/person-1", {
+      method: "DELETE",
+      headers: authedOriginHeaders(),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("404s when the user does not exist", async () => {
+    const env = createMockEnv();
+    // First person GET satisfies resolvePersonId, second returns 404 for the
+    // soft-delete target.
+    let firstCall = true;
+    const { stub } = makeFetchStub([
+      {
+        match: pgrstMatch("person", ["GET"]),
+        handle: () => {
+          if (firstCall) {
+            firstCall = false;
+            return json({ id: "ghost" });
+          }
+          return notFoundSingle();
+        },
+      },
+    ]);
+    vi.stubGlobal("fetch", stub);
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|ghost" } });
+
+    const app = buildApp(env);
+    const res = await app.fetch("/api/users/ghost", {
+      method: "DELETE",
+      headers: authedOriginHeaders(),
+    });
     expect(res.status).toBe(404);
   });
 
   it("404s when the user is already soft-deleted", async () => {
     const env = createMockEnv();
+    let firstCall = true;
     const { stub } = makeFetchStub([
       {
         match: pgrstMatch("person", ["GET"]),
-        handle: () => json({ id: "person-1", email: "x@y.z", deleted_at: "2026-05-10T00:00:00Z" }),
+        handle: () => {
+          if (firstCall) {
+            firstCall = false;
+            return json({ id: "person-1" });
+          }
+          return json({ id: "person-1", email: "x@y.z", deleted_at: "2026-05-10T00:00:00Z" });
+        },
       },
     ]);
     vi.stubGlobal("fetch", stub);
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|p1" } });
 
     const app = buildApp(env);
     const res = await app.fetch("/api/users/person-1", {
       method: "DELETE",
-      headers: authHeaders(),
+      headers: authedOriginHeaders(),
     });
     expect(res.status).toBe(404);
   });
 
   it("anonymises PII, cancels RSVPs, and writes an audit row", async () => {
     const env = createMockEnv();
+    let personCall = 0;
     const { stub, calls } = makeFetchStub([
       {
         match: pgrstMatch("person", ["GET"]),
-        handle: () => json({ id: "person-1", email: "real@user.com", deleted_at: null }),
+        handle: () => {
+          personCall += 1;
+          // 1st: resolvePersonId for the requester (matches path → self-delete)
+          if (personCall === 1) return json({ id: "person-1" });
+          // 2nd: load the target user row for the actual delete handler
+          return json({ id: "person-1", email: "real@user.com", deleted_at: null });
+        },
       },
       { match: pgrstMatch("person", ["PATCH"]), handle: () => noContent() },
       { match: pgrstMatch("rsvp_action", ["PATCH"]), handle: () => noContent() },
@@ -435,11 +507,12 @@ describe("DELETE /api/users/:id", () => {
       { match: pgrstMatch("activity_logs", ["POST"]), handle: () => json([{ id: "log-1" }], 201) },
     ]);
     vi.stubGlobal("fetch", stub);
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|p1" } });
 
     const app = buildApp(env);
     const res = await app.fetch("/api/users/person-1", {
       method: "DELETE",
-      headers: authHeaders(),
+      headers: authedOriginHeaders(),
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ message: "User account deleted successfully" });
@@ -466,21 +539,27 @@ describe("DELETE /api/users/:id", () => {
 
   it("swallows audit-log failures (delete still succeeds)", async () => {
     const env = createMockEnv();
+    let personCall = 0;
     const { stub } = makeFetchStub([
       {
         match: pgrstMatch("person", ["GET"]),
-        handle: () => json({ id: "person-1", email: "real@user.com", deleted_at: null }),
+        handle: () => {
+          personCall += 1;
+          if (personCall === 1) return json({ id: "person-1" });
+          return json({ id: "person-1", email: "real@user.com", deleted_at: null });
+        },
       },
       { match: pgrstMatch("person", ["PATCH"]), handle: () => noContent() },
       { match: pgrstMatch("rsvp_action", ["PATCH"]), handle: () => noContent() },
       { match: pgrstMatch("activity_logs", ["POST"]), handle: () => json({ error: "db down" }, 500) },
     ]);
     vi.stubGlobal("fetch", stub);
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|p1" } });
 
     const app = buildApp(env);
     const res = await app.fetch("/api/users/person-1", {
       method: "DELETE",
-      headers: authHeaders(),
+      headers: authedOriginHeaders(),
     });
     expect(res.status).toBe(200);
   });

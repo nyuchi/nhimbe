@@ -267,3 +267,22 @@ export function trustedOriginHeaders(
     ...extra,
   };
 }
+
+/**
+ * Headers that authenticate via origin AND carry a Bearer token. Routes that
+ * call `requireRequesterPersonId()` need both: writeAuth checks the origin,
+ * the identity helper needs a token to feed `getAuthenticatedUser()`. The
+ * token value is opaque — tests stub `getAuthenticatedUser` via
+ * `vi.mock("../auth/workos")` to return whatever WorkOS userId they need.
+ */
+export function authedOriginHeaders(
+  token: string = 'valid-jwt-token',
+  extra: Record<string, string> = {},
+): HeadersInit {
+  return {
+    'Content-Type': 'application/json',
+    Origin: 'http://localhost:3000',
+    Authorization: `Bearer ${token}`,
+    ...extra,
+  };
+}
