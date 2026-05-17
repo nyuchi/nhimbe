@@ -371,7 +371,8 @@ Frontend (`.env.local`):
 - `WORKOS_CLIENT_ID` — WorkOS Client ID. AuthKit reads it from `process.env` server-side; no `NEXT_PUBLIC_` prefix needed (and shouldn't have one — the Client ID is server-only in our flow)
 - `WORKOS_API_KEY` — server-only, used by the AuthKit proxy
 - `WORKOS_COOKIE_PASSWORD` — server-only, session-cookie encryption key (≥32 chars)
-- `WORKOS_REDIRECT_URI` — usually `${NEXT_PUBLIC_SITE_URL}/callback`
+- `NEXT_PUBLIC_WORKOS_REDIRECT_URI` — usually `${NEXT_PUBLIC_SITE_URL}/callback`. The `NEXT_PUBLIC_` prefix is **required** — `@workos-inc/authkit-nextjs` reads this from the client bundle to form the OAuth start URL. Stripping the prefix breaks sign-in.
+- `WORKOS_API_HOSTNAME` *(optional)* — defaults to `api.workos.com`. Set to `authenticate.nyuchi.com` to route all WorkOS API calls through the Nyuchi custom domain. When set, the hosted AuthKit UI automatically lives at `identity.nyuchi.com` and Admin Portal at `setup.identity.nyuchi.com`.
 - `NEXT_PUBLIC_API_URL` — worker base URL (e.g. `http://localhost:8787`)
 - `NEXT_PUBLIC_SITE_URL` — public site URL
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`

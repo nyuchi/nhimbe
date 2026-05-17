@@ -27,9 +27,11 @@ MUKOKO_API_URL = "https://api.mukoko.com"
 port = 8787
 local_protocol = "http"
 
-# Observability
+# Observability — capture invocation logs + console.error/warn in Workers
+# dashboard. Each [env.*] block also has its own observability config because
+# wrangler does not inherit top-level config into named environments.
 [observability]
-enabled = false
+enabled = true
 head_sampling_rate = 1
 
 [observability.logs]
@@ -125,6 +127,23 @@ routes = [
   { pattern = "events-api.mukoko.com", custom_domain = true }
 ]
 
+# Per-environment observability — top-level [observability] is not inherited
+# into [env.*] blocks by wrangler. Each env needs its own copy.
+[env.production.observability]
+enabled = true
+head_sampling_rate = 1
+
+[env.production.observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[env.production.observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
+
 [env.production.ai]
 binding = "AI"
 
@@ -187,6 +206,21 @@ name = "mukoko-nhimbe-api-staging"
 vars = { ENVIRONMENT = "staging", ALLOWED_ORIGINS = "https://staging.nhimbe.com", SUPABASE_URL = "https://tdcpuzqyoodrdsxldgsh.supabase.co", MUKOKO_API_URL = "https://api.mukoko.com" }
 # WORKOS_CLIENT_ID must be set per environment via `wrangler secret put WORKOS_CLIENT_ID --env staging`
 # (or as a non-secret var via the Cloudflare dashboard). Do NOT inline a placeholder here.
+
+[env.staging.observability]
+enabled = true
+head_sampling_rate = 1
+
+[env.staging.observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[env.staging.observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
 
 [env.staging.ai]
 binding = "AI"

@@ -1,8 +1,8 @@
 import { Hono } from "hono";
-import type { Env } from "../types";
+import type { Env, AppVariables } from "../types";
 import { supabaseFetch } from "../db/supabase";
 
-export const categories = new Hono<{ Bindings: Env }>();
+export const categories = new Hono<{ Bindings: Env; Variables: AppVariables }>();
 
 // Hardcoded fallback ensures the events form is usable if the categories
 // query fails (auth / connectivity). engagement.interest_category is the
@@ -30,6 +30,12 @@ interface InterestCategoryRow {
 }
 
 // GET /api/categories — engagement.interest_category with hardcoded fallback.
+//
+// On error we log a structured entry that includes the full Supabase error
+// message, request id, and which env piece (URL / secret) is missing — this
+// is the exact diagnostic data we lacked when "Failed to load categories"
+// surfaced in production without ever telling us *why* (turned out to be a
+// missing SUPABASE_SECRET_KEY env var that was the OLD SUPABASE_SERVICE_ROLE_KEY name).
 categories.get("/categories", async (c) => {
   try {
     const rows = await supabaseFetch<InterestCategoryRow[]>(c.env, {
@@ -51,6 +57,12 @@ categories.get("/categories", async (c) => {
       module: "categories",
       message: "Failed to load categories from Supabase, returning fallback",
       error: err instanceof Error ? err.message : String(err),
+      error_name: err instanceof Error ? err.name : undefined,
+      // Surface env-state checks so a missing-env vs. transient-network vs.
+      // RLS-block can be told apart at a glance.
+      supabase_url_set: !!c.env.SUPABASE_URL,
+      supabase_secret_key_set: !!c.env.SUPABASE_SECRET_KEY,
+      request_id: c.get("requestId"),
     }));
     return c.json({ categories: FALLBACK_CATEGORIES });
   }
@@ -92,6 +104,10 @@ categories.get("/cities", async (c) => {
       module: "cities",
       message: "Failed to load cities from Supabase",
       error: err instanceof Error ? err.message : String(err),
+      error_name: err instanceof Error ? err.name : undefined,
+      supabase_url_set: !!c.env.SUPABASE_URL,
+      supabase_secret_key_set: !!c.env.SUPABASE_SECRET_KEY,
+      request_id: c.get("requestId"),
     }));
     return c.json({ cities: [] });
   }
