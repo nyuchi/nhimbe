@@ -12,7 +12,7 @@ import type { CircleRow } from "@/lib/supabase/types";
 
 export default function KraalIndexClient() {
   const { user, isAuthenticated } = useAuth();
-  const personId = (user as { person_id?: string } | null)?.person_id ?? null;
+  const personId = user?.personId ?? null;
   // Default to "not loading" — only flip true once we've actually kicked
   // off a fetch in the effect's async callback, which keeps the React 19
   // `set-state-in-effect` rule happy.

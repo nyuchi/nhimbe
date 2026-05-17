@@ -80,7 +80,15 @@ interface EventStats {
 function ManageEventContent() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, accessToken, getAccessToken } = useAuth();
+
+  // Helper: lazily fetch a fresh JWT for each write so an idle tab doesn't
+  // send an expired token after the wizard sits unused for an hour.
+  const tokenOrThrow = async () => {
+    const t = accessToken ?? (await getAccessToken());
+    if (!t) throw new Error("Sign in required");
+    return t;
+  };
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
@@ -205,7 +213,8 @@ function ManageEventContent() {
 
   const handleApprove = async (id: string) => {
     try {
-      await updateRegistrationStatus(id, "approved");
+      const token = await tokenOrThrow();
+      await updateRegistrationStatus(id, "approved", token);
       setRegistrations((prev) =>
         prev.map((r) => (r.id === id ? { ...r, status: "approved" } : r))
       );
@@ -216,7 +225,8 @@ function ManageEventContent() {
 
   const handleReject = async (id: string) => {
     try {
-      await updateRegistrationStatus(id, "rejected");
+      const token = await tokenOrThrow();
+      await updateRegistrationStatus(id, "rejected", token);
       setRegistrations((prev) =>
         prev.map((r) => (r.id === id ? { ...r, status: "rejected" } : r))
       );
@@ -273,7 +283,8 @@ function ManageEventContent() {
   const handleDeleteEvent = async () => {
     setActionLoading(true);
     try {
-      await deleteEvent(event.id);
+      const token = await tokenOrThrow();
+      await deleteEvent(event.id, token);
       router.push("/my-events");
     } catch (err) {
       console.error("Failed to delete event:", err);

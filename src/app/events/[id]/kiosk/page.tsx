@@ -310,7 +310,13 @@ function CheckinScreen({ session, token }: { session: KioskSession; token: strin
       setScanning(false);
 
       try {
-        await checkinRegistration(session.eventId, registrationId);
+        // FIXME: paired-kiosk check-in needs a dedicated worker endpoint
+        // that validates the kiosk session token, not the WorkOS JWT.
+        // After the auth-hardening pass /api/events/:id/checkin requires
+        // the organizer's JWT, which a paired kiosk doesn't have. Passing
+        // an empty token here will 401 — the kiosk flow needs to switch
+        // to a kiosk-session-authenticated endpoint, tracked separately.
+        await checkinRegistration(session.eventId, registrationId, "");
         setResult({
           status: "success",
           name: "Guest",
