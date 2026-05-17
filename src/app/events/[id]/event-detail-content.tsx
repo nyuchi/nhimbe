@@ -27,6 +27,7 @@ import { EventEntityHostCard } from "./event-entity-host-card";
 import { useAuth } from "@/components/auth/auth-context";
 import { getUserReferralCode, generateUserReferralCode, getEventStats, getEventReviews, type UserReferralCode, type EventStats, type ReviewStats } from "@/lib/api";
 import type { Event } from "@/lib/api";
+import { useSaveEvent } from "@/lib/use-save-event";
 
 const EventRatings = dynamic(
   () => import("@/components/ui/event-ratings").then(m => ({ default: m.EventRatings })),
@@ -47,7 +48,10 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
   const [userReferral, setUserReferral] = useState<UserReferralCode | null>(null);
   const [stats, setStats] = useState<EventStats | null>(null);
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
-  const [bookmarked, setBookmarked] = useState(false);
+  // Bookmark / save persists to events.save_action via the hook — no more
+  // local-only state. canSave gates the click for unauthenticated users.
+  const { saved, toggle: toggleSaved, canSave: canSaveEvent } = useSaveEvent(event.id);
+  const bookmarked = !!saved;
   const isPastEvent = new Date(event.startDate) < new Date();
   const isOnline = event.eventAttendanceMode === "OnlineEventAttendanceMode";
   const isInPerson = !isOnline && event.location.addressLocality !== "Online";
@@ -311,16 +315,18 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
       {/* Sticky Mobile RSVP + Bookmark Bar */}
       <div className="fixed bottom-0 left-0 right-0 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-background/90 backdrop-blur-xl border-t border-elevated z-40 lg:hidden">
         <div className="max-w-250 mx-auto flex items-center gap-2.5">
-          {/* Bookmark / Interested button */}
+          {/* Bookmark / Interested button — persists to events.save_action */}
           <button
-            onClick={() => setBookmarked(!bookmarked)}
-            className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border transition-colors ${
+            onClick={() => canSaveEvent && toggleSaved()}
+            disabled={!canSaveEvent}
+            className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border transition-colors disabled:opacity-50 ${
               bookmarked
                 ? "border-transparent"
                 : "border-elevated hover:bg-elevated"
             }`}
             style={bookmarked ? { backgroundColor: "var(--event-surface)", color: "var(--event-primary)" } : undefined}
             aria-label={bookmarked ? "Remove bookmark" : "Bookmark event"}
+            aria-pressed={bookmarked}
           >
             <Bookmark className={`w-5 h-5 ${bookmarked ? "fill-current" : ""}`} />
           </button>
