@@ -16,6 +16,9 @@ const eslintConfig = defineConfig([
     "worker/.wrangler/**",
     // MongoDB playground files (not React code):
     "*.mongodb.js",
+    // Agent worktree checkouts — they hold parallel branches plus built
+    // .next bundles that aren't part of this branch's source tree.
+    ".claude/worktrees/**",
   ]),
   {
     rules: {
