@@ -242,6 +242,130 @@ export interface PlaceDetail {
   communityConfirmations: number | null;
 }
 
+/** Transit route serving a venue — joined view of
+ *  transport.transit_route + transport.transit_stop via route_stop. */
+export interface TransitOption {
+  routeId: string;
+  routeName: string;
+  routeNumber: string | null;
+  routeType: string | null;
+  operator: string | null;
+  baseFare: number | null;
+  fareCurrency: string | null;
+  frequencyMinutes: number | null;
+  daysOfOperation: string[] | null;
+  /** Nearest stop name + distance bucket. */
+  stopName: string;
+  stopDistanceM: number;
+  osmRelationId: string | null;
+}
+
+/** Returns transit routes that pass through stops near a venue.
+ *
+ *  Strategy: we query transport.transit_stop within a coarse bounding box
+ *  around the venue (~3 km / 0.027°), join via transport.route_stop to
+ *  transport.transit_route, and rank by Haversine distance. PostgREST
+ *  doesn't expose PostGIS distance directly without an RPC, so we use a
+ *  lat/lng bounding box + compute distance client-side. This is good
+ *  enough for the "Getting there" panel — picks the 5 closest routes.
+ */
+export async function getTransitForPlace(
+  placeId: string,
+  lat: number,
+  lng: number,
+): Promise<TransitOption[]> {
+  if (!placeId || typeof lat !== "number" || typeof lng !== "number") return [];
+  const supabase = getSupabaseBrowserClient();
+  // 0.027° ≈ 3 km in latitude. Longitude scaling depends on latitude;
+  // at 30°S it's about 0.031°/3km. We use a slightly looser bound so
+  // edge stops aren't clipped.
+  const dLat = 0.027;
+  const dLng = 0.032 / Math.cos((lat * Math.PI) / 180);
+  const { data: stops } = await supabase
+    .schema("transport")
+    .from("transit_stop")
+    .select("id,name,latitude,longitude,osm_node_id")
+    .eq("is_active", true)
+    .gte("latitude", lat - dLat)
+    .lte("latitude", lat + dLat)
+    .gte("longitude", lng - dLng)
+    .lte("longitude", lng + dLng)
+    .limit(40);
+  type Stop = { id: string; name: string; latitude: number; longitude: number };
+  const stopRows = ((stops as Stop[] | null) ?? [])
+    .map((s) => ({ ...s, distance: haversineMeters(lat, lng, s.latitude, s.longitude) }))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 20);
+  if (stopRows.length === 0) return [];
+
+  const stopIds = stopRows.map((s) => s.id);
+  const { data: rsRows } = await supabase
+    .schema("transport")
+    .from("route_stop")
+    .select("transit_route_id,transit_stop_id")
+    .in("transit_stop_id", stopIds);
+  type RS = { transit_route_id: string; transit_stop_id: string };
+  const routeStop = (rsRows as RS[] | null) ?? [];
+  if (routeStop.length === 0) return [];
+
+  const routeIds = Array.from(new Set(routeStop.map((r) => r.transit_route_id)));
+  const { data: routes } = await supabase
+    .schema("transport")
+    .from("transit_route")
+    .select("id,name,route_number,route_type,operator_name,base_fare,fare_currency,frequency_minutes,days_of_operation,osm_relation_id")
+    .in("id", routeIds)
+    .eq("is_active", true);
+  type R = {
+    id: string; name: string; route_number: string | null; route_type: string | null;
+    operator_name: string | null; base_fare: number | null; fare_currency: string | null;
+    frequency_minutes: number | null; days_of_operation: string[] | null; osm_relation_id: string | null;
+  };
+  const routeMap = new Map<string, R>(((routes as R[] | null) ?? []).map((r) => [r.id, r]));
+  // Best stop per route = closest stop on that route.
+  const bestStop = new Map<string, { stopId: string; distance: number }>();
+  routeStop.forEach((rs) => {
+    const stop = stopRows.find((s) => s.id === rs.transit_stop_id);
+    if (!stop) return;
+    const cur = bestStop.get(rs.transit_route_id);
+    if (!cur || stop.distance < cur.distance) {
+      bestStop.set(rs.transit_route_id, { stopId: stop.id, distance: stop.distance });
+    }
+  });
+  const options: TransitOption[] = [];
+  for (const [routeId, { stopId, distance }] of bestStop) {
+    const route = routeMap.get(routeId);
+    const stop = stopRows.find((s) => s.id === stopId);
+    if (!route || !stop) continue;
+    options.push({
+      routeId: route.id,
+      routeName: route.name,
+      routeNumber: route.route_number,
+      routeType: route.route_type,
+      operator: route.operator_name,
+      baseFare: route.base_fare ? Number(route.base_fare) : null,
+      fareCurrency: route.fare_currency,
+      frequencyMinutes: route.frequency_minutes,
+      daysOfOperation: route.days_of_operation,
+      stopName: stop.name,
+      stopDistanceM: Math.round(distance),
+      osmRelationId: route.osm_relation_id,
+    });
+  }
+  options.sort((a, b) => a.stopDistanceM - b.stopDistanceM);
+  return options.slice(0, 5);
+}
+
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 /** Read the rich place data for a venue. Returns null when the place was
  *  not found or the read is blocked by RLS. */
 export async function getPlaceById(placeId: string): Promise<PlaceDetail | null> {

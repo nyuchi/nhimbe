@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { Globe, Star, MapPin, Accessibility, Mountain, Users } from "lucide-react";
-import { getPlaceById, type PlaceDetail } from "@/lib/supabase/api";
+import { Globe, Star, MapPin, Accessibility, Mountain, Users, Bus } from "lucide-react";
+import { getPlaceById, getTransitForPlace, type PlaceDetail, type TransitOption } from "@/lib/supabase/api";
 
 /**
  * Rich venue card backed by places.places. Replaces the legacy
@@ -32,6 +32,7 @@ interface EventVenueCardProps {
 export function EventVenueCard({ placeId }: EventVenueCardProps) {
   const [place, setPlace] = useState<PlaceDetail | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [transit, setTransit] = useState<TransitOption[]>([]);
 
   useEffect(() => {
     if (!placeId) {
@@ -41,7 +42,14 @@ export function EventVenueCard({ placeId }: EventVenueCardProps) {
     let cancelled = false;
     getPlaceById(placeId)
       .then((p) => {
-        if (!cancelled) setPlace(p);
+        if (cancelled) return;
+        setPlace(p);
+        // Fire-and-forget transit lookup; the panel is best-effort.
+        if (p?.latitude != null && p?.longitude != null) {
+          getTransitForPlace(p.id, p.latitude, p.longitude).then((opts) => {
+            if (!cancelled) setTransit(opts);
+          });
+        }
       })
       .finally(() => {
         if (!cancelled) setLoaded(true);
@@ -138,6 +146,58 @@ export function EventVenueCard({ placeId }: EventVenueCardProps) {
 
         {place.openingHoursText && (
           <p className="mt-3 text-xs text-muted-foreground">{place.openingHoursText}</p>
+        )}
+
+        {/* Getting-there — transit routes near the venue. OSM-backed via
+            transport.transit_stop.osm_node_id + transit_route.osm_relation_id;
+            renders nothing when no nearby stops exist. */}
+        {transit.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <header className="flex items-center gap-1.5 mb-2">
+              <Bus className="w-3.5 h-3.5" style={{ color: "var(--nh-secondary)" }} aria-hidden />
+              <h4 className="text-[11px] font-semibold uppercase tracking-[0.04em] text-foreground">
+                Getting there
+              </h4>
+              <span className="text-[10px] text-muted-foreground">
+                {transit.length} {transit.length === 1 ? "route" : "routes"} nearby
+              </span>
+            </header>
+            <ul className="space-y-1.5">
+              {transit.map((t) => (
+                <li
+                  key={t.routeId}
+                  className="flex items-center gap-2 text-[12px]"
+                >
+                  {t.routeNumber && (
+                    <span
+                      className="inline-flex items-center justify-center min-w-[2rem] h-6 px-2 rounded-md text-[10px] font-mono font-bold"
+                      style={{ background: "var(--nh-lead-soft)", color: "var(--nh-lead)" }}
+                    >
+                      {t.routeNumber}
+                    </span>
+                  )}
+                  <span className="flex-1 min-w-0 truncate">
+                    <span className="font-semibold text-foreground">{t.routeName}</span>
+                    <span className="text-muted-foreground"> · {t.stopName} ({Math.round(t.stopDistanceM / 100) / 10}km)</span>
+                  </span>
+                  {t.frequencyMinutes && (
+                    <span className="text-[10px] text-muted-foreground shrink-0">every {t.frequencyMinutes}m</span>
+                  )}
+                  {t.osmRelationId && (
+                    <a
+                      href={`https://www.openstreetmap.org/relation/${encodeURIComponent(t.osmRelationId)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="View route on OpenStreetMap"
+                      className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                    >
+                      <Globe className="w-3 h-3" aria-hidden />
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {/* Provenance footer */}
