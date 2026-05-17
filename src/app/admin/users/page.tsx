@@ -17,6 +17,7 @@ import {
   Calendar,
   MapPin,
 } from "lucide-react";
+import { useAuth } from "@/components/auth/auth-context";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -45,14 +46,20 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<{ userId: string; action: "suspend" | "activate"; userName: string } | null>(null);
+  const { accessToken, isLoading: authLoading } = useAuth();
 
   const limit = 20;
 
   useEffect(() => {
+    if (authLoading) return;
     fetchUsers();
-  }, [page, search]);
+  }, [page, search, accessToken, authLoading]);
 
   async function fetchUsers() {
+    if (!accessToken) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -64,7 +71,7 @@ export default function UsersPage() {
       }
 
       const response = await fetch(`${API_URL}/api/admin/users?${params}`, {
-        credentials: "include",
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (response.ok) {
@@ -80,10 +87,11 @@ export default function UsersPage() {
   }
 
   async function handleAction(userId: string, action: "suspend" | "activate") {
+    if (!accessToken) return;
     try {
       await fetch(`${API_URL}/api/admin/users/${userId}/${action}`, {
         method: "POST",
-        credentials: "include",
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       fetchUsers();
     } catch (error) {

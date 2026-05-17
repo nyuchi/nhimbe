@@ -36,7 +36,7 @@ function authorInitial(label: string): string {
 
 export default function KraalDetailClient({ circleId }: KraalDetailClientProps) {
   const { user, isAuthenticated } = useAuth();
-  const personId = (user as { person_id?: string } | null)?.person_id ?? null;
+  const personId = user?.personId ?? null;
 
   const [loading, setLoading] = useState(true);
   const [circle, setCircle] = useState<CircleRow | null>(null);

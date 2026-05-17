@@ -16,6 +16,7 @@ import {
   Clock,
 } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@/components/auth/auth-context";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -69,13 +70,22 @@ export default function AdminDashboard() {
   const [recentEvents, setRecentEvents] = useState<RecentEvent[]>([]);
   const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const { accessToken, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
+    // Wait for auth to resolve before firing — without a Bearer token the
+    // worker rejects admin reads, and the placeholder admin routes here all
+    // gate on getAdminUser(role: "admin").
+    if (authLoading) return;
+    if (!accessToken) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
         const response = await fetch(`${API_URL}/api/admin/stats`, {
-          credentials: "include",
+          headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!response.ok || cancelled) return;
         const data = await response.json();
@@ -91,7 +101,7 @@ export default function AdminDashboard() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [accessToken, authLoading]);
 
   const statCards = [
     {

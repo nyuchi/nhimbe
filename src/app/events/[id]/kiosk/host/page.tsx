@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { AuthGuard } from "@/components/auth/auth-guard";
+import { useAuth } from "@/components/auth/auth-context";
 import {
   getEventById,
   getEventRegistrations,
@@ -34,6 +35,7 @@ import {
 
 function HostKioskContent() {
   const { id } = useParams<{ id: string }>();
+  const { accessToken, getAccessToken } = useAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [stats, setStats] = useState<CheckinStats | null>(null);
@@ -91,7 +93,9 @@ function HostKioskContent() {
       if (checking) return;
       setChecking(registration.id);
       try {
-        await checkinRegistration(id, registration.id);
+        const token = accessToken ?? (await getAccessToken());
+        if (!token) throw new Error("Sign in required");
+        await checkinRegistration(id, registration.id, token);
         setLastCheckin({
           name: registration.userName || "Guest",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),

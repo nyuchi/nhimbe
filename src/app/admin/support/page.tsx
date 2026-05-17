@@ -21,6 +21,7 @@ import {
   Mail,
   Calendar,
 } from "lucide-react";
+import { useAuth } from "@/components/auth/auth-context";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -61,14 +62,20 @@ export default function SupportPage() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const { accessToken, isLoading: authLoading } = useAuth();
 
   const limit = 20;
 
   useEffect(() => {
+    if (authLoading) return;
     fetchTickets();
-  }, [page, search, statusFilter]);
+  }, [page, search, statusFilter, accessToken, authLoading]);
 
   async function fetchTickets() {
+    if (!accessToken) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -83,7 +90,7 @@ export default function SupportPage() {
       }
 
       const response = await fetch(`${API_URL}/api/admin/support?${params}`, {
-        credentials: "include",
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (response.ok) {
@@ -102,11 +109,14 @@ export default function SupportPage() {
     ticketId: string,
     newStatus: "open" | "pending" | "resolved"
   ) {
+    if (!accessToken) return;
     try {
       await fetch(`${API_URL}/api/admin/support/${ticketId}/status`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({ status: newStatus }),
       });
       fetchTickets();
@@ -120,13 +130,16 @@ export default function SupportPage() {
 
   async function handleSendReply() {
     if (!selectedTicket || !replyText.trim()) return;
+    if (!accessToken) return;
 
     setSending(true);
     try {
       await fetch(`${API_URL}/api/admin/support/${selectedTicket.id}/reply`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({ content: replyText }),
       });
 

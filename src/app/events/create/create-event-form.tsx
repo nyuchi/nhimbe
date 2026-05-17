@@ -140,7 +140,7 @@ function isValidUrl(url: string): boolean {
 
 export default function CreateEventForm() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, accessToken, getAccessToken } = useAuth();
   const errorRef = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<WizardStep>(1);
   const [selectedTheme, setSelectedTheme] = useState(0);
@@ -437,7 +437,13 @@ export default function CreateEventForm() {
         setFormTouched(false);
         router.push(`/events/${supabaseResult.id}`);
       } else {
-        const result = await createEvent(eventData);
+        const token = accessToken ?? (await getAccessToken());
+        if (!token) {
+          setError("Sign in required to publish an event.");
+          setSubmitting(false);
+          return;
+        }
+        const result = await createEvent(eventData, token);
         setFormTouched(false);
         router.push(`/events/${result.event.id}`);
       }

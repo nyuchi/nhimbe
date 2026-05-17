@@ -20,6 +20,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@/components/auth/auth-context";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -56,14 +57,20 @@ export default function EventsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Event | null>(null);
+  const { accessToken, isLoading: authLoading } = useAuth();
 
   const limit = 20;
 
   useEffect(() => {
+    if (authLoading) return;
     fetchEvents();
-  }, [page, search, statusFilter]);
+  }, [page, search, statusFilter, accessToken, authLoading]);
 
   async function fetchEvents() {
+    if (!accessToken) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -78,7 +85,7 @@ export default function EventsPage() {
       }
 
       const response = await fetch(`${API_URL}/api/admin/events?${params}`, {
-        credentials: "include",
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (response.ok) {
@@ -94,10 +101,11 @@ export default function EventsPage() {
   }
 
   async function handleDelete(eventId: string) {
+    if (!accessToken) return;
     try {
       await fetch(`${API_URL}/api/admin/events/${eventId}`, {
         method: "DELETE",
-        credentials: "include",
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       fetchEvents();
     } catch (error) {
