@@ -9,6 +9,7 @@ import type { Env, AnalyticsQueueMessage, EmailQueueMessage, AppVariables } from
 import { requestId as requestIdMiddleware, requestLogger } from "./middleware/observability";
 import { rateLimit } from "./middleware/rate-limit";
 import { processAnalyticsMessage, processEmailMessage } from "./queues/handlers";
+import { CircuitOpenError } from "./utils/circuit-breaker";
 
 // Route modules
 import { health } from "./routes/health";
@@ -152,6 +153,18 @@ app.onError((err, c) => {
     error: err instanceof Error ? err.message : "Unknown error",
     stack: err instanceof Error ? err.stack : undefined,
   }));
+  // CircuitOpenError → 503 so the client knows to retry, not surface as
+  // a generic Internal Server Error.
+  if (err instanceof CircuitOpenError) {
+    return c.json(
+      {
+        error: "Service temporarily unavailable",
+        provider: err.provider,
+        requestId: reqId,
+      },
+      503,
+    );
+  }
   return c.json(
     {
       error: "Internal Server Error",

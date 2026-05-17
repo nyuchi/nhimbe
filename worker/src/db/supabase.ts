@@ -12,6 +12,7 @@
 
 import type { Env } from "../types";
 import { withRetry } from "../utils/retry";
+import { withCircuitBreakerThrow } from "../utils/circuit-breaker";
 
 export class SupabaseConfigError extends Error {
   constructor() {
@@ -104,12 +105,21 @@ export async function supabaseFetch<T>(env: Env, opts: SupabaseFetchOptions): Pr
     return (await response.json()) as T;
   };
 
+  // Wrap fetches with the circuit breaker so a sustained Supabase outage
+  // surfaces as 503s immediately instead of stalling every worker invocation
+  // on the timeout. Only SupabaseTransientError counts against the breaker —
+  // 4xx caller bugs and 500 (malformed query) errors don't open the circuit.
+  const breakerWrapped = () =>
+    withCircuitBreakerThrow("supabase", doFetch, {
+      shouldCountAsFailure: (err) => err instanceof SupabaseTransientError,
+    });
+
   // Retry the idempotent GET path only. Writes go through unchanged to avoid
   // duplicate POST/PATCH/DELETE side effects if the request actually succeeded
   // server-side but the response was lost in transit.
-  if (isWrite) return doFetch();
+  if (isWrite) return breakerWrapped();
 
-  return withRetry(doFetch, {
+  return withRetry(breakerWrapped, {
     maxRetries: 2,
     baseDelayMs: 200,
     maxDelayMs: 2_000,

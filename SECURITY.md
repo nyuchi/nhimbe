@@ -63,7 +63,7 @@ nhimbe implements the following security controls:
 ### Resilience
 
 - Rate limiting on all API endpoints (100 req/min)
-- Circuit breaker pattern for external service calls (Vectorize, Workers AI, R2 — Supabase REST not yet wrapped)
+- Circuit breaker pattern for external service calls (Vectorize, Workers AI, R2, Supabase REST — opens after 5 transient failures, 30s cooldown, surfaces as HTTP 503)
 - Request timeout handling
 - Capacity-gate logic prevents over-registration; counter columns are flagged for migration to Postgres functions when concurrency demands stricter atomicity
 

@@ -97,7 +97,7 @@ Global middleware applied in `index.ts`: CORS (restricted to trusted origins), e
 - `response.ts` — Consistent JSON response formatting
 - `validation.ts` — Input validation schemas
 - `timeout.ts` — Request timeout handling
-- `circuit-breaker.ts` — Netflix Hystrix-inspired circuit breaker (CLOSED→OPEN→HALF_OPEN). Currently only wired into `ai/search.ts` (Vectorize + Workers AI); Supabase calls are uncovered.
+- `circuit-breaker.ts` — Netflix Hystrix-inspired circuit breaker (CLOSED→OPEN→HALF_OPEN). Wraps `ai/search.ts` (Vectorize + Workers AI) and `supabaseFetch()` (via `withCircuitBreakerThrow`, opens at 5 transient failures, 30s cooldown). `CircuitOpenError` surfaces as HTTP 503 in the global error handler instead of a generic 500.
 - `retry.ts` — Exponential backoff with jitter. Wired into `supabaseFetch()` for the GET path only (writes are not retried to avoid duplicate POST/PATCH/DELETE side effects). Retries 502/503/504 and network failures up to 2 attempts.
 - `observability.ts` — Backend structured logging with `[mukoko]` prefix
 - `audit.ts` — Audit logging to the `audit_logs` table on Supabase
