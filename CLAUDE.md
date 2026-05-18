@@ -100,7 +100,7 @@ Global middleware applied in `index.ts`: CORS (restricted to trusted origins), e
 - `circuit-breaker.ts` — Netflix Hystrix-inspired circuit breaker (CLOSED→OPEN→HALF_OPEN). Wraps `ai/search.ts` (Vectorize + Workers AI) and `supabaseFetch()` (via `withCircuitBreakerThrow`, opens at 5 transient failures, 30s cooldown). `CircuitOpenError` surfaces as HTTP 503 in the global error handler instead of a generic 500.
 - `retry.ts` — Exponential backoff with jitter. Wired into `supabaseFetch()` for the GET path only (writes are not retried to avoid duplicate POST/PATCH/DELETE side effects). Retries 502/503/504 and network failures up to 2 attempts.
 - `observability.ts` — Backend structured logging with `[mukoko]` prefix
-- `audit.ts` — Audit logging to the `audit_logs` table on Supabase
+- `audit.ts` — Audit logging to the `system.activity_logs` table on Supabase
 - `export.ts` — CSV export with proper escaping
 - `index.ts` — Barrel export for common utilities
 
@@ -299,7 +299,7 @@ The schema is owned by the `nyuchi_platform_db` repo — not this one. Apply mig
 - **events** — `event`, `event_series`, `category`, `event_view`, `event_circle` (Kraal linkage)
 - **engagement** — `registration`, `review`, `referral`, `waitlist`, `kiosk_pairing`
 - **payments** — `payment`, Paynow transaction state
-- **audit** — `audit_logs` for destructive operations
+- **system** — `system.activity_logs` for audit trail of destructive operations
 - **search** — `search_query` (analytics), AI conversation logs
 
 ### Counter-column hot spots
@@ -361,7 +361,7 @@ Three counters are read-then-written through PostgREST and are race-prone under 
 - **Schema.org alignment** — Events and users modeled after schema.org specs
 - **Structured logging** — `[mukoko]` prefix on all log output, structured JSON in backend
 - **Request ID tracking** — Every backend request gets a unique ID for observability
-- **Audit logging** — All destructive operations logged to `audit_logs` table
+- **Audit logging** — All destructive operations logged to `system.activity_logs` table
 - **Path alias** — `@/*` maps to `./src/*` in frontend
 
 ## Environment Variables

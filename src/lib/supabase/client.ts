@@ -10,6 +10,19 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+// Guard against accidental server imports. The browser client wires its
+// fetch to a module-level `accessToken` that's only ever set by the
+// client-side auth provider — using it from an RSC or route handler would
+// silently send unauthenticated requests. Today this is held safe only by
+// the "use client" boundary in auth-context; the throw makes it future-proof.
+// (`src/lib/supabase/server.ts` is the correct module on the server.)
+if (typeof window === "undefined") {
+  throw new Error(
+    "[nhimbe] src/lib/supabase/client.ts was imported from a server context. " +
+      "Use src/lib/supabase/server.ts in RSC / route handlers instead.",
+  );
+}
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
