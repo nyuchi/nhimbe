@@ -10,6 +10,7 @@ import { requestId as requestIdMiddleware, requestLogger } from "./middleware/ob
 import { rateLimit } from "./middleware/rate-limit";
 import { processAnalyticsMessage, processEmailMessage } from "./queues/handlers";
 import { CircuitOpenError } from "./utils/circuit-breaker";
+import { SupabaseClientError } from "./db/supabase";
 
 // Route modules
 import { health } from "./routes/health";
@@ -179,6 +180,46 @@ app.onError((err, c) => {
         requestId: reqId,
       },
       503,
+    );
+  }
+  // SupabaseClientError — distinguish caller-bug 4xx from upstream 5xx.
+  //   - 23505 / 409 → uniqueness violation, surface as 409 so the client
+  //     can show "already exists" without re-trying.
+  //   - other 4xx → surface a clean shape with a STRIPPED body (cap at
+  //     200 chars, no raw row data) so the caller can act on it.
+  //   - 5xx (malformed query, broken trigger) → generic 500. The PostgREST
+  //     body would leak query shape / column names, so we don't echo it.
+  if (err instanceof SupabaseClientError) {
+    if (err.status === 409 || err.body.includes("23505")) {
+      return c.json(
+        {
+          error: "Conflict",
+          detail: err.body.slice(0, 200),
+          requestId: reqId,
+        },
+        409,
+      );
+    }
+    if (err.status >= 400 && err.status < 500) {
+      return c.json(
+        {
+          error: "Bad request",
+          detail: err.body.slice(0, 200),
+          requestId: reqId,
+        },
+        // Hono's c.json accepts any number, but its type wants a
+        // ContentfulStatusCode union — cast through the narrow set we
+        // actually return here (400/401/403/404/405/422 etc.).
+        err.status as 400,
+      );
+    }
+    // 5xx — stay generic. Don't leak PostgREST body.
+    return c.json(
+      {
+        error: "Internal Server Error",
+        requestId: reqId,
+      },
+      500,
     );
   }
   return c.json(

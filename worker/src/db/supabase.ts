@@ -33,6 +33,25 @@ export class SupabaseTransientError extends Error {
   }
 }
 
+/**
+ * Thrown by supabaseFetch when PostgREST returns a non-transient error —
+ * 4xx (caller bugs: bad query, duplicate row, missing FK) or 500 (malformed
+ * query, broken trigger). Carries the original HTTP status and raw response
+ * body so route handlers can switch on `err.status === 409` (etc.) instead
+ * of grepping the message string. Does NOT count against the circuit
+ * breaker — see `shouldCountAsFailure` in `supabaseFetch` below.
+ */
+export class SupabaseClientError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly body: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "SupabaseClientError";
+  }
+}
+
 interface SupabaseFetchOptions {
   /** Postgres schema (e.g. "identity", "events"). PostgREST routes via Accept-Profile / Content-Profile. */
   schema: string;
@@ -98,7 +117,10 @@ export async function supabaseFetch<T>(env: Env, opts: SupabaseFetchOptions): Pr
       if (response.status === 502 || response.status === 503 || response.status === 504) {
         throw new SupabaseTransientError(msg, response.status);
       }
-      throw new Error(msg);
+      // 4xx (caller bug, uniqueness violation, FK miss) and 500 (malformed
+      // query, broken trigger) — surface as a typed error so route handlers
+      // can switch on `err.status === 409` instead of grepping the message.
+      throw new SupabaseClientError(response.status, text, msg);
     }
 
     if (response.status === 204) return null;
