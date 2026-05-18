@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { writeAuth } from "../middleware/auth";
-import { getAuthenticatedUser } from "../auth/workos";
-import { unauthorized, notFound, badRequest, conflict } from "../utils/response";
+import { requireRequesterPersonId } from "../auth/identity";
+import { notFound, badRequest, conflict } from "../utils/response";
 import { supabaseFetch } from "../db/supabase";
 import { RSVP_NO } from "../db/event_mapper";
 
@@ -10,13 +10,13 @@ export const waitlist = new Hono<{ Bindings: Env }>();
 waitlist.use("*", writeAuth);
 
 // POST /api/events/:eventId/waitlist — Join the waitlist for a capacity-bound event.
+// Person id is derived from the WorkOS JWT; any `userId` in the body is ignored.
 waitlist.post("/events/:eventId/waitlist", async (c) => {
   const eventId = c.req.param("eventId");
-  const body = await c.req.json() as { userId: string };
 
-  if (!body.userId) {
-    return badRequest(c, "userId is required");
-  }
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const personId = r;
 
   interface EventRow { id: string; maximumattendeecapacity: number | null }
   const event = await supabaseFetch<EventRow>(c.env, {
@@ -45,50 +45,42 @@ waitlist.post("/events/:eventId/waitlist", async (c) => {
   const existing = await supabaseFetch<{ id: string }>(c.env, {
     schema: "events",
     path: "waitlist_entry",
-    query: `event_id=eq.${encodeURIComponent(eventId)}&person_id=eq.${encodeURIComponent(body.userId)}&select=id`,
+    query: `event_id=eq.${encodeURIComponent(eventId)}&person_id=eq.${encodeURIComponent(personId)}&select=id`,
     single: true,
   });
   if (existing) {
     return conflict(c, "User is already on the waitlist");
   }
 
-  const positions = await supabaseFetch<{ position: number }[]>(c.env, {
+  // Atomic SELECT FOR UPDATE + INSERT via SECURITY DEFINER function.
+  // Concurrent joiners get distinct, sequential positions; without the
+  // event-row lock + COALESCE(MAX, 0)+1 in one transaction, two parallel
+  // requests would both compute the same MAX and insert the same position.
+  interface WaitlistRpcRow { id: string; position: number }
+  const inserted = await supabaseFetch<WaitlistRpcRow[]>(c.env, {
     schema: "events",
-    path: "waitlist_entry",
-    query: `event_id=eq.${encodeURIComponent(eventId)}&select=position&order=position.desc&limit=1`,
-  });
-  const position = (positions?.[0]?.position ?? 0) + 1;
-
-  interface InsertedRow { id: string }
-  const inserted = await supabaseFetch<InsertedRow[]>(c.env, {
-    schema: "events",
-    path: "waitlist_entry",
+    path: "rpc/add_to_waitlist",
     method: "POST",
-    body: {
-      event_id: eventId,
-      person_id: body.userId,
-      position,
-      status: "waiting",
-      joined_at: new Date().toISOString(),
-    },
+    body: { p_event_id: eventId, p_person_id: personId },
   });
+  const row = inserted?.[0];
 
-  return c.json({ id: inserted?.[0]?.id, position, message: "Added to waitlist" }, 201);
+  return c.json({ id: row?.id, position: row?.position, message: "Added to waitlist" }, 201);
 });
 
-// DELETE /api/events/:eventId/waitlist — Leave the waitlist.
+// DELETE /api/events/:eventId/waitlist — Leave the waitlist. Person id is
+// derived from the WorkOS JWT.
 waitlist.delete("/events/:eventId/waitlist", async (c) => {
   const eventId = c.req.param("eventId");
-  const body = await c.req.json() as { userId: string };
 
-  if (!body.userId) {
-    return badRequest(c, "userId is required");
-  }
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const personId = r;
 
   const existing = await supabaseFetch<{ id: string }>(c.env, {
     schema: "events",
     path: "waitlist_entry",
-    query: `event_id=eq.${encodeURIComponent(eventId)}&person_id=eq.${encodeURIComponent(body.userId)}&select=id`,
+    query: `event_id=eq.${encodeURIComponent(eventId)}&person_id=eq.${encodeURIComponent(personId)}&select=id`,
     single: true,
   });
   if (!existing) {
@@ -107,10 +99,9 @@ waitlist.delete("/events/:eventId/waitlist", async (c) => {
 
 // GET /api/events/:eventId/waitlist — List for the event (auth required; email exposed only to host).
 waitlist.get("/events/:eventId/waitlist", async (c) => {
-  const authResult = await getAuthenticatedUser(c.req.raw, c.env);
-  if (!authResult.user) {
-    return unauthorized(c);
-  }
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const requesterPersonId = r;
 
   const eventId = c.req.param("eventId");
 
@@ -122,19 +113,7 @@ waitlist.get("/events/:eventId/waitlist", async (c) => {
     single: true,
   });
 
-  // Resolve the requester's identity.person id to compare against the
-  // organizer. workos_user_id is the linkage column.
-  let requesterPersonId: string | null = null;
-  interface PersonRow { id: string }
-  const requester = await supabaseFetch<PersonRow>(c.env, {
-    schema: "identity",
-    path: "person",
-    query: `workos_user_id=eq.${encodeURIComponent(authResult.user.userId)}&select=id`,
-    single: true,
-  });
-  requesterPersonId = requester?.id ?? null;
-
-  const isHost = !!event && !!requesterPersonId && event.organizer_person_id === requesterPersonId;
+  const isHost = !!event && event.organizer_person_id === requesterPersonId;
 
   interface WaitRow { id: string; event_id: string; person_id: string; position: number; joined_at: string | null }
   const rows = await supabaseFetch<WaitRow[]>(c.env, {

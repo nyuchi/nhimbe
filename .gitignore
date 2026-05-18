@@ -50,3 +50,4 @@ worker/worker-configuration.d.ts
 
 # worktrees
 .worktrees
+.claude/worktrees/

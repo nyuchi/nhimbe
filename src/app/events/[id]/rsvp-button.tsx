@@ -25,7 +25,7 @@ export function RSVPButton({ eventId, price }: RSVPButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const pathname = usePathname();
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, accessToken, getAccessToken } = useAuth();
 
   // Track view on mount
   useEffect(() => {
@@ -41,13 +41,18 @@ export function RSVPButton({ eventId, price }: RSVPButtonProps) {
     setError(null);
 
     try {
+      const token = accessToken ?? (await getAccessToken());
+      if (!token) {
+        setError("Sign in expired. Please refresh the page.");
+        setLoading(false);
+        return;
+      }
       await registerForEvent({
         eventId: eventId,
-        userId: user.id,
         ticketType: price?.price ? "paid" : "free",
         ticketPrice: price?.price,
         ticketCurrency: price?.priceCurrency,
-      });
+      }, token);
       setRegistered(true);
     } catch (err) {
       setError("Failed to register. Please try again.");
@@ -69,7 +74,7 @@ export function RSVPButton({ eventId, price }: RSVPButtonProps) {
   // Show sign in prompt if not authenticated
   if (!isAuthenticated) {
     return (
-      <Link href={`/auth/signin?redirect=${encodeURIComponent(pathname)}`}>
+      <Link href={`/auth/signin?return_to=${encodeURIComponent(pathname)}`}>
         <Button variant="default" className="w-full py-4 text-base">
           <LogIn className="w-5 h-5 mr-2" />
           Sign in to RSVP

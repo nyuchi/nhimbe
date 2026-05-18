@@ -291,6 +291,109 @@ kiosk.get("/session/:token", writeAuth, async (c) => {
   });
 });
 
+// POST /api/kiosk/checkin — Kiosk-session-authenticated check-in.
+//
+// The paired-kiosk page can't carry a WorkOS JWT, so the organizer-only
+// `/api/events/:id/checkin` endpoint (hardened in the auth campaign) won't
+// accept its calls. Instead, the kiosk presents the session token it was
+// issued on `/pair/:code/confirm` — that token is itself proof the host
+// paired this device to this event, so it grants check-in rights for the
+// bound event only.
+//
+// Auth: `X-Kiosk-Token` header (NOT the WorkOS Bearer slot — keeps the two
+// auth contexts separate). The token is hashed with SHA-256 and looked up
+// in device.session; the bound event id comes from the joined device row.
+kiosk.post("/checkin", writeAuth, async (c) => {
+  const token = c.req.header("X-Kiosk-Token");
+  if (!token) {
+    return c.json({ error: "X-Kiosk-Token header required" }, 401);
+  }
+
+  let body: { registrationId?: string };
+  try {
+    body = await c.req.json() as { registrationId?: string };
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  if (!body.registrationId) {
+    return c.json({ error: "registrationId is required" }, 400);
+  }
+
+  // 1. Resolve the kiosk session and the event it's bound to. Mirror of
+  // GET /api/kiosk/session/:token — same join shape.
+  const tokenHash = await sha256Hex(token);
+  const now = new Date().toISOString();
+
+  interface SessionRow { device_id: string; revoked_at: string | null }
+  const session = await supabaseFetch<SessionRow>(c.env, {
+    schema: "device",
+    path: "session",
+    query: `token_hash=eq.${encodeURIComponent(tokenHash)}&expires_at=gt.${encodeURIComponent(now)}&revoked_at=is.null&select=device_id,revoked_at`,
+    single: true,
+  });
+  if (!session) {
+    return c.json({ error: "Kiosk session expired or invalid" }, 401);
+  }
+
+  interface DeviceRow { id: string; context_entity_id: string | null; device_type: string }
+  const device = await supabaseFetch<DeviceRow>(c.env, {
+    schema: "device",
+    path: "device",
+    query: `id=eq.${encodeURIComponent(session.device_id)}&select=id,context_entity_id,device_type`,
+    single: true,
+  });
+  if (!device || !device.context_entity_id) {
+    return c.json({ error: "Kiosk session has no bound event" }, 401);
+  }
+  // Only "kiosk" device_type can check in — signage screens are display-only.
+  if (device.device_type !== "kiosk") {
+    return c.json({ error: "This screen is not a check-in kiosk" }, 403);
+  }
+
+  const eventId = device.context_entity_id;
+
+  // 2. Resolve the RSVP. Confirm it belongs to the bound event so a stolen
+  // session token can't be used to check guests in at unrelated events.
+  interface RsvpRow { id: string; agent_person_id: string; event_id: string }
+  const rsvp = await supabaseFetch<RsvpRow>(c.env, {
+    schema: "events",
+    path: "rsvp_action",
+    query: `id=eq.${encodeURIComponent(body.registrationId)}&event_id=eq.${encodeURIComponent(eventId)}&select=id,agent_person_id,event_id`,
+    single: true,
+  });
+  if (!rsvp) {
+    return c.json({ error: "Registration not found for this event" }, 404);
+  }
+
+  // 3. Idempotency — return 409 if already checked in (matches the
+  // host-authenticated check-in endpoint's contract).
+  interface CheckInRow { id: string; checked_in_at: string | null }
+  const existing = await supabaseFetch<CheckInRow>(c.env, {
+    schema: "events",
+    path: "check_in",
+    query: `event_id=eq.${encodeURIComponent(eventId)}&person_id=eq.${encodeURIComponent(rsvp.agent_person_id)}&select=id,checked_in_at`,
+    single: true,
+  });
+  if (existing) {
+    return c.json({ error: "Already checked in", checkedInAt: existing.checked_in_at }, 409);
+  }
+
+  await supabaseFetch(c.env, {
+    schema: "events",
+    path: "check_in",
+    method: "POST",
+    body: {
+      event_id: eventId,
+      person_id: rsvp.agent_person_id,
+      method: "qr",
+      checked_in_at: new Date().toISOString(),
+      sync_version: 1,
+    },
+  });
+
+  return c.json({ message: "Check-in successful", registrationId: body.registrationId, eventId });
+});
+
 // DELETE /api/kiosk/session/:token — Revoke a session.
 kiosk.delete("/session/:token", writeAuth, async (c) => {
   const token = c.req.param("token");

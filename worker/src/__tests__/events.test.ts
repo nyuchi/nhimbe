@@ -27,10 +27,18 @@ import {
   makeFetchStub,
   pgrstMatch,
   jsonResponse as json,
+  jsonResponseWithCount as jsonWithCount,
   noContent,
   notFoundSingle,
-  trustedOriginHeaders as authHeaders,
+  trustedOriginHeaders as originOnlyHeaders,
+  authedOriginHeaders as authHeaders,
 } from "./mocks";
+
+vi.mock("../auth/workos", () => ({
+  getAuthenticatedUser: vi.fn(),
+}));
+import { getAuthenticatedUser } from "../auth/workos";
+const mockedGetAuthenticatedUser = vi.mocked(getAuthenticatedUser);
 
 function buildApp(env: Env) {
   const app = new Hono<{ Bindings: Env }>();
@@ -72,6 +80,7 @@ function eventRow(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  mockedGetAuthenticatedUser.mockReset();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -102,6 +111,32 @@ describe("GET /api/events", () => {
     const url = new URL(calls[0].url);
     expect(url.searchParams.get("limit")).toBe("20");
     expect(url.searchParams.get("offset")).toBe("0");
+  });
+
+  it("uses Prefer: count=exact and surfaces the parsed total in pagination", async () => {
+    const env = createMockEnv();
+    const { stub, calls } = makeFetchStub([
+      {
+        match: pgrstMatch("event", ["GET"]),
+        // 2 rows in this page, but 12345 total — proves we return the
+        // authoritative count, not the page-row count.
+        handle: () => jsonWithCount([eventRow(), eventRow({ id: "evt-2" })], 12345),
+      },
+    ]);
+    vi.stubGlobal("fetch", stub);
+
+    const app = buildApp(env);
+    const res = await app.fetch("/api/events");
+    expect(res.status).toBe(200);
+    const body = await res.json() as { events: unknown[]; pagination: { limit: number; offset: number; total: number } };
+    expect(body.events).toHaveLength(2);
+    expect(body.pagination.total).toBe(12345);
+
+    // The outgoing request must carry `Prefer: count=exact` so PostgREST
+    // populates the Content-Range header. Header values are case-insensitive
+    // by HTTP spec; the test stub lower-cases via the Headers iterator.
+    const preferHeader = calls[0].headers["prefer"] ?? calls[0].headers["Prefer"];
+    expect(preferHeader).toMatch(/count=exact/);
   });
 
   it("applies city and category filters", async () => {
@@ -228,25 +263,28 @@ describe("POST /api/events", () => {
     const res = await app.fetch("/api/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "X", organizerPersonId: "p" }),
+      body: JSON.stringify({ name: "X" }),
     });
     expect(res.status).toBe(401);
   });
 
-  it("400s when organizerPersonId is missing", async () => {
+  it("401s when no JWT is present", async () => {
     const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: null, failureReason: "no_token" });
     const app = buildApp(env);
     const res = await app.fetch("/api/events", {
       method: "POST",
-      headers: authHeaders(),
+      headers: originOnlyHeaders(),
       body: JSON.stringify({ name: "Concert" }),
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
   });
 
-  it("creates an event with a generated slug + indexes it", async () => {
+  it("creates an event with a generated slug + indexes it (organizer from JWT)", async () => {
     const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|host" } });
     const { stub, calls } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-host" }) },
       {
         match: pgrstMatch("event", ["POST"]),
         handle: ({ body }) => json([eventRow({ ...body as Record<string, unknown> })], 201),
@@ -261,12 +299,12 @@ describe("POST /api/events", () => {
       body: JSON.stringify({
         name: "African Tech Summit 2026",
         startDate: "2026-08-01T09:00:00Z",
-        organizerPersonId: "person-host",
+        // organizerPersonId in body is ignored — JWT identity wins.
         location: { name: "Rainbow Towers", addressLocality: "Harare" },
       }),
     });
     expect(res.status).toBe(201);
-    const post = calls.find(c => c.method === "POST");
+    const post = calls.find(c => c.method === "POST" && c.url.includes("/event"));
     expect(post!.body).toMatchObject({
       name: "African Tech Summit 2026",
       slug: "african-tech-summit-2026",
@@ -276,6 +314,37 @@ describe("POST /api/events", () => {
     // indexEvent runs AI.run + VECTORIZE.upsert as side-effects (mocks no-op).
     expect(env.AI.run).toHaveBeenCalled();
   });
+
+  it("ignores body.organizerPersonId — JWT is the source of truth", async () => {
+    const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|host" } });
+    const { stub, calls } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-host" }) },
+      {
+        match: pgrstMatch("event", ["POST"]),
+        handle: ({ body }) => json([eventRow({ ...body as Record<string, unknown> })], 201),
+      },
+    ]);
+    vi.stubGlobal("fetch", stub);
+
+    const app = buildApp(env);
+    const res = await app.fetch("/api/events", {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        name: "Impersonation Attempt",
+        organizerPersonId: "person-victim",
+        organizer: { identifier: "person-victim", name: "Victim", initials: "V", eventCount: 0 },
+        location: { name: "X", addressLocality: "Y" },
+      }),
+    });
+    expect(res.status).toBe(201);
+    const post = calls.find(c => c.method === "POST" && c.url.includes("/event"));
+    expect(post!.body).toMatchObject({
+      organizer_person_id: "person-host",
+      owner_id: "person-host",
+    });
+  });
 });
 
 // ============================================
@@ -283,9 +352,15 @@ describe("POST /api/events", () => {
 // ============================================
 
 describe("PUT /api/events/:id", () => {
-  it("sends a patch with only the supplied fields", async () => {
+  it("sends a patch with only the supplied fields (when requester is the organizer)", async () => {
     const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|host" } });
     const { stub, calls } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-host" }) },
+      {
+        match: pgrstMatch("event", ["GET"]),
+        handle: () => json({ organizer_person_id: "person-host" }),
+      },
       {
         match: pgrstMatch("event", ["PATCH"]),
         handle: () => json([eventRow({ name: "New Title" })]),
@@ -303,6 +378,27 @@ describe("PUT /api/events/:id", () => {
     const patch = calls.find(c => c.method === "PATCH");
     expect(patch!.body).toEqual({ name: "New Title", description: "Updated" });
   });
+
+  it("403s when requester is not the organizer", async () => {
+    const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|imposter" } });
+    const { stub } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-imposter" }) },
+      {
+        match: pgrstMatch("event", ["GET"]),
+        handle: () => json({ organizer_person_id: "person-host" }),
+      },
+    ]);
+    vi.stubGlobal("fetch", stub);
+
+    const app = buildApp(env);
+    const res = await app.fetch("/api/events/evt-1", {
+      method: "PUT",
+      headers: authHeaders(),
+      body: JSON.stringify({ name: "Stolen Edit" }),
+    });
+    expect(res.status).toBe(403);
+  });
 });
 
 // ============================================
@@ -312,7 +408,9 @@ describe("PUT /api/events/:id", () => {
 describe("POST /api/events/:id/cancel", () => {
   it("404s when the event does not exist", async () => {
     const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|host" } });
     const { stub } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-host" }) },
       { match: pgrstMatch("event", ["GET"]), handle: () => notFoundSingle() },
     ]);
     vi.stubGlobal("fetch", stub);
@@ -325,12 +423,42 @@ describe("POST /api/events/:id/cancel", () => {
     expect(res.status).toBe(404);
   });
 
-  it("400s when the event is already cancelled", async () => {
+  it("403s when requester is not the organizer", async () => {
     const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|imposter" } });
     const { stub } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-imposter" }) },
       {
         match: pgrstMatch("event", ["GET"]),
-        handle: () => json({ id: "evt-1", eventstatus: "https://schema.org/EventCancelled" }),
+        handle: () => json({
+          id: "evt-1",
+          eventstatus: "https://schema.org/EventScheduled",
+          organizer_person_id: "person-host",
+        }),
+      },
+    ]);
+    vi.stubGlobal("fetch", stub);
+
+    const app = buildApp(env);
+    const res = await app.fetch("/api/events/evt-1/cancel", {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("400s when the event is already cancelled", async () => {
+    const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|host" } });
+    const { stub } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-host" }) },
+      {
+        match: pgrstMatch("event", ["GET"]),
+        handle: () => json({
+          id: "evt-1",
+          eventstatus: "https://schema.org/EventCancelled",
+          organizer_person_id: "person-host",
+        }),
       },
     ]);
     vi.stubGlobal("fetch", stub);
@@ -343,12 +471,18 @@ describe("POST /api/events/:id/cancel", () => {
     expect(res.status).toBe(400);
   });
 
-  it("patches eventstatus and writes an audit row", async () => {
+  it("patches eventstatus and writes an audit row with the requester as actor", async () => {
     const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|host" } });
     const { stub, calls } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-host" }) },
       {
         match: pgrstMatch("event", ["GET"]),
-        handle: () => json({ id: "evt-1", eventstatus: "https://schema.org/EventScheduled" }),
+        handle: () => json({
+          id: "evt-1",
+          eventstatus: "https://schema.org/EventScheduled",
+          organizer_person_id: "person-host",
+        }),
       },
       { match: pgrstMatch("event", ["PATCH"]), handle: () => noContent() },
       { match: pgrstMatch("activity_logs", ["POST"]), handle: () => json([{ id: "log" }], 201) },
@@ -364,7 +498,7 @@ describe("POST /api/events/:id/cancel", () => {
     const patch = calls.find(c => c.method === "PATCH");
     expect(patch!.body).toEqual({ eventstatus: "https://schema.org/EventCancelled" });
     const audit = calls.find(c => c.method === "POST" && c.url.includes("/activity_logs"));
-    expect(audit!.body).toMatchObject({ action: "event.cancelled" });
+    expect(audit!.body).toMatchObject({ action: "event.cancelled", user_id: "person-host" });
   });
 });
 
@@ -373,9 +507,29 @@ describe("POST /api/events/:id/cancel", () => {
 // ============================================
 
 describe("DELETE /api/events/:id", () => {
+  it("403s when requester is not the organizer", async () => {
+    const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|imposter" } });
+    const { stub } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-imposter" }) },
+      { match: pgrstMatch("event", ["GET"]), handle: () => json({ organizer_person_id: "person-host" }) },
+    ]);
+    vi.stubGlobal("fetch", stub);
+
+    const app = buildApp(env);
+    const res = await app.fetch("/api/events/evt-1", {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(403);
+  });
+
   it("deletes the row + writes an audit row + removes from index", async () => {
     const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|host" } });
     const { stub, calls } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-host" }) },
+      { match: pgrstMatch("event", ["GET"]), handle: () => json({ organizer_person_id: "person-host" }) },
       { match: pgrstMatch("event", ["DELETE"]), handle: () => noContent() },
       { match: pgrstMatch("activity_logs", ["POST"]), handle: () => json([{ id: "log" }], 201) },
     ]);
@@ -389,6 +543,8 @@ describe("DELETE /api/events/:id", () => {
     expect(res.status).toBe(200);
     expect(calls.find(c => c.method === "DELETE")).toBeDefined();
     expect(env.VECTORIZE.deleteByIds).toHaveBeenCalledWith(["evt-1"]);
+    const audit = calls.find(c => c.method === "POST" && c.url.includes("/activity_logs"));
+    expect(audit!.body).toMatchObject({ action: "event.deleted", user_id: "person-host" });
   });
 });
 
@@ -493,18 +649,25 @@ describe("GET /api/events/:id/reviews", () => {
 describe("POST /api/events/:id/reviews", () => {
   it("400s when rating is out of range", async () => {
     const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|author" } });
+    const { stub } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-author" }) },
+    ]);
+    vi.stubGlobal("fetch", stub);
     const app = buildApp(env);
     const res = await app.fetch("/api/events/evt-1/reviews", {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ userId: "p1", rating: 7 }),
+      body: JSON.stringify({ rating: 7 }),
     });
     expect(res.status).toBe(400);
   });
 
-  it("inserts a review + enqueues an analytics message", async () => {
+  it("inserts a review (author from JWT) + enqueues an analytics message", async () => {
     const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|author" } });
     const { stub, calls } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-author" }) },
       {
         match: pgrstMatch("review", ["POST"]),
         handle: () => json([{ id: "rev-1" }], 201),
@@ -516,23 +679,26 @@ describe("POST /api/events/:id/reviews", () => {
     const res = await app.fetch("/api/events/evt-1/reviews", {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ userId: "p1", rating: 5, reviewBody: "great" }),
+      // Body's userId is ignored — JWT identity wins.
+      body: JSON.stringify({ userId: "person-spoof", rating: 5, reviewBody: "great" }),
     });
     expect(res.status).toBe(201);
-    const post = calls[0];
-    expect(post.body).toMatchObject({
-      author: "p1",
+    const post = calls.find((c) => c.method === "POST" && c.url.includes("/review"));
+    expect(post!.body).toMatchObject({
+      author: "person-author",
       rating_value: 5,
       item_reviewed_id: "evt-1",
     });
     expect(env.ANALYTICS_QUEUE!.send).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "review", eventId: "evt-1" }),
+      expect.objectContaining({ type: "review", eventId: "evt-1", userId: "person-author" }),
     );
   });
 
   it("returns 409 when supabase insert fails (duplicate review)", async () => {
     const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|author" } });
     const { stub } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-author" }) },
       { match: pgrstMatch("review", ["POST"]), handle: () => json({ error: "dupe" }, 409) },
     ]);
     vi.stubGlobal("fetch", stub);
@@ -541,7 +707,7 @@ describe("POST /api/events/:id/reviews", () => {
     const res = await app.fetch("/api/events/evt-1/reviews", {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({ userId: "p1", rating: 5 }),
+      body: JSON.stringify({ rating: 5 }),
     });
     expect(res.status).toBe(409);
   });

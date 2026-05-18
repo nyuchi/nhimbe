@@ -10,6 +10,7 @@ import { requestId as requestIdMiddleware, requestLogger } from "./middleware/ob
 import { rateLimit } from "./middleware/rate-limit";
 import { processAnalyticsMessage, processEmailMessage } from "./queues/handlers";
 import { CircuitOpenError } from "./utils/circuit-breaker";
+import { SupabaseClientError } from "./db/supabase";
 
 // Route modules
 import { health } from "./routes/health";
@@ -103,6 +104,17 @@ app.use("*", async (c, next) => {
   c.res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   c.res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   c.res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // Strict CSP for JSON/API responses — the worker is JSON-only with one
+  // exception (the HTML status page at `/` in health.ts, which uses inline
+  // styles + Google Fonts and would break under this policy). Skip CSP for
+  // HTML so the status page keeps rendering; everything else gets locked down.
+  const responseContentType = c.res.headers.get("Content-Type") || "";
+  if (!responseContentType.includes("text/html")) {
+    c.res.headers.set(
+      "Content-Security-Policy",
+      "default-src 'self'; frame-ancestors 'none'; base-uri 'self'",
+    );
+  }
 });
 
 // Observability
@@ -123,6 +135,11 @@ app.use("/api/registrations/*", rateLimit);
 app.use("/api/admin/*", rateLimit);
 app.use("/api/series/*", rateLimit);
 app.use("/api/kiosk/*", rateLimit);
+// Categories listings are cheap (cached), but the propose/vouch/flag write
+// paths can be spammed to fill events.event_category with garbage. Rate-limit
+// the whole /api/event-categories tree to share the 100 req/min bucket.
+app.use("/api/event-categories", rateLimit);
+app.use("/api/event-categories/*", rateLimit);
 
 // Mount route modules
 app.route("/", health);
@@ -163,6 +180,46 @@ app.onError((err, c) => {
         requestId: reqId,
       },
       503,
+    );
+  }
+  // SupabaseClientError — distinguish caller-bug 4xx from upstream 5xx.
+  //   - 23505 / 409 → uniqueness violation, surface as 409 so the client
+  //     can show "already exists" without re-trying.
+  //   - other 4xx → surface a clean shape with a STRIPPED body (cap at
+  //     200 chars, no raw row data) so the caller can act on it.
+  //   - 5xx (malformed query, broken trigger) → generic 500. The PostgREST
+  //     body would leak query shape / column names, so we don't echo it.
+  if (err instanceof SupabaseClientError) {
+    if (err.status === 409 || err.body.includes("23505")) {
+      return c.json(
+        {
+          error: "Conflict",
+          detail: err.body.slice(0, 200),
+          requestId: reqId,
+        },
+        409,
+      );
+    }
+    if (err.status >= 400 && err.status < 500) {
+      return c.json(
+        {
+          error: "Bad request",
+          detail: err.body.slice(0, 200),
+          requestId: reqId,
+        },
+        // Hono's c.json accepts any number, but its type wants a
+        // ContentfulStatusCode union — cast through the narrow set we
+        // actually return here (400/401/403/404/405/422 etc.).
+        err.status as 400,
+      );
+    }
+    // 5xx — stay generic. Don't leak PostgREST body.
+    return c.json(
+      {
+        error: "Internal Server Error",
+        requestId: reqId,
+      },
+      500,
     );
   }
   return c.json(

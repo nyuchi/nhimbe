@@ -7,12 +7,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/components/auth/auth-context";
 import { getCirclesForPerson } from "@/lib/supabase/api";
-import { t } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import type { CircleRow } from "@/lib/supabase/types";
 
 export default function KraalIndexClient() {
+  const { t } = useT();
   const { user, isAuthenticated } = useAuth();
-  const personId = (user as { person_id?: string } | null)?.person_id ?? null;
+  const personId = user?.personId ?? null;
   // Default to "not loading" — only flip true once we've actually kicked
   // off a fetch in the effect's async callback, which keeps the React 19
   // `set-state-in-effect` rule happy.

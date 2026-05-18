@@ -114,10 +114,28 @@ export interface CitiesResponse {
 // API fetch wrapper. The session JWT (WorkOS access token) is always passed
 // explicitly by callers — the AuthKit provider owns it and there's no
 // browser-cookie path to retrieve it from here.
+//
+// Errors carry the worker's own `error` body when available — every route
+// returns `{ error: string }` on failure, and callers (UI) want that string
+// in toasts rather than the generic status text. The thrown Error also has
+// a `.status` numeric property so callers can branch on 401 / 403 / 409.
+//
+// 20s timeout: long enough for the AI-assisted endpoints (description
+// generator, search RAG) and short enough that a hung connection doesn't
+// strand a button in the loading state indefinitely.
+const DEFAULT_FETCH_TIMEOUT_MS = 20_000;
+
+export class ApiError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {},
-  sessionJwt?: string
+  sessionJwt?: string,
 ): Promise<T> {
   const url = `${API_URL}${endpoint}`;
 
@@ -130,13 +148,39 @@ async function apiFetch<T>(
     headers["Authorization"] = `Bearer ${sessionJwt}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  // Compose with any caller-supplied signal so callers can still cancel.
+  const timeoutSignal = AbortSignal.timeout(DEFAULT_FETCH_TIMEOUT_MS);
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, timeoutSignal])
+    : timeoutSignal;
+
+  let response: Response;
+  try {
+    response = await fetch(url, { ...options, headers, signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new ApiError(0, `Request timed out after ${DEFAULT_FETCH_TIMEOUT_MS}ms`);
+    }
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new ApiError(0, "Request cancelled");
+    }
+    throw err; // network failure surfaces as TypeError — keep that shape
+  }
 
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    // Pull the error message out of the response body. Every worker error
+    // shape is `{ error: string, ...extras }`, but a 5xx from edge / a CORS
+    // failure might return plain text, so fall back to the status line.
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const body = await response.clone().json() as { error?: string };
+      if (body && typeof body.error === "string" && body.error.length > 0) {
+        message = body.error;
+      }
+    } catch {
+      // Not JSON; leave the status-line message in place.
+    }
+    throw new ApiError(response.status, message);
   }
 
   return response.json();
@@ -214,24 +258,26 @@ export interface CreateEventInput {
   offers?: EventOffers;
 }
 
-// Create a new event
-export async function createEvent(event: CreateEventInput, sessionJwt?: string): Promise<{ event: Event; message: string }> {
+// Create a new event. The WorkOS access token is required — every write
+// endpoint on the worker derives the actor identity from the JWT now, and
+// `sessionJwt` is the only path to provide it.
+export async function createEvent(event: CreateEventInput, sessionJwt: string): Promise<{ event: Event; message: string }> {
   return apiFetch<{ event: Event; message: string }>("/api/events", {
     method: "POST",
     body: JSON.stringify(event),
   }, sessionJwt);
 }
 
-// Update an event
-export async function updateEvent(id: string, updates: Partial<CreateEventInput>, sessionJwt?: string): Promise<{ message: string }> {
+// Update an event. Caller must be the event organizer (worker enforces).
+export async function updateEvent(id: string, updates: Partial<CreateEventInput>, sessionJwt: string): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/api/events/${id}`, {
     method: "PUT",
     body: JSON.stringify(updates),
   }, sessionJwt);
 }
 
-// Delete an event
-export async function deleteEvent(id: string, sessionJwt?: string): Promise<{ message: string }> {
+// Delete an event. Caller must be the event organizer (worker enforces).
+export async function deleteEvent(id: string, sessionJwt: string): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/api/events/${id}`, {
     method: "DELETE",
   }, sessionJwt);
@@ -274,36 +320,40 @@ export async function getUserRegistrations(userId: string): Promise<Registration
   return response.registrations;
 }
 
-// Register for an event (RSVP)
+// Register for an event (RSVP). The worker derives the registrant identity
+// from the JWT; `userId` in the body is accepted for back-compat but ignored
+// server-side.
 export async function registerForEvent(data: {
   eventId: string;
-  userId: string;
+  userId?: string;
   ticketType?: string;
   ticketPrice?: number;
   ticketCurrency?: string;
-}, sessionJwt?: string): Promise<{ id: string; message: string }> {
+}, sessionJwt: string): Promise<{ id: string; message: string }> {
   return apiFetch<{ id: string; message: string }>("/api/registrations", {
     method: "POST",
     body: JSON.stringify(data),
   }, sessionJwt);
 }
 
-// Update registration status (approve/reject)
+// Update registration status (approve/reject). Host-only — worker checks
+// the JWT against the event organizer.
 export async function updateRegistrationStatus(
   registrationId: string,
-  status: "approved" | "rejected" | "pending" | "registered"
+  status: "approved" | "rejected" | "pending" | "registered",
+  sessionJwt: string,
 ): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/api/registrations/${registrationId}`, {
     method: "PUT",
     body: JSON.stringify({ status }),
-  });
+  }, sessionJwt);
 }
 
-// Cancel a registration
-export async function cancelRegistration(registrationId: string): Promise<{ message: string }> {
+// Cancel a registration. Caller must be the registrant or event organizer.
+export async function cancelRegistration(registrationId: string, sessionJwt: string): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/api/registrations/${registrationId}`, {
     method: "DELETE",
-  });
+  }, sessionJwt);
 }
 
 // ============================================
@@ -560,26 +610,28 @@ export async function getEventReviews(eventId: string): Promise<EventReviewsResp
   return apiFetch<EventReviewsResponse>(`/api/events/${eventId}/reviews`);
 }
 
-// Submit a review for an event
+// Submit a review for an event. Author identity is derived from the JWT
+// server-side; `userId` in the body is ignored.
 export async function submitEventReview(
   eventId: string,
-  data: { userId: string; rating: number; reviewBody?: string }
+  data: { userId?: string; rating: number; reviewBody?: string },
+  sessionJwt: string,
 ): Promise<{ id: string; message: string }> {
   return apiFetch<{ id: string; message: string }>(`/api/events/${eventId}/reviews`, {
     method: "POST",
     body: JSON.stringify(data),
-  });
+  }, sessionJwt);
 }
 
-// Mark a review as helpful
+// Mark a review as helpful. Voter identity is derived from the JWT.
 export async function markReviewHelpful(
   reviewId: string,
-  userId: string
+  sessionJwt: string,
 ): Promise<{ message: string }> {
   return apiFetch<{ message: string }>(`/api/reviews/${reviewId}/helpful`, {
     method: "POST",
-    body: JSON.stringify({ userId }),
-  });
+    body: JSON.stringify({}),
+  }, sessionJwt);
 }
 
 // Event Stats Types
@@ -609,17 +661,18 @@ export interface TrackedLink {
   url: string; // relative: /r/{code}
 }
 
-// Create a tracked link that redirects through nhimbe for click analytics
+// Create a tracked link that redirects through nhimbe for click analytics.
+// `createdBy` is derived from the JWT server-side; passing it in the body
+// has no effect.
 export async function createTrackedLink(data: {
   targetUrl: string;
   eventId: string;
   linkType: "meeting_url" | "directions" | "ticket" | "website";
-  createdBy?: string;
-}): Promise<TrackedLink> {
+}, sessionJwt: string): Promise<TrackedLink> {
   return apiFetch<TrackedLink>("/api/links", {
     method: "POST",
     body: JSON.stringify(data),
-  });
+  }, sessionJwt);
 }
 
 // Get the full tracked URL for a code
@@ -637,20 +690,43 @@ export interface CheckinStats {
   rate: number;
 }
 
-// Check in a registration at an event
+// Check in a registration at an event. Only the event organizer may call
+// this — the worker enforces the JWT-derived identity against the event row.
+// (Kiosk devices use a separate session-token flow via /api/kiosk.)
 export async function checkinRegistration(
   eventId: string,
-  registrationId: string
+  registrationId: string,
+  sessionJwt: string,
 ): Promise<{ message: string; registrationId: string }> {
   return apiFetch<{ message: string; registrationId: string }>(
     `/api/events/${eventId}/checkin`,
-    { method: "POST", body: JSON.stringify({ registrationId }) }
+    { method: "POST", body: JSON.stringify({ registrationId }) },
+    sessionJwt,
   );
 }
 
 // Get check-in stats for an event
 export async function getCheckinStats(eventId: string): Promise<CheckinStats> {
   return apiFetch<CheckinStats>(`/api/events/${eventId}/checkin/stats`);
+}
+
+// Paired-kiosk check-in. Hits POST /api/kiosk/checkin which validates the
+// kiosk session token via X-Kiosk-Token header (NOT the WorkOS Bearer slot)
+// and resolves the bound event server-side. The eventId arg is passed for
+// client-side sanity-checking only; the worker uses the token's bound event.
+export async function checkinViaKiosk(
+  eventId: string,
+  registrationId: string,
+  kioskToken: string,
+): Promise<{ message: string; registrationId: string; eventId: string }> {
+  return apiFetch<{ message: string; registrationId: string; eventId: string }>(
+    `/api/kiosk/checkin`,
+    {
+      method: "POST",
+      body: JSON.stringify({ registrationId, eventId }),
+      headers: { "X-Kiosk-Token": kioskToken },
+    },
+  );
 }
 
 // Kiosk Pairing Types

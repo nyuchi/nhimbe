@@ -10,7 +10,7 @@ import { ShareButton } from "./event-actions";
 import { RSVPButton } from "./rsvp-button";
 import { HostReputation } from "@/components/ui/host-reputation";
 import { EventEntityHostCard } from "./event-entity-host-card";
-import { t } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import type { Event, EventStats, ReviewStats } from "@/lib/api";
 
 interface EventSidebarProps {
@@ -37,6 +37,7 @@ function StatBox({ icon, label, value }: { icon: React.ReactNode; label: string;
 }
 
 export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
+  const { t } = useT();
   const [hasEntityHost, setHasEntityHost] = useState(false);
   const capacityPercent = event.maximumAttendeeCapacity
     ? Math.min((event.attendeeCount / event.maximumAttendeeCapacity) * 100, 100)

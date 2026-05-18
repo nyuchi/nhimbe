@@ -33,6 +33,25 @@ export class SupabaseTransientError extends Error {
   }
 }
 
+/**
+ * Thrown by supabaseFetch when PostgREST returns a non-transient error —
+ * 4xx (caller bugs: bad query, duplicate row, missing FK) or 500 (malformed
+ * query, broken trigger). Carries the original HTTP status and raw response
+ * body so route handlers can switch on `err.status === 409` (etc.) instead
+ * of grepping the message string. Does NOT count against the circuit
+ * breaker — see `shouldCountAsFailure` in `supabaseFetch` below.
+ */
+export class SupabaseClientError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly body: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "SupabaseClientError";
+  }
+}
+
 interface SupabaseFetchOptions {
   /** Postgres schema (e.g. "identity", "events"). PostgREST routes via Accept-Profile / Content-Profile. */
   schema: string;
@@ -44,9 +63,25 @@ interface SupabaseFetchOptions {
   body?: unknown;
   /** When true, asks PostgREST to return at most one row (sets Accept: application/vnd.pgrst.object+json). */
   single?: boolean;
+  /**
+   * Ask PostgREST to include an authoritative row count via the `Prefer:
+   * count=<mode>` header. The total is returned by `supabaseFetchWithCount`
+   * (parsed from the `Content-Range: 0-99/12345` response header). See
+   * `supabaseFetchWithCount` for the trade-offs.
+   */
+  countMode?: "exact" | "planned" | "estimated";
 }
 
-export async function supabaseFetch<T>(env: Env, opts: SupabaseFetchOptions): Promise<T | null> {
+/**
+ * Internal: drives the fetch and exposes the raw `Response` so callers can
+ * read headers (e.g. `Content-Range` for counts). The public `supabaseFetch`
+ * unwraps to just the body; `supabaseFetchWithCount` reads the count header
+ * alongside the body.
+ */
+async function supabaseFetchRaw<T>(
+  env: Env,
+  opts: SupabaseFetchOptions,
+): Promise<{ data: T | null; response: Response | null }> {
   const url = env.SUPABASE_URL;
   const key = env.SUPABASE_SECRET_KEY;
   if (!url || !key) throw new SupabaseConfigError();
@@ -59,11 +94,20 @@ export async function supabaseFetch<T>(env: Env, opts: SupabaseFetchOptions): Pr
 
   const method = opts.method ?? "GET";
   const isWrite = method !== "GET";
+  // PostgREST's `Prefer` header is comma-separated — we may need to combine
+  // `return=representation` (write path) with `count=exact` (any path).
+  const preferParts: string[] = [];
   if (isWrite) {
     headers.set("Content-Profile", opts.schema);
-    headers.set("Prefer", "return=representation");
+    preferParts.push("return=representation");
   } else {
     headers.set("Accept-Profile", opts.schema);
+  }
+  if (opts.countMode) {
+    preferParts.push(`count=${opts.countMode}`);
+  }
+  if (preferParts.length > 0) {
+    headers.set("Prefer", preferParts.join(","));
   }
   if (opts.single) {
     headers.set("Accept", "application/vnd.pgrst.object+json");
@@ -71,7 +115,7 @@ export async function supabaseFetch<T>(env: Env, opts: SupabaseFetchOptions): Pr
 
   const fullUrl = `${url.replace(/\/$/, "")}/rest/v1/${opts.path}${opts.query ? `?${opts.query}` : ""}`;
 
-  const doFetch = async (): Promise<T | null> => {
+  const doFetch = async (): Promise<{ data: T | null; response: Response | null }> => {
     let response: Response;
     try {
       response = await fetch(fullUrl, {
@@ -88,7 +132,7 @@ export async function supabaseFetch<T>(env: Env, opts: SupabaseFetchOptions): Pr
 
     if (response.status === 406 && opts.single) {
       // PostgREST returns 406 from `single=true` when no rows match. Treat as null.
-      return null;
+      return { data: null, response };
     }
     if (!response.ok) {
       const text = await response.text().catch(() => "");
@@ -98,11 +142,15 @@ export async function supabaseFetch<T>(env: Env, opts: SupabaseFetchOptions): Pr
       if (response.status === 502 || response.status === 503 || response.status === 504) {
         throw new SupabaseTransientError(msg, response.status);
       }
-      throw new Error(msg);
+      // 4xx (caller bug, uniqueness violation, FK miss) and 500 (malformed
+      // query, broken trigger) — surface as a typed error so route handlers
+      // can switch on `err.status === 409` instead of grepping the message.
+      throw new SupabaseClientError(response.status, text, msg);
     }
 
-    if (response.status === 204) return null;
-    return (await response.json()) as T;
+    if (response.status === 204) return { data: null, response };
+    const data = (await response.json()) as T;
+    return { data, response };
   };
 
   // Wrap fetches with the circuit breaker so a sustained Supabase outage
@@ -125,4 +173,50 @@ export async function supabaseFetch<T>(env: Env, opts: SupabaseFetchOptions): Pr
     maxDelayMs: 2_000,
     shouldRetry: (err) => err instanceof SupabaseTransientError,
   });
+}
+
+export async function supabaseFetch<T>(env: Env, opts: SupabaseFetchOptions): Promise<T | null> {
+  const { data } = await supabaseFetchRaw<T>(env, opts);
+  return data;
+}
+
+/**
+ * Parse the total row count out of a PostgREST `Content-Range` header. The
+ * format is `<from>-<to>/<total>` (or `<asterisk>/<total>` when the result
+ * set is empty). Returns null when the header is missing or unparseable so
+ * callers can fall back gracefully instead of crashing the request.
+ */
+function parseContentRangeTotal(response: Response | null): number | null {
+  if (!response) return null;
+  const header = response.headers.get("Content-Range");
+  if (!header) return null;
+  const slash = header.indexOf("/");
+  if (slash < 0) return null;
+  const totalPart = header.slice(slash + 1).trim();
+  if (totalPart === "" || totalPart === "*") return null;
+  const total = Number.parseInt(totalPart, 10);
+  return Number.isFinite(total) ? total : null;
+}
+
+/**
+ * Like `supabaseFetch`, but also returns the authoritative row count parsed
+ * out of the PostgREST `Content-Range` response header. The caller must set
+ * `countMode` in opts; the default is "exact" if omitted.
+ *
+ * Trade-off: `count=exact` runs a separate `SELECT count(*)` server-side and
+ * can be slow on very large tables (PostgREST docs warn about this). For the
+ * tables this is currently wired up to (events.event, identity.person,
+ * events.rsvp_action) we're well under the size where this matters. Switch
+ * to `"planned"` or `"estimated"` if a future call site is at risk.
+ */
+export async function supabaseFetchWithCount<T>(
+  env: Env,
+  opts: SupabaseFetchOptions,
+): Promise<{ rows: T | null; total: number | null }> {
+  const resolved: SupabaseFetchOptions = {
+    ...opts,
+    countMode: opts.countMode ?? "exact",
+  };
+  const { data, response } = await supabaseFetchRaw<T>(env, resolved);
+  return { rows: data, total: parseContentRangeTotal(response) };
 }

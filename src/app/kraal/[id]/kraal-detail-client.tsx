@@ -19,7 +19,7 @@ import {
   type KraalPostWithAuthor,
 } from "@/lib/supabase/api";
 import type { CircleRow } from "@/lib/supabase/types";
-import { t } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 
 interface KraalDetailClientProps {
   circleId: string;
@@ -35,8 +35,9 @@ function authorInitial(label: string): string {
 }
 
 export default function KraalDetailClient({ circleId }: KraalDetailClientProps) {
+  const { t } = useT();
   const { user, isAuthenticated } = useAuth();
-  const personId = (user as { person_id?: string } | null)?.person_id ?? null;
+  const personId = user?.personId ?? null;
 
   const [loading, setLoading] = useState(true);
   const [circle, setCircle] = useState<CircleRow | null>(null);

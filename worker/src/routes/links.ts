@@ -13,22 +13,30 @@
 import { Hono } from "hono";
 import type { Env, AppVariables } from "../types";
 import { generateShortCode } from "../utils/ids";
+import { writeAuth } from "../middleware/auth";
+import { requireRequesterPersonId } from "../auth/identity";
 import { supabaseFetch } from "../db/supabase";
 
 const links = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+links.use("*", writeAuth);
 
+// POST /api/links — create a tracked link. Requires a valid JWT;
+// created_by is derived from the requester's person id.
 links.post("/", async (c) => {
   const body = await c.req.json<{
     targetUrl: string;
     eventId: string;
     linkType: string;
-    createdBy?: string;
   }>();
 
   if (!body.targetUrl || !body.eventId || !body.linkType) {
     return c.json({ error: "targetUrl, eventId, and linkType are required" }, 400);
   }
   try { new URL(body.targetUrl); } catch { return c.json({ error: "Invalid target URL" }, 400); }
+
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const createdBy = r;
 
   // Idempotent: existing (event,url,type) tuple wins.
   const existing = await supabaseFetch<{ code: string }>(c.env, {
@@ -53,7 +61,7 @@ links.post("/", async (c) => {
       context_schema: "events",
       context_entity_type: "events.event",
       context_entity_id: body.eventId,
-      created_by: body.createdBy ?? null,
+      created_by: createdBy,
     },
   });
 
@@ -63,11 +71,11 @@ links.post("/", async (c) => {
 links.get("/:code", async (c) => {
   const code = c.req.param("code");
 
-  interface LinkRow { id: string; target_url: string; context_entity_id: string | null; click_count: number | null }
+  interface LinkRow { id: string; target_url: string; context_entity_id: string | null }
   const link = await supabaseFetch<LinkRow>(c.env, {
     schema: "engagement",
     path: "tracked_link",
-    query: `code=eq.${encodeURIComponent(code)}&select=id,target_url,context_entity_id,click_count`,
+    query: `code=eq.${encodeURIComponent(code)}&select=id,target_url,context_entity_id`,
     single: true,
   });
   if (!link) {
@@ -79,6 +87,8 @@ links.get("/:code", async (c) => {
       try {
         const userAgent = c.req.header("user-agent") || "";
         const referrer = c.req.header("referer") || "";
+        // Atomic increment via SECURITY DEFINER function — concurrent clicks
+        // don't lose increments to the read-modify-write race.
         await Promise.all([
           supabaseFetch(c.env, {
             schema: "engagement",
@@ -93,10 +103,9 @@ links.get("/:code", async (c) => {
           }),
           supabaseFetch(c.env, {
             schema: "engagement",
-            path: "tracked_link",
-            query: `id=eq.${encodeURIComponent(link.id)}`,
-            method: "PATCH",
-            body: { click_count: (link.click_count ?? 0) + 1 },
+            path: "rpc/increment_link_clicks",
+            method: "POST",
+            body: { p_link_id: link.id },
           }),
         ]);
       } catch (err) {

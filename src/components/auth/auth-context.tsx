@@ -57,6 +57,23 @@ interface AuthContextType {
   signIn: (returnUrl?: string) => void;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  /**
+   * Current WorkOS access token (JWT) or null if the user is signed out.
+   * Pass this as the `sessionJwt` argument to every write helper in
+   * `src/lib/api.ts` — the worker validates it locally against WorkOS's
+   * JWKS and uses the `sub` claim to derive the actor identity.
+   *
+   * Snapshot of `useAccessToken().accessToken` from
+   * `@workos-inc/authkit-nextjs/components`. AuthKit refreshes this in the
+   * background, so reading it at call time is safe.
+   */
+  accessToken: string | null;
+  /**
+   * Force-refresh and return the current access token. Useful when a long-
+   * lived screen needs to make a write after sitting idle — call this
+   * immediately before the write to avoid sending an expired JWT.
+   */
+  getAccessToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -136,14 +153,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [workosUser, accessToken, getAccessToken]);
 
   useEffect(() => {
-    if (!authKitLoading && workosUser && !hasSynced) {
+    // Gate the first sync on having the access token in hand. Without this,
+    // the effect fires as soon as `workosUser` resolves, then `syncWithSupabase`
+    // has to fall through to `getAccessToken()` because the
+    // `setSupabaseAccessToken` effect at line 109 hasn't run yet — costing
+    // a second AuthKit fetch on every first sign-in.
+    if (!authKitLoading && workosUser && accessToken && !hasSynced) {
       void syncWithSupabase();
     }
     if (!authKitLoading && !workosUser) {
       setNhimbeUser(null);
       setHasSynced(false);
     }
-  }, [authKitLoading, workosUser, hasSynced, syncWithSupabase]);
+  }, [authKitLoading, workosUser, accessToken, hasSynced, syncWithSupabase]);
 
   const signIn = useCallback(
     (returnUrl?: string) => {
@@ -189,6 +211,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     complete: hasName && hasAddressLocality && hasInterests,
   };
 
+  const getAccessTokenSafe = useCallback(async () => {
+    try {
+      const t = await getAccessToken();
+      return t ?? null;
+    } catch {
+      return null;
+    }
+  }, [getAccessToken]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -199,6 +230,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signOut,
         refreshUser,
+        accessToken: accessToken ?? null,
+        getAccessToken: getAccessTokenSafe,
       }}
     >
       {children}

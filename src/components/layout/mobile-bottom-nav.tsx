@@ -34,7 +34,7 @@ export function MobileBottomNav() {
           // For profile, redirect to sign-in if not authenticated
           const href =
             item.href === "/profile" && !isAuthenticated
-              ? `/auth/signin?redirect=${encodeURIComponent(pathname)}`
+              ? `/auth/signin?return_to=${encodeURIComponent(pathname)}`
               : item.href;
 
           const isActive =

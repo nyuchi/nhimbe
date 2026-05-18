@@ -8,6 +8,13 @@ interface QRCodeProps {
   bgColor?: string;
   fgColor?: string;
   className?: string;
+  /**
+   * Accessible name for assistive tech. Defaults to a sentence built from
+   * `value`, but callers can pass a friendlier one (e.g. "QR code for event
+   * 'Mukoko meetup'"). Canvas elements are silent to screen readers unless
+   * they carry an explicit accessible name (axe rule: image-alt / canvas).
+   */
+  ariaLabel?: string;
 }
 
 /**
@@ -20,6 +27,7 @@ export function QRCode({
   bgColor = "#FFFFFF",
   fgColor = "#000000",
   className = "",
+  ariaLabel,
 }: QRCodeProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -54,6 +62,8 @@ export function QRCode({
       ref={canvasRef}
       width={size}
       height={size}
+      role="img"
+      aria-label={ariaLabel ?? `QR code for ${value}`}
       className={`rounded-lg ${className}`}
     />
   );

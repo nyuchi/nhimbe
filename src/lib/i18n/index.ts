@@ -1,12 +1,25 @@
 /**
  * Lightweight i18n for nhimbe.
  * Supports English (en) and Shona (sn) — the two primary languages in Zimbabwe.
+ *
+ * Two consumption modes:
+ *  1. React client components — use `useT()` from `./i18n-provider` for a
+ *     reactive translator that re-renders when `setLocale()` is called.
+ *  2. Non-React contexts (RSC, utility files, modules) — use the `t()`,
+ *     `getLocale()`, `setLocale()` exports from this file. They read/write a
+ *     module-level mirror plus localStorage when `window` is available.
+ *
+ * Both modes share the same translation table and the same persistence key.
  */
 
 export type Locale = "en" | "sn";
 
+export type TranslationVars = Record<string, string | number>;
+
 type TranslationKey = string;
 type TranslationMap = Record<TranslationKey, string>;
+
+export const LOCALE_STORAGE_KEY = "nhimbe_locale";
 
 const translations: Record<Locale, TranslationMap> = {
   en: {
@@ -119,25 +132,55 @@ const translations: Record<Locale, TranslationMap> = {
 
 let currentLocale: Locale = "en";
 
+/**
+ * Interpolate `{name}` placeholders. Missing vars are left as-is so the
+ * developer can spot them in the UI.
+ */
+function interpolate(template: string, vars?: TranslationVars): string {
+  if (!vars) return template;
+  return template.replace(/\{(\w+)\}/g, (match, key: string) => {
+    const value = vars[key];
+    return value === undefined ? match : String(value);
+  });
+}
+
+/**
+ * Look up a translation for an explicit locale. Falls back to English, then
+ * to the raw key. Pure — no side effects — so it's safe to call from the
+ * provider's render path or from utility code.
+ */
+export function tStatic(locale: Locale, key: TranslationKey, vars?: TranslationVars): string {
+  const raw = translations[locale]?.[key] ?? translations.en[key] ?? key;
+  return interpolate(raw, vars);
+}
+
 export function setLocale(locale: Locale): void {
   currentLocale = locale;
   if (typeof window !== "undefined") {
-    localStorage.setItem("nhimbe_locale", locale);
+    try {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch {
+      // localStorage may throw in private-mode or sandboxed iframes; ignore.
+    }
   }
 }
 
 export function getLocale(): Locale {
   if (typeof window !== "undefined") {
-    const stored = localStorage.getItem("nhimbe_locale");
-    if (stored === "en" || stored === "sn") {
-      currentLocale = stored;
+    try {
+      const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+      if (stored === "en" || stored === "sn") {
+        currentLocale = stored;
+      }
+    } catch {
+      // ignore
     }
   }
   return currentLocale;
 }
 
-export function t(key: TranslationKey): string {
-  return translations[currentLocale]?.[key] || translations.en[key] || key;
+export function t(key: TranslationKey, vars?: TranslationVars): string {
+  return tStatic(currentLocale, key, vars);
 }
 
 export function getAvailableLocales(): { code: Locale; name: string }[] {
@@ -146,3 +189,5 @@ export function getAvailableLocales(): { code: Locale; name: string }[] {
     { code: "sn", name: "Shona" },
   ];
 }
+
+export { I18nProvider, useT } from "./i18n-provider";

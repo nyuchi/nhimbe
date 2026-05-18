@@ -6,7 +6,7 @@ import { safeParseInt } from "../utils/validation";
 import { removeEventFromIndex } from "../ai/embeddings";
 import { logAudit } from "../utils/audit";
 import { unauthorized, notFound, badRequest, forbidden } from "../utils/response";
-import { supabaseFetch } from "../db/supabase";
+import { supabaseFetch, supabaseFetchWithCount } from "../db/supabase";
 import { mapSupabaseEventToApi, type SupabaseEventRow, EVENT_COLUMNS } from "../db/event_mapper";
 
 export const admin = new Hono<{ Bindings: Env }>();
@@ -17,14 +17,17 @@ async function fetchCount(
   path: string,
   filterQuery: string,
 ): Promise<number> {
-  // Cheap row-count proxy: fetch ids only and count locally. Sufficient for
-  // admin dashboards; can move to RPC count(*) when the dataset is large.
-  const rows = await supabaseFetch<{ id: string }[]>(env, {
+  // Authoritative row count via PostgREST's `Prefer: count=exact` header —
+  // returned in `Content-Range: 0-0/<total>`. We ask for a 1-row window
+  // (`limit=1`) so we pay the count-query cost but transfer almost no rows.
+  // The previous implementation fetched up to 10k ids and counted locally,
+  // which silently truncated dashboards once a table crossed that threshold.
+  const { total } = await supabaseFetchWithCount<{ id: string }[]>(env, {
     schema,
     path,
-    query: `${filterQuery}${filterQuery ? "&" : ""}select=id&limit=10000`,
+    query: `${filterQuery}${filterQuery ? "&" : ""}select=id&limit=1`,
   });
-  return rows?.length ?? 0;
+  return total ?? 0;
 }
 
 // GET /api/admin/stats — top-of-dashboard counters + recent activity.

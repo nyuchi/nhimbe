@@ -2,7 +2,9 @@ import { Hono } from "hono";
 import type { Env } from "../types";
 import { getInitials } from "../utils/validation";
 import { generateReferralCode } from "../utils/ids";
-import { writeAuth } from "../middleware/auth";
+import { writeAuth, getAdminUser } from "../middleware/auth";
+import { requireRequesterPersonId } from "../auth/identity";
+import { forbidden } from "../utils/response";
 import { logAudit } from "../utils/audit";
 import { supabaseFetch } from "../db/supabase";
 import { RSVP_NO } from "../db/event_mapper";
@@ -247,8 +249,21 @@ users.get("/:id/reputation", async (c) => {
 // identity.person.deleted_at carries the soft-delete signal; role is left
 // untouched (role = "what kind of user" is orthogonal to "is this user
 // still live?"). Consumers should filter `deleted_at IS NULL` for visibility.
+//
+// Authorization: requester must be deleting their own account, OR be an admin.
 users.delete("/:id", async (c) => {
   const userId = c.req.param("id");
+
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const requesterPersonId = r;
+
+  if (requesterPersonId !== userId) {
+    const admin = await getAdminUser(c.req.raw, c.env, "admin");
+    if (!admin) {
+      return forbidden(c, "You can only delete your own account");
+    }
+  }
 
   const user = await supabaseFetch<{ id: string; email: string | null; deleted_at: string | null }>(c.env, {
     schema: "identity",
@@ -292,11 +307,14 @@ users.delete("/:id", async (c) => {
   const ipAddress = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || null;
 
   await logAudit(c.env, {
-    actorId: userId,
+    actorId: requesterPersonId,
     action: "user.deleted",
     resourceType: "user",
     resourceId: userId,
-    details: { method: "soft_delete" },
+    details: {
+      method: "soft_delete",
+      self_delete: requesterPersonId === userId,
+    },
     ipAddress: ipAddress || undefined,
   });
 

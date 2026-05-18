@@ -243,6 +243,32 @@ export function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
+/**
+ * JSON response that carries a PostgREST-style `Content-Range` header so
+ * `supabaseFetchWithCount` can parse the total. Format: `<from>-<to>/<total>`
+ * (or `<asterisk>/<total>` for empty results — pass `total = 0` and any data
+ * array).
+ */
+export function jsonResponseWithCount(
+  data: unknown,
+  total: number,
+  status = 200,
+): Response {
+  const rangeFrom = Array.isArray(data) && data.length > 0 ? 0 : 0;
+  const rangeTo = Array.isArray(data) && data.length > 0 ? data.length - 1 : 0;
+  const range =
+    Array.isArray(data) && data.length === 0
+      ? `*/${total}`
+      : `${rangeFrom}-${rangeTo}/${total}`;
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Range': range,
+    },
+  });
+}
+
 /** Build a 204 No Content response (Node forbids a body on 204). */
 export function noContent(): Response {
   return new Response(null, { status: 204 });
@@ -264,6 +290,25 @@ export function trustedOriginHeaders(
   return {
     'Content-Type': 'application/json',
     Origin: 'http://localhost:3000',
+    ...extra,
+  };
+}
+
+/**
+ * Headers that authenticate via origin AND carry a Bearer token. Routes that
+ * call `requireRequesterPersonId()` need both: writeAuth checks the origin,
+ * the identity helper needs a token to feed `getAuthenticatedUser()`. The
+ * token value is opaque — tests stub `getAuthenticatedUser` via
+ * `vi.mock("../auth/workos")` to return whatever WorkOS userId they need.
+ */
+export function authedOriginHeaders(
+  token: string = 'valid-jwt-token',
+  extra: Record<string, string> = {},
+): HeadersInit {
+  return {
+    'Content-Type': 'application/json',
+    Origin: 'http://localhost:3000',
+    Authorization: `Bearer ${token}`,
     ...extra,
   };
 }

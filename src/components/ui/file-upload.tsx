@@ -65,6 +65,11 @@ function FileUpload({
 
   return (
     <div data-slot="file-upload" className={cn("space-y-3", className)}>
+      {/* The dropzone is a div, not role=button, because nesting the
+          focusable <input type=file> inside a role=button trips axe's
+          nested-interactive rule. Instead we render a real <button> as
+          the explicit keyboard/click affordance and let the surrounding
+          div continue to accept drag-and-drop. */}
       <div
         data-slot="file-upload-dropzone"
         className={cn(
@@ -74,14 +79,6 @@ function FileUpload({
             : "border-foreground/10 hover:border-foreground/20",
           disabled && "pointer-events-none opacity-50"
         )}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            inputRef.current?.click();
-          }
-        }}
         onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
         onDragLeave={() => setDragActive(false)}
         onDrop={(e) => {
@@ -89,19 +86,25 @@ function FileUpload({
           setDragActive(false);
           if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
         }}
-        onClick={() => inputRef.current?.click()}
       >
-        <Upload className="size-8 text-foreground/30" />
-        <p className="text-sm text-foreground/60">
+        <Upload className="size-8 text-foreground/30" aria-hidden />
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => inputRef.current?.click()}
+          className="text-sm text-foreground/60 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm"
+        >
           Drop files here or <span className="font-medium text-primary">browse</span>
-        </p>
+        </button>
         <p className="text-xs text-foreground/40">Max {formatSize(maxSize)}</p>
         <input
           ref={inputRef}
           type="file"
           accept={accept}
           multiple={multiple}
-          className="hidden"
+          aria-label="Upload files"
+          className="sr-only"
+          tabIndex={-1}
           onChange={(e) => e.target.files && handleFiles(e.target.files)}
         />
       </div>

@@ -27,7 +27,10 @@ MUKOKO_API_URL = "https://api.mukoko.com"
 port = 8787
 local_protocol = "http"
 
-# Observability
+# Observability — mirrors the JSONC spec exactly. Top-level `enabled = false`
+# is intentional; the per-channel `[observability.logs]` enables the only
+# stream we actually want. Each [env.*] block also carries its own copy
+# because wrangler does not inherit top-level config into named environments.
 [observability]
 enabled = false
 head_sampling_rate = 1
@@ -52,10 +55,14 @@ binding = "AI"
 binding = "VECTORIZE"
 index_name = "mukoko-nhimbe-events"
 
-# KV Namespace for caching
+# KV Namespace for caching — dev/staging/production each get their own
+# namespace. The shared id used to be bbe12fb2..., which meant `wrangler dev`
+# and a staging deploy both wrote into the production cache (and could evict
+# legitimate prod entries). Per-env split was applied 2026-05; the same id
+# is reused only inside each environment's named section below.
 [[kv_namespaces]]
 binding = "CACHE"
-id = "bbe12fb2c88247b4a498da713416b7d7"
+id = "d77fe04daba349268f05ca32a88120da"  # mukoko-nhimbe-cache-dev
 
 # R2 Bucket for media storage
 [[r2_buckets]]
@@ -125,6 +132,24 @@ routes = [
   { pattern = "events-api.mukoko.com", custom_domain = true }
 ]
 
+# Per-environment observability — top-level [observability] is not inherited
+# into [env.*] blocks by wrangler. Each env needs its own copy. Matches the
+# JSONC spec exactly (top-level `enabled = false`; logs channel is on).
+[env.production.observability]
+enabled = false
+head_sampling_rate = 1
+
+[env.production.observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[env.production.observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
+
 [env.production.ai]
 binding = "AI"
 
@@ -134,7 +159,7 @@ index_name = "mukoko-nhimbe-events"
 
 [[env.production.kv_namespaces]]
 binding = "CACHE"
-id = "bbe12fb2c88247b4a498da713416b7d7"
+id = "bbe12fb2c88247b4a498da713416b7d7"  # mukoko-nhimbe-cache (production only)
 
 [[env.production.r2_buckets]]
 binding = "MEDIA"
@@ -188,6 +213,21 @@ vars = { ENVIRONMENT = "staging", ALLOWED_ORIGINS = "https://staging.nhimbe.com"
 # WORKOS_CLIENT_ID must be set per environment via `wrangler secret put WORKOS_CLIENT_ID --env staging`
 # (or as a non-secret var via the Cloudflare dashboard). Do NOT inline a placeholder here.
 
+[env.staging.observability]
+enabled = false
+head_sampling_rate = 1
+
+[env.staging.observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[env.staging.observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
+
 [env.staging.ai]
 binding = "AI"
 
@@ -197,7 +237,7 @@ index_name = "mukoko-nhimbe-events"
 
 [[env.staging.kv_namespaces]]
 binding = "CACHE"
-id = "bbe12fb2c88247b4a498da713416b7d7"
+id = "12716ecd4fbc4821a121d6a724fa46e6"  # mukoko-nhimbe-cache-staging
 
 [[env.staging.r2_buckets]]
 binding = "MEDIA"

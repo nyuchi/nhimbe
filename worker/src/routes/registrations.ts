@@ -1,11 +1,12 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
-import { writeAuth } from "../middleware/auth";
-import { getAuthenticatedUser } from "../auth/workos";
-import { validateRequiredFields } from "../utils/validation";
-import { unauthorized, notFound, badRequest, forbidden } from "../utils/response";
-import { supabaseFetch } from "../db/supabase";
-import { RSVP_YES, RSVP_NO } from "../db/event_mapper";
+import { writeAuth, getAdminUser } from "../middleware/auth";
+import { requireRequesterPersonId } from "../auth/identity";
+import { safeParseInt, validateRequiredFields } from "../utils/validation";
+import { notFound, badRequest, forbidden } from "../utils/response";
+import { supabaseFetch, supabaseFetchWithCount, SupabaseClientError } from "../db/supabase";
+import { RSVP_NO } from "../db/event_mapper";
+import { logAudit } from "../utils/audit";
 
 // platform-db CHECK constraints. events.rsvp_action stores the fully-qualified
 // schema.org URLs for rsvpresponse, and a narrow lifecycle enum for
@@ -108,29 +109,74 @@ export const registrations = new Hono<{ Bindings: Env }>();
 registrations.use("*", writeAuth);
 
 // GET /api/registrations?event_id= OR ?user_id=
+//
+// Authorization:
+//   - Caller must have a valid JWT (resolved to an identity.person row).
+//   - If `user_id` is supplied, it must equal the requester's person id,
+//     OR (when `event_id` is also supplied) the requester must be the
+//     event organizer, OR the requester must be an admin.
 registrations.get("/", async (c) => {
   const eventId = c.req.query("event_id");
   const userId = c.req.query("user_id");
+  const limit = safeParseInt(c.req.query("limit") || null, 100, 1, 500);
+  const offset = safeParseInt(c.req.query("offset") || null, 0, 0, 100_000);
 
   if (!eventId && !userId) {
     return badRequest(c, "event_id or user_id required");
+  }
+
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const requesterPersonId = r;
+
+  if (userId && userId !== requesterPersonId) {
+    // Allow if requester is the event organizer for the given event_id,
+    // or if the requester has admin role.
+    let allowed = false;
+    if (eventId) {
+      const eventRow = await supabaseFetch<{ organizer_person_id: string | null }>(c.env, {
+        schema: "events",
+        path: "event",
+        query: `id=eq.${encodeURIComponent(eventId)}&select=organizer_person_id`,
+        single: true,
+      });
+      if (eventRow && eventRow.organizer_person_id === requesterPersonId) {
+        allowed = true;
+      }
+    }
+    if (!allowed) {
+      const admin = await getAdminUser(c.req.raw, c.env, "admin");
+      if (admin) allowed = true;
+    }
+    if (!allowed) {
+      return forbidden(c, "Not authorized to view another user's registrations");
+    }
   }
 
   const filter = eventId
     ? `event_id=eq.${encodeURIComponent(eventId)}`
     : `agent_person_id=eq.${encodeURIComponent(userId!)}`;
 
-  const rows = await supabaseFetch<RsvpRow[]>(c.env, {
+  // Single round-trip for the page + the unpaginated total via
+  // `Prefer: count=exact` (parsed from Content-Range). Admin/host dashboards
+  // can now show "X of Y" instead of inferring from page fullness.
+  const { rows: rowsRaw, total } = await supabaseFetchWithCount<RsvpRow[]>(c.env, {
     schema: "events",
     path: "rsvp_action",
-    query: `${filter}&select=${RSVP_COLS}`,
-  }) ?? [];
+    query: `${filter}&select=${RSVP_COLS}&order=created_at.desc&limit=${limit}&offset=${offset}`,
+  });
+  const rows = rowsRaw ?? [];
 
   const checkedIns = await loadAttendance(c.env, eventId ?? null, rows);
-  return c.json({ registrations: rows.map((r) => mapRow(r, checkedIns)) });
+  return c.json({
+    registrations: rows.map((r) => mapRow(r, checkedIns)),
+    pagination: { limit, offset, total: total ?? rows.length },
+  });
 });
 
 // POST /api/registrations — atomic capacity check + RSVP insert.
+// agent_person_id is derived from the WorkOS JWT; `userId` in the body
+// is ignored.
 registrations.post("/", async (c) => {
   let body: Record<string, unknown>;
   try {
@@ -139,23 +185,28 @@ registrations.post("/", async (c) => {
     return badRequest(c, "Invalid JSON body");
   }
 
-  const err = validateRequiredFields(body, ["eventId", "userId"]);
+  const err = validateRequiredFields(body, ["eventId"]);
   if (err) return badRequest(c, err);
 
+  const r = await requireRequesterPersonId(c);
+  if (typeof r !== "string") return r;
+  const userId = r;
+
   const eventId = String(body.eventId);
-  const userId = String(body.userId);
 
   interface EventStateRow {
     id: string;
-    maximumattendeecapacity: number | null;
-    attendee_count: number | null;
     visibility: string;
     eventstatus: string;
   }
+  // Cheap pre-check for visibility/status so we return a meaningful error
+  // (rather than a generic P0002/P0003) when the event isn't open for
+  // registration. Capacity and existence are re-checked atomically inside
+  // the RPC under a row lock, so a TOCTOU race here is harmless.
   const event = await supabaseFetch<EventStateRow>(c.env, {
     schema: "events",
     path: "event",
-    query: `id=eq.${encodeURIComponent(eventId)}&select=id,maximumattendeecapacity,attendee_count,visibility,eventstatus`,
+    query: `id=eq.${encodeURIComponent(eventId)}&select=id,visibility,eventstatus`,
     single: true,
   });
 
@@ -163,10 +214,12 @@ registrations.post("/", async (c) => {
   if (event.visibility !== "public" || event.eventstatus !== "https://schema.org/EventScheduled") {
     return badRequest(c, "Event is not available for registration");
   }
-  if (event.maximumattendeecapacity && (event.attendee_count ?? 0) >= event.maximumattendeecapacity) {
-    return badRequest(c, "Event is at capacity");
-  }
 
+  // Duplicate-check stays out here so we can return a friendly
+  // "already registered" message rather than a generic 409 from the
+  // (event_id, agent_person_id) unique index. The atomic RPC will still
+  // reject (via its own constraint violation) if a second request slips
+  // in between this lookup and the insert.
   const existing = await supabaseFetch<{ id: string }>(c.env, {
     schema: "events",
     path: "rsvp_action",
@@ -177,50 +230,44 @@ registrations.post("/", async (c) => {
     return badRequest(c, "User is already registered for this event");
   }
 
-  // No equivalent of the D1 UPDATE…WHERE attendee_count<capacity atomic
-  // increment via PostgREST raw, so we delegate to the SECURITY DEFINER
-  // function events.try_register_attendee, which performs the conditional
-  // UPDATE in a single statement. The pre-check above is kept for the nice
-  // error message; the RPC is the authoritative gate against over-capacity
-  // under concurrent load.
-  const inserted = await supabaseFetch<{ id: string }[]>(c.env, {
-    schema: "events",
-    path: "rsvp_action",
-    method: "POST",
-    body: {
-      event_id: eventId,
-      agent_person_id: userId,
-      rsvpresponse: RSVP_YES,
-      sync_version: 1,
-      additional_guests: 0,
-      starttime: new Date().toISOString(),
-    },
-  });
-
-  const newCount = await supabaseFetch<number | null>(c.env, {
-    schema: "events",
-    path: "rpc/try_register_attendee",
-    method: "POST",
-    body: { p_event_id: eventId },
-  });
-
-  if (newCount === null) {
-    // RPC's conditional UPDATE matched no rows — event either disappeared
-    // between our pre-check and now, or another concurrent registration
-    // pushed it over capacity. Roll back the RSVP we just inserted.
-    const insertedId = inserted?.[0]?.id;
-    if (insertedId) {
-      await supabaseFetch(c.env, {
-        schema: "events",
-        path: "rsvp_action",
-        query: `id=eq.${encodeURIComponent(insertedId)}`,
-        method: "DELETE",
-      });
+  // Single SECURITY DEFINER call: locks the event row (`FOR UPDATE`),
+  // rejects if the row is gone (P0002) or full (P0003), otherwise inserts
+  // the RSVP and bumps attendee_count in one statement. This replaces the
+  // old insert-then-rollback flow, which leaked a phantom RSVP whenever
+  // the rollback DELETE failed and let concurrent reads observe transient
+  // over-capacity state.
+  let rpcResult: Array<{ rsvp_id: string; new_count: number }> | null;
+  try {
+    rpcResult = await supabaseFetch<Array<{ rsvp_id: string; new_count: number }>>(c.env, {
+      schema: "events",
+      path: "rpc/register_attendee_atomic",
+      method: "POST",
+      body: { p_event_id: eventId, p_agent_person_id: userId },
+    });
+  } catch (e) {
+    if (e instanceof SupabaseClientError) {
+      // PostgREST surfaces RAISE EXCEPTION ... USING ERRCODE as a 400 with
+      // a JSON body `{"code":"P0003","message":"Event at capacity",...}`.
+      // Map our two custom codes to user-facing responses.
+      let pgCode: string | null = null;
+      try {
+        const parsed = JSON.parse(e.body) as { code?: string };
+        pgCode = parsed.code ?? null;
+      } catch {
+        // Body wasn't JSON — fall through to a generic 500.
+      }
+      if (pgCode === "P0002") return notFound(c, "Event");
+      if (pgCode === "P0003") return badRequest(c, "Event is at capacity");
     }
-    return badRequest(c, "Event is at capacity");
+    throw e;
   }
 
-  return c.json({ id: inserted?.[0]?.id, message: "Registration successful" }, 201);
+  const newRsvpId = rpcResult?.[0]?.rsvp_id;
+  if (!newRsvpId) {
+    return c.json({ error: "Failed to create registration" }, 500);
+  }
+
+  return c.json({ id: newRsvpId, message: "Registration successful" }, 201);
 });
 
 const ALLOWED_STATUSES = new Set(Object.keys(API_TO_DB_CONFIRMATION));
@@ -264,21 +311,11 @@ registrations.put("/:id", async (c) => {
     single: true,
   });
 
-  const authResult = await getAuthenticatedUser(c.req.raw, c.env);
-  if (!authResult.user) {
-    return unauthorized(c);
-  }
+  const rp = await requireRequesterPersonId(c);
+  if (typeof rp !== "string") return rp;
+  const requesterPersonId = rp;
 
-  // Map WorkOS userId → identity.person.id for authz comparisons.
-  const requester = await supabaseFetch<{ id: string }>(c.env, {
-    schema: "identity",
-    path: "person",
-    query: `workos_user_id=eq.${encodeURIComponent(authResult.user.userId)}&select=id`,
-    single: true,
-  });
-  const requesterPersonId = requester?.id ?? null;
-
-  const isHost = !!event && !!requesterPersonId && event.organizer_person_id === requesterPersonId;
+  const isHost = !!event && event.organizer_person_id === requesterPersonId;
   const isRegistrant = reg.agent_person_id === requesterPersonId;
 
   if (!isHost && ["approved", "rejected"].includes(body.status)) {
@@ -303,17 +340,41 @@ registrations.put("/:id", async (c) => {
 });
 
 // DELETE /api/registrations/:id — soft cancel + attendee_count decrement.
+// Only the registrant or the event organizer may cancel.
 registrations.delete("/:id", async (c) => {
   const regId = c.req.param("id");
 
-  const reg = await supabaseFetch<{ id: string; event_id: string; rsvpresponse: string }>(c.env, {
+  const rp = await requireRequesterPersonId(c);
+  if (typeof rp !== "string") return rp;
+  const requesterPersonId = rp;
+
+  const reg = await supabaseFetch<{ id: string; event_id: string; agent_person_id: string; rsvpresponse: string }>(c.env, {
     schema: "events",
     path: "rsvp_action",
-    query: `id=eq.${encodeURIComponent(regId)}&select=id,event_id,rsvpresponse`,
+    query: `id=eq.${encodeURIComponent(regId)}&select=id,event_id,agent_person_id,rsvpresponse`,
     single: true,
   });
+  if (!reg) return notFound(c, "Registration");
 
-  if (reg && reg.rsvpresponse !== RSVP_NO) {
+  // Authz: registrant cancelling their own RSVP, OR organizer cancelling
+  // any RSVP for their event.
+  let allowed = reg.agent_person_id === requesterPersonId;
+  if (!allowed) {
+    const event = await supabaseFetch<{ organizer_person_id: string | null }>(c.env, {
+      schema: "events",
+      path: "event",
+      query: `id=eq.${encodeURIComponent(reg.event_id)}&select=organizer_person_id`,
+      single: true,
+    });
+    if (event && event.organizer_person_id === requesterPersonId) {
+      allowed = true;
+    }
+  }
+  if (!allowed) {
+    return forbidden(c, "Only the registrant or event organizer can cancel this registration");
+  }
+
+  if (reg.rsvpresponse !== RSVP_NO) {
     await supabaseFetch(c.env, {
       schema: "events",
       path: "rsvp_action",
@@ -328,6 +389,14 @@ registrations.delete("/:id", async (c) => {
       path: "rpc/decrement_attendee_count",
       method: "POST",
       body: { p_event_id: reg.event_id },
+    });
+
+    await logAudit(c.env, {
+      actorId: requesterPersonId,
+      action: "registration.cancelled",
+      resourceType: "registration",
+      resourceId: regId,
+      details: { event_id: reg.event_id, agent_person_id: reg.agent_person_id },
     });
   }
 

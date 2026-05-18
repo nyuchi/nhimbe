@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
-  checkinRegistration,
+  checkinViaKiosk,
   getCheckinStats,
   requestKioskPairing,
   getKioskPairingStatus,
@@ -79,7 +79,7 @@ function PairingScreen({ onPaired }: { onPaired: (session: KioskSession, token: 
         if (status.status === "confirmed" && status.sessionToken) {
           if (pollRef.current) clearInterval(pollRef.current);
           const { session } = await getKioskSession(status.sessionToken);
-          if (typeof window !== "undefined") localStorage.setItem("nhimbe_kiosk_token", status.sessionToken);
+          if (typeof window !== "undefined") sessionStorage.setItem("nhimbe_kiosk_token", status.sessionToken);
           onPaired(session, status.sessionToken);
         }
       } catch {
@@ -310,7 +310,12 @@ function CheckinScreen({ session, token }: { session: KioskSession; token: strin
       setScanning(false);
 
       try {
-        await checkinRegistration(session.eventId, registrationId);
+        // Paired-kiosk check-in goes through the kiosk-session-authenticated
+        // endpoint (POST /api/kiosk/checkin) which validates the kiosk
+        // session token via X-Kiosk-Token, not the WorkOS Bearer slot.
+        // The host's organizer-only `/api/events/:id/checkin` endpoint is
+        // for the host's own page; paired devices don't carry a JWT.
+        await checkinViaKiosk(session.eventId, registrationId, token);
         setResult({
           status: "success",
           name: "Guest",
@@ -430,14 +435,14 @@ export default function KioskPage() {
   // Check for existing kiosk session on mount
   useEffect(() => {
     async function checkExisting() {
-      const token = typeof window !== "undefined" ? localStorage.getItem("nhimbe_kiosk_token") : null;
+      const token = typeof window !== "undefined" ? sessionStorage.getItem("nhimbe_kiosk_token") : null;
       if (token) {
         try {
           const { session: existing } = await getKioskSession(token);
           setSession(existing);
           setSessionToken(token);
         } catch {
-          if (typeof window !== "undefined") localStorage.removeItem("nhimbe_kiosk_token");
+          if (typeof window !== "undefined") sessionStorage.removeItem("nhimbe_kiosk_token");
         }
       }
       setChecking(false);
@@ -449,6 +454,35 @@ export default function KioskPage() {
     setSession(newSession);
     setSessionToken(token);
   }, []);
+
+  // Kiosks live on shared/public hardware. If the tab is hidden for 30+ min
+  // (operator walked away, screen locked, etc.), clear the paired session so
+  // a passer-by can't pick up where they left off. Same-tab survival is
+  // already handled by sessionStorage; this just adds an idle-hide TTL.
+  useEffect(() => {
+    if (!sessionToken) return;
+    const HIDDEN_TIMEOUT_MS = 30 * 60 * 1000;
+    let hiddenSince: number | null = null;
+
+    function clearSession() {
+      if (typeof window !== "undefined") sessionStorage.removeItem("nhimbe_kiosk_token");
+      setSession(null);
+      setSessionToken(null);
+    }
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        hiddenSince = Date.now();
+      } else if (document.visibilityState === "visible" && hiddenSince !== null) {
+        const hiddenFor = Date.now() - hiddenSince;
+        hiddenSince = null;
+        if (hiddenFor >= HIDDEN_TIMEOUT_MS) clearSession();
+      }
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [sessionToken]);
 
   if (checking) {
     return (
