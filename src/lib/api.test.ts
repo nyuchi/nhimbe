@@ -108,7 +108,10 @@ describe('getEvents', () => {
 
   it('throws on API error', async () => {
     mockFetchError(500);
-    await expect(getEvents()).rejects.toThrow('API Error: 500');
+    // apiFetch surfaces the response body's `error` field when present, else
+    // the HTTP status line. mockFetchError returns no JSON body so the
+    // status line is used.
+    await expect(getEvents()).rejects.toThrow('500 Internal Server Error');
   });
 });
 

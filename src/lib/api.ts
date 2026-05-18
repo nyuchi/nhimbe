@@ -114,10 +114,28 @@ export interface CitiesResponse {
 // API fetch wrapper. The session JWT (WorkOS access token) is always passed
 // explicitly by callers — the AuthKit provider owns it and there's no
 // browser-cookie path to retrieve it from here.
+//
+// Errors carry the worker's own `error` body when available — every route
+// returns `{ error: string }` on failure, and callers (UI) want that string
+// in toasts rather than the generic status text. The thrown Error also has
+// a `.status` numeric property so callers can branch on 401 / 403 / 409.
+//
+// 20s timeout: long enough for the AI-assisted endpoints (description
+// generator, search RAG) and short enough that a hung connection doesn't
+// strand a button in the loading state indefinitely.
+const DEFAULT_FETCH_TIMEOUT_MS = 20_000;
+
+export class ApiError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {},
-  sessionJwt?: string
+  sessionJwt?: string,
 ): Promise<T> {
   const url = `${API_URL}${endpoint}`;
 
@@ -130,13 +148,39 @@ async function apiFetch<T>(
     headers["Authorization"] = `Bearer ${sessionJwt}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  // Compose with any caller-supplied signal so callers can still cancel.
+  const timeoutSignal = AbortSignal.timeout(DEFAULT_FETCH_TIMEOUT_MS);
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, timeoutSignal])
+    : timeoutSignal;
+
+  let response: Response;
+  try {
+    response = await fetch(url, { ...options, headers, signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new ApiError(0, `Request timed out after ${DEFAULT_FETCH_TIMEOUT_MS}ms`);
+    }
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new ApiError(0, "Request cancelled");
+    }
+    throw err; // network failure surfaces as TypeError — keep that shape
+  }
 
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    // Pull the error message out of the response body. Every worker error
+    // shape is `{ error: string, ...extras }`, but a 5xx from edge / a CORS
+    // failure might return plain text, so fall back to the status line.
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const body = await response.clone().json() as { error?: string };
+      if (body && typeof body.error === "string" && body.error.length > 0) {
+        message = body.error;
+      }
+    } catch {
+      // Not JSON; leave the status-line message in place.
+    }
+    throw new ApiError(response.status, message);
   }
 
   return response.json();

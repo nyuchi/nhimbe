@@ -153,14 +153,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [workosUser, accessToken, getAccessToken]);
 
   useEffect(() => {
-    if (!authKitLoading && workosUser && !hasSynced) {
+    // Gate the first sync on having the access token in hand. Without this,
+    // the effect fires as soon as `workosUser` resolves, then `syncWithSupabase`
+    // has to fall through to `getAccessToken()` because the
+    // `setSupabaseAccessToken` effect at line 109 hasn't run yet — costing
+    // a second AuthKit fetch on every first sign-in.
+    if (!authKitLoading && workosUser && accessToken && !hasSynced) {
       void syncWithSupabase();
     }
     if (!authKitLoading && !workosUser) {
       setNhimbeUser(null);
       setHasSynced(false);
     }
-  }, [authKitLoading, workosUser, hasSynced, syncWithSupabase]);
+  }, [authKitLoading, workosUser, accessToken, hasSynced, syncWithSupabase]);
 
   const signIn = useCallback(
     (returnUrl?: string) => {
