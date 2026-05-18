@@ -7,10 +7,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/components/auth/auth-context";
 import { getCirclesForPerson } from "@/lib/supabase/api";
-import { t } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import type { CircleRow } from "@/lib/supabase/types";
 
 export default function KraalIndexClient() {
+  const { t } = useT();
   const { user, isAuthenticated } = useAuth();
   const personId = user?.personId ?? null;
   // Default to "not loading" — only flip true once we've actually kicked
