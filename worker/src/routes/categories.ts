@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env, AppVariables } from "../types";
-import { supabaseFetch } from "../db/supabase";
+import { supabaseFetch, SupabaseClientError } from "../db/supabase";
 import { writeAuth } from "../middleware/auth";
 import { getAuthenticatedUser } from "../auth/workos";
 import { resolvePersonId } from "../auth/identity";
@@ -403,18 +403,17 @@ categories.post("/event-categories", async (c) => {
       },
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
     // The partial unique index on (lower(name), coalesce(interest_category_id))
     // surfaces concurrent duplicates as Postgres 23505 → PostgREST 409. Map
     // back to a clean 409 so two simultaneous proposers see a usable error.
-    if (msg.includes("(409)") || msg.includes("duplicate") || msg.includes("23505")) {
+    if (err instanceof SupabaseClientError && err.status === 409) {
       return conflict(c, "A category with that name already exists");
     }
     console.error(JSON.stringify({
       level: "error",
       module: "event_categories",
       message: "Failed to insert event_category",
-      error: msg,
+      error: err instanceof Error ? err.message : String(err),
       person_id: personId,
       request_id: c.get("requestId"),
     }));
@@ -482,17 +481,17 @@ categories.post("/event-categories/:id/vouch", async (c) => {
       },
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    // PostgREST surfaces unique violations as 409 in the response body. The
-    // wrapped Error contains "(409)" — translate to a clean conflict.
-    if (msg.includes("(409)") || msg.includes("duplicate")) {
+    // PostgREST surfaces unique violations as 409. SupabaseClientError
+    // carries the original status, so we can check it directly instead of
+    // grepping the error message for "(409)" / "duplicate".
+    if (err instanceof SupabaseClientError && err.status === 409) {
       return conflict(c, "Already vouched for this category");
     }
     console.error(JSON.stringify({
       level: "error",
       module: "event_categories",
       message: "Failed to insert vouch",
-      error: msg,
+      error: err instanceof Error ? err.message : String(err),
       request_id: c.get("requestId"),
     }));
     return c.json({ error: "Failed to record vouch" }, 500);
@@ -556,15 +555,14 @@ categories.post("/event-categories/:id/flag", async (c) => {
       },
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("(409)") || msg.includes("duplicate")) {
+    if (err instanceof SupabaseClientError && err.status === 409) {
       return conflict(c, "Already flagged this category with that reason");
     }
     console.error(JSON.stringify({
       level: "error",
       module: "event_categories",
       message: "Failed to insert flag",
-      error: msg,
+      error: err instanceof Error ? err.message : String(err),
       request_id: c.get("requestId"),
     }));
     return c.json({ error: "Failed to record flag" }, 500);
