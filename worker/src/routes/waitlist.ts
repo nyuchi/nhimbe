@@ -52,28 +52,20 @@ waitlist.post("/events/:eventId/waitlist", async (c) => {
     return conflict(c, "User is already on the waitlist");
   }
 
-  const positions = await supabaseFetch<{ position: number }[]>(c.env, {
+  // Atomic SELECT FOR UPDATE + INSERT via SECURITY DEFINER function.
+  // Concurrent joiners get distinct, sequential positions; without the
+  // event-row lock + COALESCE(MAX, 0)+1 in one transaction, two parallel
+  // requests would both compute the same MAX and insert the same position.
+  interface WaitlistRpcRow { id: string; position: number }
+  const inserted = await supabaseFetch<WaitlistRpcRow[]>(c.env, {
     schema: "events",
-    path: "waitlist_entry",
-    query: `event_id=eq.${encodeURIComponent(eventId)}&select=position&order=position.desc&limit=1`,
-  });
-  const position = (positions?.[0]?.position ?? 0) + 1;
-
-  interface InsertedRow { id: string }
-  const inserted = await supabaseFetch<InsertedRow[]>(c.env, {
-    schema: "events",
-    path: "waitlist_entry",
+    path: "rpc/add_to_waitlist",
     method: "POST",
-    body: {
-      event_id: eventId,
-      person_id: personId,
-      position,
-      status: "waiting",
-      joined_at: new Date().toISOString(),
-    },
+    body: { p_event_id: eventId, p_person_id: personId },
   });
+  const row = inserted?.[0];
 
-  return c.json({ id: inserted?.[0]?.id, position, message: "Added to waitlist" }, 201);
+  return c.json({ id: row?.id, position: row?.position, message: "Added to waitlist" }, 201);
 });
 
 // DELETE /api/events/:eventId/waitlist — Leave the waitlist. Person id is
