@@ -120,13 +120,6 @@ jobs:
     name: Claude Code Review
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    # Advisory check — the bot posts review comments via the Claude API and
-    # can fail for reasons outside the PR's quality (large diffs that bust
-    # the action's prompt window, API quota, beta-tag regressions). When that
-    # happens we don't want it to block merging behind passing test/build/
-    # lint gates. The job is still surfaced in the checks list; humans can
-    # look at it but it's not authoritative.
-    continue-on-error: true
     permissions:
       contents: read
       pull-requests: write
@@ -138,6 +131,16 @@ jobs:
           fetch-depth: 0
 
       - name: Run Claude Code Review
+        # Advisory check — the bot posts review comments via the Claude API
+        # and can fail for reasons outside the PR's quality (large diffs that
+        # bust the action's prompt window, API quota, beta-tag regressions).
+        # step-level continue-on-error lets the job (and the check listed in
+        # branch protection) report success even when the bot itself errored;
+        # the failure still surfaces as an annotation on the step for humans
+        # to investigate. Job-level continue-on-error wouldn't help here — it
+        # only stops the workflow from failing overall, the check still shows
+        # red and blocks branch-protection gates that require this check name.
+        continue-on-error: true
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
