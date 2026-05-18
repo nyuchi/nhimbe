@@ -1,5 +1,11 @@
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
+import * as axeMatchers from 'vitest-axe/matchers';
+
+// Register vitest-axe matchers globally (`toHaveNoViolations`, etc.).
+// Doing it here avoids re-extending in every test file and keeps the
+// matcher available across the suite.
+expect.extend(axeMatchers);
 
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
