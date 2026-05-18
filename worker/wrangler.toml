@@ -55,10 +55,14 @@ binding = "AI"
 binding = "VECTORIZE"
 index_name = "mukoko-nhimbe-events"
 
-# KV Namespace for caching
+# KV Namespace for caching — dev/staging/production each get their own
+# namespace. The shared id used to be bbe12fb2..., which meant `wrangler dev`
+# and a staging deploy both wrote into the production cache (and could evict
+# legitimate prod entries). Per-env split was applied 2026-05; the same id
+# is reused only inside each environment's named section below.
 [[kv_namespaces]]
 binding = "CACHE"
-id = "bbe12fb2c88247b4a498da713416b7d7"
+id = "d77fe04daba349268f05ca32a88120da"  # mukoko-nhimbe-cache-dev
 
 # R2 Bucket for media storage
 [[r2_buckets]]
@@ -155,7 +159,7 @@ index_name = "mukoko-nhimbe-events"
 
 [[env.production.kv_namespaces]]
 binding = "CACHE"
-id = "bbe12fb2c88247b4a498da713416b7d7"
+id = "bbe12fb2c88247b4a498da713416b7d7"  # mukoko-nhimbe-cache (production only)
 
 [[env.production.r2_buckets]]
 binding = "MEDIA"
@@ -233,7 +237,7 @@ index_name = "mukoko-nhimbe-events"
 
 [[env.staging.kv_namespaces]]
 binding = "CACHE"
-id = "bbe12fb2c88247b4a498da713416b7d7"
+id = "12716ecd4fbc4821a121d6a724fa46e6"  # mukoko-nhimbe-cache-staging
 
 [[env.staging.r2_buckets]]
 binding = "MEDIA"
