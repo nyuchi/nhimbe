@@ -78,6 +78,7 @@ function ShareDialog({
             <Input
               value={url}
               readOnly
+              aria-label="Share link"
               className="pl-9 text-sm"
             />
           </div>
