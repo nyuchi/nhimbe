@@ -52,12 +52,14 @@ import {
   deleteEvent,
   getEventRegistrations,
   updateRegistrationStatus,
+  checkinRegistration,
   type Event,
   type Registration as APIRegistration,
 } from "@/lib/api";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { PairKiosk } from "../kiosk/pair-kiosk";
 import { useAuth } from "@/components/auth/auth-context";
+import { useToast } from "@/hooks/use-toast";
 
 interface Registration {
   id: string;
@@ -81,6 +83,7 @@ function ManageEventContent() {
   const params = useParams();
   const router = useRouter();
   const { user, accessToken, getAccessToken } = useAuth();
+  const { toast } = useToast();
 
   // Helper: lazily fetch a fresh JWT for each write so an idle tab doesn't
   // send an expired token after the wizard sits unused for an hour.
@@ -218,8 +221,10 @@ function ManageEventContent() {
       setRegistrations((prev) =>
         prev.map((r) => (r.id === id ? { ...r, status: "approved" } : r))
       );
+      toast.success("Registration approved");
     } catch (error) {
       console.error("Failed to approve registration:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to approve registration");
     }
   };
 
@@ -230,15 +235,47 @@ function ManageEventContent() {
       setRegistrations((prev) =>
         prev.map((r) => (r.id === id ? { ...r, status: "rejected" } : r))
       );
+      toast.success("Registration rejected");
     } catch (error) {
       console.error("Failed to reject registration:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to reject registration");
     }
   };
 
-  const handleCheckIn = (id: string) => {
+  // Host-page check-in. Goes through the organizer-authenticated
+  // /api/events/:id/checkin endpoint (the paired-kiosk flow uses
+  // /api/kiosk/checkin with its session token — separate auth context).
+  // Previously this was local-state-only — clicking "Check in" toggled the
+  // UI but never wrote to the server, so attendance was lost on reload.
+  const handleCheckIn = async (id: string) => {
+    const previousState = registrations.find((r) => r.id === id)?.checkedIn ?? false;
+    // Optimistic flip
     setRegistrations((prev) =>
       prev.map((r) => (r.id === id ? { ...r, checkedIn: !r.checkedIn } : r))
     );
+    try {
+      const token = await tokenOrThrow();
+      await checkinRegistration(event.id, id, token);
+      toast.success("Checked in");
+    } catch (error) {
+      // Roll back the optimistic flip on failure so the UI matches the server.
+      setRegistrations((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, checkedIn: previousState } : r))
+      );
+      const message = error instanceof Error ? error.message : "Failed to check in";
+      console.error("Failed to check in registration:", error);
+      // "Already checked in" comes back as 409 — that's a benign double-tap,
+      // surface it as info not error so the host doesn't panic.
+      if (message.toLowerCase().includes("already")) {
+        toast.info(message);
+        // Server says they're checked in already — keep the UI flipped.
+        setRegistrations((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, checkedIn: true } : r))
+        );
+      } else {
+        toast.error(message);
+      }
+    }
   };
 
   const handleCopyLink = async () => {
