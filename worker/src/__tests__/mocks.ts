@@ -243,6 +243,32 @@ export function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
+/**
+ * JSON response that carries a PostgREST-style `Content-Range` header so
+ * `supabaseFetchWithCount` can parse the total. Format: `<from>-<to>/<total>`
+ * (or `<asterisk>/<total>` for empty results — pass `total = 0` and any data
+ * array).
+ */
+export function jsonResponseWithCount(
+  data: unknown,
+  total: number,
+  status = 200,
+): Response {
+  const rangeFrom = Array.isArray(data) && data.length > 0 ? 0 : 0;
+  const rangeTo = Array.isArray(data) && data.length > 0 ? data.length - 1 : 0;
+  const range =
+    Array.isArray(data) && data.length === 0
+      ? `*/${total}`
+      : `${rangeFrom}-${rangeTo}/${total}`;
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Range': range,
+    },
+  });
+}
+
 /** Build a 204 No Content response (Node forbids a body on 204). */
 export function noContent(): Response {
   return new Response(null, { status: 204 });

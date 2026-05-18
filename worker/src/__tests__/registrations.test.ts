@@ -152,7 +152,10 @@ describe("GET /api/registrations", () => {
       headers: { Authorization: "Bearer x" },
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ registrations: [] });
+    expect(await res.json()).toEqual({
+      registrations: [],
+      pagination: { limit: 100, offset: 0, total: 0 },
+    });
 
     const rsvpCall = calls.find((c) => c.url.includes("/rsvp_action"));
     const queriedUrl = new URL(rsvpCall!.url);

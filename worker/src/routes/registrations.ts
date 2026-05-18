@@ -2,9 +2,9 @@ import { Hono } from "hono";
 import type { Env } from "../types";
 import { writeAuth, getAdminUser } from "../middleware/auth";
 import { requireRequesterPersonId } from "../auth/identity";
-import { validateRequiredFields } from "../utils/validation";
+import { safeParseInt, validateRequiredFields } from "../utils/validation";
 import { notFound, badRequest, forbidden } from "../utils/response";
-import { supabaseFetch } from "../db/supabase";
+import { supabaseFetch, supabaseFetchWithCount } from "../db/supabase";
 import { RSVP_YES, RSVP_NO } from "../db/event_mapper";
 import { logAudit } from "../utils/audit";
 
@@ -118,6 +118,8 @@ registrations.use("*", writeAuth);
 registrations.get("/", async (c) => {
   const eventId = c.req.query("event_id");
   const userId = c.req.query("user_id");
+  const limit = safeParseInt(c.req.query("limit") || null, 100, 1, 500);
+  const offset = safeParseInt(c.req.query("offset") || null, 0, 0, 100_000);
 
   if (!eventId && !userId) {
     return badRequest(c, "event_id or user_id required");
@@ -155,14 +157,21 @@ registrations.get("/", async (c) => {
     ? `event_id=eq.${encodeURIComponent(eventId)}`
     : `agent_person_id=eq.${encodeURIComponent(userId!)}`;
 
-  const rows = await supabaseFetch<RsvpRow[]>(c.env, {
+  // Single round-trip for the page + the unpaginated total via
+  // `Prefer: count=exact` (parsed from Content-Range). Admin/host dashboards
+  // can now show "X of Y" instead of inferring from page fullness.
+  const { rows: rowsRaw, total } = await supabaseFetchWithCount<RsvpRow[]>(c.env, {
     schema: "events",
     path: "rsvp_action",
-    query: `${filter}&select=${RSVP_COLS}`,
-  }) ?? [];
+    query: `${filter}&select=${RSVP_COLS}&order=created_at.desc&limit=${limit}&offset=${offset}`,
+  });
+  const rows = rowsRaw ?? [];
 
   const checkedIns = await loadAttendance(c.env, eventId ?? null, rows);
-  return c.json({ registrations: rows.map((r) => mapRow(r, checkedIns)) });
+  return c.json({
+    registrations: rows.map((r) => mapRow(r, checkedIns)),
+    pagination: { limit, offset, total: total ?? rows.length },
+  });
 });
 
 // POST /api/registrations — atomic capacity check + RSVP insert.

@@ -7,7 +7,7 @@ import { indexEvent, removeEventFromIndex } from "../ai/embeddings";
 import { toCsv } from "../utils/export";
 import { logAudit } from "../utils/audit";
 import { notFound, badRequest, forbidden, conflict } from "../utils/response";
-import { supabaseFetch } from "../db/supabase";
+import { supabaseFetch, supabaseFetchWithCount } from "../db/supabase";
 import { fetchEventsByIds, mapSupabaseEventToApi, EVENT_COLUMNS, addSchemaPrefix, RSVP_NO, type SupabaseEventRow } from "../db/event_mapper";
 
 export const events = new Hono<{ Bindings: Env }>();
@@ -27,18 +27,20 @@ events.get("/", async (c) => {
   if (city) filters.push(`location->>addresslocality=eq.${encodeURIComponent(city)}`);
   if (category) filters.push(`category=eq.${encodeURIComponent(category)}`);
 
-  const rows = await supabaseFetch<SupabaseEventRow[]>(c.env, {
+  // Single round-trip: PostgREST returns this page's rows AND the
+  // unpaginated row count (via `Prefer: count=exact` → `Content-Range`),
+  // so the frontend gets an authoritative `total` instead of the page-sized
+  // approximation we used to send back.
+  const { rows, total } = await supabaseFetchWithCount<SupabaseEventRow[]>(c.env, {
     schema: "events",
     path: "event",
     query: `${filters.join("&")}&select=${EVENT_COLUMNS}&order=startdate.asc&limit=${limit}&offset=${offset}`,
-  }) ?? [];
+  });
+  const pageRows = rows ?? [];
 
-  // No exact-count helper without a SQL function; we return rows.length for
-  // the page and let the frontend infer "more" by checking whether the page
-  // is full. This is good-enough until usage demands precise pagination.
   return c.json({
-    events: rows.map(mapSupabaseEventToApi),
-    pagination: { limit, offset, total: rows.length },
+    events: pageRows.map(mapSupabaseEventToApi),
+    pagination: { limit, offset, total: total ?? pageRows.length },
   });
 });
 

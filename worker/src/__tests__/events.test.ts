@@ -27,6 +27,7 @@ import {
   makeFetchStub,
   pgrstMatch,
   jsonResponse as json,
+  jsonResponseWithCount as jsonWithCount,
   noContent,
   notFoundSingle,
   trustedOriginHeaders as originOnlyHeaders,
@@ -110,6 +111,32 @@ describe("GET /api/events", () => {
     const url = new URL(calls[0].url);
     expect(url.searchParams.get("limit")).toBe("20");
     expect(url.searchParams.get("offset")).toBe("0");
+  });
+
+  it("uses Prefer: count=exact and surfaces the parsed total in pagination", async () => {
+    const env = createMockEnv();
+    const { stub, calls } = makeFetchStub([
+      {
+        match: pgrstMatch("event", ["GET"]),
+        // 2 rows in this page, but 12345 total — proves we return the
+        // authoritative count, not the page-row count.
+        handle: () => jsonWithCount([eventRow(), eventRow({ id: "evt-2" })], 12345),
+      },
+    ]);
+    vi.stubGlobal("fetch", stub);
+
+    const app = buildApp(env);
+    const res = await app.fetch("/api/events");
+    expect(res.status).toBe(200);
+    const body = await res.json() as { events: unknown[]; pagination: { limit: number; offset: number; total: number } };
+    expect(body.events).toHaveLength(2);
+    expect(body.pagination.total).toBe(12345);
+
+    // The outgoing request must carry `Prefer: count=exact` so PostgREST
+    // populates the Content-Range header. Header values are case-insensitive
+    // by HTTP spec; the test stub lower-cases via the Headers iterator.
+    const preferHeader = calls[0].headers["prefer"] ?? calls[0].headers["Prefer"];
+    expect(preferHeader).toMatch(/count=exact/);
   });
 
   it("applies city and category filters", async () => {
