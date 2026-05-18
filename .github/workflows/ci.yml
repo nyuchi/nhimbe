@@ -120,6 +120,13 @@ jobs:
     name: Claude Code Review
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    # Advisory check — the bot posts review comments via the Claude API and
+    # can fail for reasons outside the PR's quality (large diffs that bust
+    # the action's prompt window, API quota, beta-tag regressions). When that
+    # happens we don't want it to block merging behind passing test/build/
+    # lint gates. The job is still surfaced in the checks list; humans can
+    # look at it but it's not authoritative.
+    continue-on-error: true
     permissions:
       contents: read
       pull-requests: write
