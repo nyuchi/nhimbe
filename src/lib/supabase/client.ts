@@ -10,19 +10,6 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-// Guard against accidental server imports. The browser client wires its
-// fetch to a module-level `accessToken` that's only ever set by the
-// client-side auth provider — using it from an RSC or route handler would
-// silently send unauthenticated requests. Today this is held safe only by
-// the "use client" boundary in auth-context; the throw makes it future-proof.
-// (`src/lib/supabase/server.ts` is the correct module on the server.)
-if (typeof window === "undefined") {
-  throw new Error(
-    "[nhimbe] src/lib/supabase/client.ts was imported from a server context. " +
-      "Use src/lib/supabase/server.ts in RSC / route handlers instead.",
-  );
-}
-
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
@@ -33,12 +20,30 @@ let cached: SupabaseClient | null = null;
 // signed-in person without re-creating the client.
 let accessToken: string | null = null;
 
+// Guard against accidental server-side use. Imports from server contexts
+// (RSC, route handlers, Next.js static prerender) are fine — they wouldn't
+// hit the fetch path — but actually CALLING the client without a window
+// means the access token wouldn't be set and RLS would reject the request.
+// Throwing on access (not on import) keeps the module loadable during
+// `next build` static prerender while still catching real developer mistakes.
+function assertBrowserContext(): void {
+  if (typeof window === "undefined") {
+    throw new Error(
+      "[nhimbe] src/lib/supabase/client.ts was called from a server context. " +
+        "Use src/lib/supabase/server.ts in RSC / route handlers instead.",
+    );
+  }
+}
+
 export function setSupabaseAccessToken(token: string | null): void {
+  // No assertBrowserContext here — auth-context calls this in a useEffect
+  // which only runs client-side, and we want a noop-safe path during SSR.
   accessToken = token;
 }
 
 export function getSupabaseBrowserClient(): SupabaseClient {
   if (cached) return cached;
+  assertBrowserContext();
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     throw new Error(
       "[mukoko] Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
