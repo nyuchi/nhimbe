@@ -4,8 +4,8 @@ import { writeAuth, getAdminUser } from "../middleware/auth";
 import { requireRequesterPersonId } from "../auth/identity";
 import { safeParseInt, validateRequiredFields } from "../utils/validation";
 import { notFound, badRequest, forbidden } from "../utils/response";
-import { supabaseFetch, supabaseFetchWithCount } from "../db/supabase";
-import { RSVP_YES, RSVP_NO } from "../db/event_mapper";
+import { supabaseFetch, supabaseFetchWithCount, SupabaseClientError } from "../db/supabase";
+import { RSVP_NO } from "../db/event_mapper";
 import { logAudit } from "../utils/audit";
 
 // platform-db CHECK constraints. events.rsvp_action stores the fully-qualified
@@ -196,15 +196,17 @@ registrations.post("/", async (c) => {
 
   interface EventStateRow {
     id: string;
-    maximumattendeecapacity: number | null;
-    attendee_count: number | null;
     visibility: string;
     eventstatus: string;
   }
+  // Cheap pre-check for visibility/status so we return a meaningful error
+  // (rather than a generic P0002/P0003) when the event isn't open for
+  // registration. Capacity and existence are re-checked atomically inside
+  // the RPC under a row lock, so a TOCTOU race here is harmless.
   const event = await supabaseFetch<EventStateRow>(c.env, {
     schema: "events",
     path: "event",
-    query: `id=eq.${encodeURIComponent(eventId)}&select=id,maximumattendeecapacity,attendee_count,visibility,eventstatus`,
+    query: `id=eq.${encodeURIComponent(eventId)}&select=id,visibility,eventstatus`,
     single: true,
   });
 
@@ -212,10 +214,12 @@ registrations.post("/", async (c) => {
   if (event.visibility !== "public" || event.eventstatus !== "https://schema.org/EventScheduled") {
     return badRequest(c, "Event is not available for registration");
   }
-  if (event.maximumattendeecapacity && (event.attendee_count ?? 0) >= event.maximumattendeecapacity) {
-    return badRequest(c, "Event is at capacity");
-  }
 
+  // Duplicate-check stays out here so we can return a friendly
+  // "already registered" message rather than a generic 409 from the
+  // (event_id, agent_person_id) unique index. The atomic RPC will still
+  // reject (via its own constraint violation) if a second request slips
+  // in between this lookup and the insert.
   const existing = await supabaseFetch<{ id: string }>(c.env, {
     schema: "events",
     path: "rsvp_action",
@@ -226,50 +230,44 @@ registrations.post("/", async (c) => {
     return badRequest(c, "User is already registered for this event");
   }
 
-  // No equivalent of the D1 UPDATE…WHERE attendee_count<capacity atomic
-  // increment via PostgREST raw, so we delegate to the SECURITY DEFINER
-  // function events.try_register_attendee, which performs the conditional
-  // UPDATE in a single statement. The pre-check above is kept for the nice
-  // error message; the RPC is the authoritative gate against over-capacity
-  // under concurrent load.
-  const inserted = await supabaseFetch<{ id: string }[]>(c.env, {
-    schema: "events",
-    path: "rsvp_action",
-    method: "POST",
-    body: {
-      event_id: eventId,
-      agent_person_id: userId,
-      rsvpresponse: RSVP_YES,
-      sync_version: 1,
-      additional_guests: 0,
-      starttime: new Date().toISOString(),
-    },
-  });
-
-  const newCount = await supabaseFetch<number | null>(c.env, {
-    schema: "events",
-    path: "rpc/try_register_attendee",
-    method: "POST",
-    body: { p_event_id: eventId },
-  });
-
-  if (newCount === null) {
-    // RPC's conditional UPDATE matched no rows — event either disappeared
-    // between our pre-check and now, or another concurrent registration
-    // pushed it over capacity. Roll back the RSVP we just inserted.
-    const insertedId = inserted?.[0]?.id;
-    if (insertedId) {
-      await supabaseFetch(c.env, {
-        schema: "events",
-        path: "rsvp_action",
-        query: `id=eq.${encodeURIComponent(insertedId)}`,
-        method: "DELETE",
-      });
+  // Single SECURITY DEFINER call: locks the event row (`FOR UPDATE`),
+  // rejects if the row is gone (P0002) or full (P0003), otherwise inserts
+  // the RSVP and bumps attendee_count in one statement. This replaces the
+  // old insert-then-rollback flow, which leaked a phantom RSVP whenever
+  // the rollback DELETE failed and let concurrent reads observe transient
+  // over-capacity state.
+  let rpcResult: Array<{ rsvp_id: string; new_count: number }> | null;
+  try {
+    rpcResult = await supabaseFetch<Array<{ rsvp_id: string; new_count: number }>>(c.env, {
+      schema: "events",
+      path: "rpc/register_attendee_atomic",
+      method: "POST",
+      body: { p_event_id: eventId, p_agent_person_id: userId },
+    });
+  } catch (e) {
+    if (e instanceof SupabaseClientError) {
+      // PostgREST surfaces RAISE EXCEPTION ... USING ERRCODE as a 400 with
+      // a JSON body `{"code":"P0003","message":"Event at capacity",...}`.
+      // Map our two custom codes to user-facing responses.
+      let pgCode: string | null = null;
+      try {
+        const parsed = JSON.parse(e.body) as { code?: string };
+        pgCode = parsed.code ?? null;
+      } catch {
+        // Body wasn't JSON — fall through to a generic 500.
+      }
+      if (pgCode === "P0002") return notFound(c, "Event");
+      if (pgCode === "P0003") return badRequest(c, "Event is at capacity");
     }
-    return badRequest(c, "Event is at capacity");
+    throw e;
   }
 
-  return c.json({ id: inserted?.[0]?.id, message: "Registration successful" }, 201);
+  const newRsvpId = rpcResult?.[0]?.rsvp_id;
+  if (!newRsvpId) {
+    return c.json({ error: "Failed to create registration" }, 500);
+  }
+
+  return c.json({ id: newRsvpId, message: "Registration successful" }, 201);
 });
 
 const ALLOWED_STATUSES = new Set(Object.keys(API_TO_DB_CONFIRMATION));

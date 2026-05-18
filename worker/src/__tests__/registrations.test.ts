@@ -310,34 +310,6 @@ describe("POST /api/registrations", () => {
     expect(await res.json()).toEqual({ error: "Event is not available for registration" });
   });
 
-  it("400s when event is at capacity", async () => {
-    const env = createMockEnv();
-    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|p1" } });
-    const { stub } = makeFetchStub([
-      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-1" }) },
-      {
-        match: pgrstMatch("event", ["GET"]),
-        handle: () => json({
-          id: "e",
-          maximumattendeecapacity: 10,
-          attendee_count: 10,
-          visibility: "public",
-          eventstatus: "https://schema.org/EventScheduled",
-        }),
-      },
-    ]);
-    vi.stubGlobal("fetch", stub);
-
-    const app = buildApp(env);
-    const res = await app.fetch("/api/registrations", {
-      method: "POST",
-      headers: authedOriginHeaders(),
-      body: JSON.stringify({ eventId: "e" }),
-    });
-    expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: "Event is at capacity" });
-  });
-
   it("400s when user already has a non-cancelled RSVP", async () => {
     const env = createMockEnv();
     mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|p1" } });
@@ -346,7 +318,7 @@ describe("POST /api/registrations", () => {
       {
         match: pgrstMatch("event", ["GET"]),
         handle: () => json({
-          id: "e", maximumattendeecapacity: 100, attendee_count: 5, visibility: "public", eventstatus: "https://schema.org/EventScheduled",
+          id: "e", visibility: "public", eventstatus: "https://schema.org/EventScheduled",
         }),
       },
       { match: pgrstMatch("rsvp_action", ["GET"]), handle: () => json({ id: "existing-rsvp" }) },
@@ -363,7 +335,7 @@ describe("POST /api/registrations", () => {
     expect(await res.json()).toEqual({ error: "User is already registered for this event" });
   });
 
-  it("inserts RSVP and bumps attendee_count atomically on the happy path", async () => {
+  it("inserts RSVP + bumps attendee_count in one atomic RPC call on the happy path", async () => {
     const env = createMockEnv();
     mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|p1" } });
     const { stub, calls } = makeFetchStub([
@@ -371,12 +343,14 @@ describe("POST /api/registrations", () => {
       {
         match: pgrstMatch("event", ["GET"]),
         handle: () => json({
-          id: "e", maximumattendeecapacity: 100, attendee_count: 5, visibility: "public", eventstatus: "https://schema.org/EventScheduled",
+          id: "e", visibility: "public", eventstatus: "https://schema.org/EventScheduled",
         }),
       },
       { match: pgrstMatch("rsvp_action", ["GET"]), handle: () => notFoundSingle() },
-      { match: pgrstMatch("rsvp_action", ["POST"]), handle: () => json([{ id: "new-rsvp" }], 201) },
-      { match: pgrstMatch("rpc/try_register_attendee", ["POST"]), handle: () => json(6) },
+      {
+        match: pgrstMatch("rpc/register_attendee_atomic", ["POST"]),
+        handle: () => json([{ rsvp_id: "new-rsvp", new_count: 6 }]),
+      },
     ]);
     vi.stubGlobal("fetch", stub);
 
@@ -389,20 +363,16 @@ describe("POST /api/registrations", () => {
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ id: "new-rsvp", message: "Registration successful" });
 
-    const insert = calls.find(c => c.method === "POST" && c.url.includes("/rsvp_action"));
-    expect(insert).toBeDefined();
-    expect(insert!.body).toMatchObject({
-      event_id: "e",
-      agent_person_id: "person-1",
-      rsvpresponse: "https://schema.org/RsvpResponseYes",
-    });
+    // The new flow makes a single RPC call — no direct rsvp_action POST.
+    const directInsert = calls.find(c => c.method === "POST" && c.url.endsWith("/rsvp_action"));
+    expect(directInsert).toBeUndefined();
 
-    const rpc = calls.find(c => c.method === "POST" && c.url.includes("/rpc/try_register_attendee"));
+    const rpc = calls.find(c => c.method === "POST" && c.url.includes("/rpc/register_attendee_atomic"));
     expect(rpc).toBeDefined();
-    expect(rpc!.body).toEqual({ p_event_id: "e" });
+    expect(rpc!.body).toEqual({ p_event_id: "e", p_agent_person_id: "person-1" });
   });
 
-  it("rolls back the RSVP when the atomic capacity RPC rejects (race lost)", async () => {
+  it("400s with 'Event is at capacity' when the atomic RPC raises P0003", async () => {
     const env = createMockEnv();
     mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|p1" } });
     const { stub, calls } = makeFetchStub([
@@ -410,13 +380,20 @@ describe("POST /api/registrations", () => {
       {
         match: pgrstMatch("event", ["GET"]),
         handle: () => json({
-          id: "e", maximumattendeecapacity: 100, attendee_count: 99, visibility: "public", eventstatus: "https://schema.org/EventScheduled",
+          id: "e", visibility: "public", eventstatus: "https://schema.org/EventScheduled",
         }),
       },
       { match: pgrstMatch("rsvp_action", ["GET"]), handle: () => notFoundSingle() },
-      { match: pgrstMatch("rsvp_action", ["POST"]), handle: () => json([{ id: "doomed-rsvp" }], 201) },
-      { match: pgrstMatch("rpc/try_register_attendee", ["POST"]), handle: () => json(null) },
-      { match: pgrstMatch("rsvp_action", ["DELETE"]), handle: () => noContent() },
+      {
+        match: pgrstMatch("rpc/register_attendee_atomic", ["POST"]),
+        // PostgREST surfaces RAISE EXCEPTION as HTTP 400 with the SQLSTATE
+        // in the JSON body's `code`. The handler parses that to decide the
+        // status code + message.
+        handle: () => new Response(
+          JSON.stringify({ code: "P0003", message: "Event at capacity" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        ),
+      },
     ]);
     vi.stubGlobal("fetch", stub);
 
@@ -429,9 +406,42 @@ describe("POST /api/registrations", () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "Event is at capacity" });
 
-    const del = calls.find(c => c.method === "DELETE" && c.url.includes("/rsvp_action"));
-    expect(del).toBeDefined();
-    expect(new URL(del!.url).searchParams.get("id")).toBe("eq.doomed-rsvp");
+    // No direct rsvp_action POST/DELETE — capacity rejection happens
+    // entirely server-side, so we never write a phantom row.
+    const directWrites = calls.filter(c => c.url.endsWith("/rsvp_action") && c.method !== "GET");
+    expect(directWrites).toHaveLength(0);
+  });
+
+  it("404s when the atomic RPC raises P0002 (event disappeared)", async () => {
+    const env = createMockEnv();
+    mockedGetAuthenticatedUser.mockResolvedValue({ user: { userId: "workos|p1" } });
+    const { stub } = makeFetchStub([
+      { match: pgrstMatch("person", ["GET"]), handle: () => json({ id: "person-1" }) },
+      {
+        match: pgrstMatch("event", ["GET"]),
+        handle: () => json({
+          id: "e", visibility: "public", eventstatus: "https://schema.org/EventScheduled",
+        }),
+      },
+      { match: pgrstMatch("rsvp_action", ["GET"]), handle: () => notFoundSingle() },
+      {
+        match: pgrstMatch("rpc/register_attendee_atomic", ["POST"]),
+        handle: () => new Response(
+          JSON.stringify({ code: "P0002", message: "Event not found" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        ),
+      },
+    ]);
+    vi.stubGlobal("fetch", stub);
+
+    const app = buildApp(env);
+    const res = await app.fetch("/api/registrations", {
+      method: "POST",
+      headers: authedOriginHeaders(),
+      body: JSON.stringify({ eventId: "e" }),
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "Event not found" });
   });
 });
 
