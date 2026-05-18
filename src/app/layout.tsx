@@ -10,6 +10,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { AnimatedBackground } from "@/components/ui/animated-background";
 import { ThemeProvider } from "@/components/theme-provider";
+import { I18nProvider } from "@/lib/i18n/i18n-provider";
 import { AuthProvider } from "@/components/auth/auth-context";
 import { WorkOSProvider } from "@/components/auth/workos-provider";
 import { ErrorBoundary } from "@/components/error/error-boundary";
@@ -183,19 +184,21 @@ export default function RootLayout({
           <WorkOSProvider>
             <AuthProvider>
               <ThemeProvider defaultTheme="system">
-                <LiveRegionProvider>
-                  <AnimatedBackground enableAnimation={true} intensity={0.2} speed={0.3} />
-                  <WidgetErrorBoundary fallback={<MinimalNav />} name="Header">
-                    <Header />
-                  </WidgetErrorBoundary>
-                  <main id="main-content" className="flex-1 relative z-10 pb-16 md:pb-0">{children}</main>
-                  <WidgetErrorBoundary fallback={null} name="MobileNav">
-                    <MobileBottomNav />
-                  </WidgetErrorBoundary>
-                  <WidgetErrorBoundary fallback={null} name="Footer">
-                    <Footer />
-                  </WidgetErrorBoundary>
-                </LiveRegionProvider>
+                <I18nProvider>
+                  <LiveRegionProvider>
+                    <AnimatedBackground enableAnimation={true} intensity={0.2} speed={0.3} />
+                    <WidgetErrorBoundary fallback={<MinimalNav />} name="Header">
+                      <Header />
+                    </WidgetErrorBoundary>
+                    <main id="main-content" className="flex-1 relative z-10 pb-16 md:pb-0">{children}</main>
+                    <WidgetErrorBoundary fallback={null} name="MobileNav">
+                      <MobileBottomNav />
+                    </WidgetErrorBoundary>
+                    <WidgetErrorBoundary fallback={null} name="Footer">
+                      <Footer />
+                    </WidgetErrorBoundary>
+                  </LiveRegionProvider>
+                </I18nProvider>
               </ThemeProvider>
             </AuthProvider>
           </WorkOSProvider>
