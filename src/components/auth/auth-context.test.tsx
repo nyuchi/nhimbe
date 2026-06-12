@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import { AuthProvider, useAuth } from "./auth-context";
-import type { PersonRow } from "@/lib/supabase/types";
+import type { AppUser } from "@/lib/mongo/users";
 
 // Mock next/navigation
 const mockPush = vi.fn();
@@ -32,19 +32,20 @@ vi.mock("@workos-inc/authkit-nextjs/components", () => ({
   }),
 }));
 
-// Mock Supabase client setter — auth-context calls setSupabaseAccessToken on
-// every token rotation. We just want to confirm it's invoked.
+// Mock Supabase client setter — auth-context still forwards the access token
+// to the Supabase client for read paths not yet migrated off direct access.
 const mockSetSupabaseAccessToken = vi.fn();
 vi.mock("@/lib/supabase/client", () => ({
   setSupabaseAccessToken: (t: string | null) => mockSetSupabaseAccessToken(t),
   getSupabaseBrowserClient: () => ({}),
 }));
 
-// Mock the Supabase identity.person upsert. AuthProvider replaces the old
-// /api/auth/sync round-trip with this call after PR-34.
-const mockUpsertPersonFromWorkos = vi.fn();
-vi.mock("@/lib/supabase/api", () => ({
-  upsertPersonFromWorkos: (...args: unknown[]) => mockUpsertPersonFromWorkos(...args),
+// Mock the server action that syncs the WorkOS session into identity.persons
+// (MongoDB). The browser can't reach Mongo, so the sync runs server-side and
+// the client calls it as an action.
+const mockSyncCurrentUser = vi.fn();
+vi.mock("@/app/actions/auth", () => ({
+  syncCurrentUser: (...args: unknown[]) => mockSyncCurrentUser(...args),
 }));
 
 function TestConsumer() {
@@ -64,12 +65,31 @@ function TestConsumer() {
   );
 }
 
+// Build an AppUser as returned by the syncCurrentUser server action.
+function appUser(overrides: Partial<AppUser> & { id: string; workosUserId: string }): AppUser {
+  return {
+    email: "",
+    name: "",
+    image: undefined,
+    addressLocality: undefined,
+    addressCountry: undefined,
+    interests: [],
+    role: "user",
+    onboardingCompleted: false,
+    suspended: false,
+    ...overrides,
+    personId: overrides.personId ?? overrides.id,
+  };
+}
+
 describe("AuthContext", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockWorkosUser = null;
     mockAuthLoading = false;
     mockAccessToken = "mock-access-token";
+    mockGetAccessToken.mockResolvedValue("mock-access-token");
+    mockSyncCurrentUser.mockResolvedValue(null);
 
     Object.defineProperty(global, "localStorage", {
       value: {
@@ -81,33 +101,6 @@ describe("AuthContext", () => {
       configurable: true,
     });
   });
-
-  // Helper — build a realistic identity.person row that maps cleanly to a
-  // NhimbeUser for assertions.
-  function personRow(overrides: Partial<PersonRow> & { id: string; workos_user_id: string }): PersonRow {
-    return {
-      id: overrides.id,
-      workos_user_id: overrides.workos_user_id,
-      name: null,
-      givenname: null,
-      familyname: null,
-      alternatename: null,
-      email: null,
-      image: null,
-      bio: null,
-      description: null,
-      address: null,
-      knowsabout: null,
-      role: "user",
-      onboarding_completed: false,
-      profile_completed: false,
-      email_verified: false,
-      last_login_at: null,
-      created_at: null,
-      updated_at: null,
-      ...overrides,
-    };
-  }
 
   it("finishes loading when no AuthKit session exists", async () => {
     render(
@@ -134,7 +127,7 @@ describe("AuthContext", () => {
     expect(screen.getByTestId("loading").textContent).toBe("loading");
   });
 
-  it("syncs with Supabase when AuthKit user exists", async () => {
+  it("syncs the user into identity.persons when an AuthKit user exists", async () => {
     mockWorkosUser = {
       id: "user_workos_123",
       email: "test@example.com",
@@ -142,14 +135,13 @@ describe("AuthContext", () => {
       lastName: "User",
     };
 
-    mockUpsertPersonFromWorkos.mockResolvedValueOnce(
-      personRow({
+    mockSyncCurrentUser.mockResolvedValueOnce(
+      appUser({
         id: "usr-backend-1",
-        workos_user_id: "user_workos_123",
+        workosUserId: "user_workos_123",
         email: "test@example.com",
         name: "Backend User",
-        address: { addressLocality: "Harare" },
-        knowsabout: ["music", "tech"],
+        onboardingCompleted: true,
       }),
     );
 
@@ -163,18 +155,15 @@ describe("AuthContext", () => {
       expect(screen.getByTestId("loading").textContent).toBe("not-loading");
     });
 
-    expect(mockUpsertPersonFromWorkos).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workosUserId: "user_workos_123",
-        email: "test@example.com",
-      }),
-    );
-
+    expect(mockSyncCurrentUser).toHaveBeenCalled();
     expect(screen.getByTestId("authenticated").textContent).toBe("yes");
     expect(screen.getByTestId("user-name").textContent).toBe("Backend User");
+    // The access token is still forwarded to the Supabase client for the
+    // not-yet-migrated read paths.
+    expect(mockSetSupabaseAccessToken).toHaveBeenCalledWith("mock-access-token");
   });
 
-  it("stays logged out when Supabase upsert fails", async () => {
+  it("stays logged out when the sync returns null (no session / suspended)", async () => {
     mockWorkosUser = {
       id: "user_workos_456",
       email: "fallback@example.com",
@@ -182,7 +171,7 @@ describe("AuthContext", () => {
       lastName: "User",
     };
 
-    mockUpsertPersonFromWorkos.mockResolvedValueOnce(null);
+    mockSyncCurrentUser.mockResolvedValueOnce(null);
 
     render(
       <AuthProvider>
@@ -197,7 +186,10 @@ describe("AuthContext", () => {
     expect(screen.getByTestId("authenticated").textContent).toBe("no");
   });
 
-  it("computes profileCompleteness based on user fields", async () => {
+  it("tracks name completeness from the synced person", async () => {
+    // Note: under the v3.1 persons schema, addressLocality and interests are
+    // not yet modeled on the person doc, so profile completeness can only
+    // reflect the name today. (Tracked as a follow-up to model those fields.)
     mockWorkosUser = {
       id: "user_workos_789",
       email: "complete@example.com",
@@ -205,14 +197,12 @@ describe("AuthContext", () => {
       lastName: "User",
     };
 
-    mockUpsertPersonFromWorkos.mockResolvedValueOnce(
-      personRow({
+    mockSyncCurrentUser.mockResolvedValueOnce(
+      appUser({
         id: "usr-complete",
-        workos_user_id: "user_workos_789",
+        workosUserId: "user_workos_789",
         email: "complete@example.com",
         name: "Complete User",
-        address: { addressLocality: "Harare" },
-        knowsabout: ["music"],
       }),
     );
 
@@ -223,14 +213,14 @@ describe("AuthContext", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("profile-complete").textContent).toBe("yes");
+      expect(screen.getByTestId("profile-name").textContent).toBe("yes");
     });
-    expect(screen.getByTestId("profile-name").textContent).toBe("yes");
-    expect(screen.getByTestId("profile-city").textContent).toBe("yes");
-    expect(screen.getByTestId("profile-interests").textContent).toBe("yes");
+    expect(screen.getByTestId("profile-city").textContent).toBe("no");
+    expect(screen.getByTestId("profile-interests").textContent).toBe("no");
+    expect(screen.getByTestId("profile-complete").textContent).toBe("no");
   });
 
-  it("marks profileCompleteness as incomplete when fields are missing", async () => {
+  it("marks profileCompleteness as incomplete when the name is a placeholder", async () => {
     mockWorkosUser = {
       id: "user_workos_incomplete",
       email: "incomplete@example.com",
@@ -238,10 +228,10 @@ describe("AuthContext", () => {
       lastName: null,
     };
 
-    mockUpsertPersonFromWorkos.mockResolvedValueOnce(
-      personRow({
+    mockSyncCurrentUser.mockResolvedValueOnce(
+      appUser({
         id: "usr-incomplete",
-        workos_user_id: "user_workos_incomplete",
+        workosUserId: "user_workos_incomplete",
         email: "incomplete@example.com",
         name: "User",
       }),
@@ -289,14 +279,12 @@ describe("AuthContext", () => {
       lastName: null,
     };
 
-    mockUpsertPersonFromWorkos.mockResolvedValueOnce(
-      personRow({
+    mockSyncCurrentUser.mockResolvedValueOnce(
+      appUser({
         id: "usr-123",
-        workos_user_id: "user_workos_123",
+        workosUserId: "user_workos_123",
         email: "test@example.com",
         name: "Test",
-        address: { addressLocality: "Harare" },
-        knowsabout: ["music", "tech"],
       }),
     );
 

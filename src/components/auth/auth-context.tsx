@@ -11,8 +11,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useAuth as useAuthKit, useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { setSupabaseAccessToken } from "@/lib/supabase/client";
-import { upsertPersonFromWorkos } from "@/lib/supabase/api";
-import type { PersonRow } from "@/lib/supabase/types";
+import { syncCurrentUser } from "@/app/actions/auth";
 
 export type UserRole = "user" | "moderator" | "admin" | "super_admin";
 
@@ -78,22 +77,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function personRowToNhimbeUser(row: PersonRow, fallbackEmail: string, fallbackName: string): NhimbeUser {
-  const role = (row.role ?? "user") as UserRole;
-  return {
-    id: row.id,
-    personId: row.id,
-    workosUserId: row.workos_user_id ?? "",
-    email: row.email ?? fallbackEmail,
-    name: row.name ?? fallbackName,
-    image: row.image ?? undefined,
-    addressLocality: row.address?.addressLocality ?? undefined,
-    addressCountry: row.address?.addressCountry ?? undefined,
-    interests: row.knowsabout ?? [],
-    role: ROLE_HIERARCHY[role] !== undefined ? role : "user",
-  };
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { user: workosUser, loading: authKitLoading, signOut: authKitSignOut } = useAuthKit();
@@ -110,41 +93,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSupabaseAccessToken(accessToken ?? null);
   }, [accessToken]);
 
-  // Supabase-direct sync. Replaces the old worker /api/auth/sync round-trip
-  // — identity.person now owns the canonical user state.
-  const syncWithSupabase = useCallback(async () => {
+  // Server-side sync. The WorkOS session is resolved on the server via
+  // AuthKit and mirrored into identity.persons (MongoDB) — the browser can't
+  // reach Mongo. We still forward the access token to the Supabase client for
+  // the read paths not yet migrated off direct Supabase access.
+  const syncUser = useCallback(async () => {
     if (!workosUser) return;
 
     setSyncing(true);
     try {
-      // Make sure the access token is in the Supabase client before the
-      // upsert hits PostgREST; useEffect above is async w.r.t. this call.
       const token = accessToken ?? (await getAccessToken().catch(() => null));
       if (token) setSupabaseAccessToken(token);
-      if (!token) {
-        setSyncing(false);
-        return;
-      }
 
-      const email = workosUser.email ?? "";
-      const name = [workosUser.firstName, workosUser.lastName].filter(Boolean).join(" ").trim();
-
-      const row = await upsertPersonFromWorkos({
-        workosUserId: workosUser.id,
-        email,
-        name,
-        givenname: workosUser.firstName ?? null,
-        familyname: workosUser.lastName ?? null,
-      });
-
-      if (row) {
-        setNhimbeUser(personRowToNhimbeUser(row, email, name));
+      const appUser = await syncCurrentUser();
+      if (appUser) {
+        const fallbackName = [workosUser.firstName, workosUser.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        setNhimbeUser({
+          id: appUser.id,
+          personId: appUser.personId,
+          workosUserId: appUser.workosUserId || workosUser.id,
+          email: appUser.email || (workosUser.email ?? ""),
+          name: appUser.name || fallbackName,
+          image: appUser.image,
+          addressLocality: appUser.addressLocality,
+          addressCountry: appUser.addressCountry,
+          interests: appUser.interests,
+          role: appUser.role,
+        });
       } else {
-        console.error("[nhimbe] identity.person upsert returned null");
+        // No session or suspended account — treat as signed out.
         setNhimbeUser(null);
       }
     } catch (err) {
-      console.error("[nhimbe] identity.person sync failed:", err);
+      console.error("[nhimbe] identity.persons sync failed:", err);
       setNhimbeUser(null);
     } finally {
       setSyncing(false);
@@ -153,19 +137,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [workosUser, accessToken, getAccessToken]);
 
   useEffect(() => {
-    // Gate the first sync on having the access token in hand. Without this,
-    // the effect fires as soon as `workosUser` resolves, then `syncWithSupabase`
-    // has to fall through to `getAccessToken()` because the
-    // `setSupabaseAccessToken` effect at line 109 hasn't run yet — costing
-    // a second AuthKit fetch on every first sign-in.
-    if (!authKitLoading && workosUser && accessToken && !hasSynced) {
-      void syncWithSupabase();
+    // The server action reads the session cookie, so the sync no longer waits
+    // on the client access token — fire as soon as the WorkOS user resolves.
+    if (!authKitLoading && workosUser && !hasSynced) {
+      void syncUser();
     }
     if (!authKitLoading && !workosUser) {
       setNhimbeUser(null);
       setHasSynced(false);
     }
-  }, [authKitLoading, workosUser, accessToken, hasSynced, syncWithSupabase]);
+  }, [authKitLoading, workosUser, hasSynced, syncUser]);
 
   const signIn = useCallback(
     (returnUrl?: string) => {
@@ -194,8 +175,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     setHasSynced(false);
-    await syncWithSupabase();
-  }, [syncWithSupabase]);
+    await syncUser();
+  }, [syncUser]);
 
   const isLoading = authKitLoading || syncing;
   const isAuthenticated = !!workosUser && !!nhimbeUser;
