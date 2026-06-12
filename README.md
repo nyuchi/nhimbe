@@ -1,174 +1,75 @@
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./public/nhimbe-icon-dark.png">
+  <img src="./public/nhimbe-icon-light.png" alt="nhimbe" width="96" height="96">
+</picture>
+
 # nhimbe
 
-> Together we gather, together we grow
+**Together we gather, together we grow.**
 
-**nhimbe** (pronounced /ˈnhimbɛ/) is the community events discovery and management platform within the [Mukoko](https://mukoko.com) ecosystem. Named after the Shona tradition of communal work gatherings, nhimbe brings people together through events.
+Discover, host, and grow community events.
 
-## Tech Stack
+[![License: MIT](https://img.shields.io/badge/License-MIT-1f6feb.svg)](./LICENSE)
+[![Join the community on Discord](https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/CP2P4JpPR)
 
-| Layer       | Technology                                              | Deployment |
-| ----------- | ------------------------------------------------------- | ---------- |
-| Frontend    | Next.js 16, React 19, Tailwind CSS v4                   | Vercel     |
-| Backend     | Hono on Cloudflare Workers                              | Cloudflare |
-| Database    | Supabase Postgres (via PostgREST)                       | Supabase   |
-| API Gateway | FastAPI (api.mukoko.com)                                | fly.io     |
-| AI          | Workers AI (BGE embeddings, Llama 3.1, Qwen 3)          | Cloudflare |
-| Search      | Cloudflare Vectorize (RAG)                              | Cloudflare |
-| Storage     | Cloudflare R2                                           | Cloudflare |
-| Cache       | Cloudflare KV                                           | Cloudflare |
-| Auth        | WorkOS AuthKit (`@workos-inc/authkit-nextjs`, JWT/JWKS) | WorkOS     |
-| Payments    | Paynow (Zimbabwe mobile money)                          | Paynow     |
-| Email       | Resend (transactional)                                  | Resend     |
-
-## Features
-
-- **Event Management** -- Create, edit, manage, and cancel events with rich details
-- **AI-Powered Search** -- Semantic search using vector embeddings (RAG)
-- **AI Description Wizard** -- Generate event descriptions with AI assistance
-- **Authentication** -- WorkOS AuthKit (magic links, OTP, SSO)
-- **Registrations** -- RSVP with atomic capacity checks and waitlist support
-- **Payments** -- Mobile money payments via Paynow (EcoCash, OneMoney, Telecash)
-- **QR Check-in** -- QR code-based attendance tracking
-- **Calendar Integration** -- Export to Google, Apple, Outlook calendars
-- **Recurring Events** -- Series with RRULE recurrence support
-- **Reviews & Referrals** -- Event ratings and referral tracking
-- **Admin Dashboard** -- User management, content moderation, analytics
-- **Community Stats** -- Real-time metrics, trending categories, peak times
-- **PWA Support** -- Installable progressive web app
-- **Dark/Light Themes** -- WCAG AAA accessible, high-contrast design
-- **i18n** -- English and Shona language support
-
-## Quick Start
-
-### Prerequisites
-
-- Node.js 20+
-- npm
-- Wrangler CLI (`npm install -g wrangler`)
-
-### Frontend
-
-```bash
-npm install
-npm run dev           # http://localhost:3000
-```
-
-### Backend
-
-```bash
-cd worker
-npm install
-npm run dev           # http://localhost:8787
-```
-
-### Environment Variables
-
-```bash
-# Frontend (.env.local)
-NEXT_PUBLIC_API_URL=http://localhost:8787
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
-WORKOS_CLIENT_ID=client_xxx
-WORKOS_API_KEY=sk_xxx                          # server-only
-WORKOS_COOKIE_PASSWORD=at-least-32-chars       # server-only
-NEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback   # NEXT_PUBLIC_ prefix is REQUIRED by authkit-nextjs
-WORKOS_API_HOSTNAME=authenticate.nyuchi.com                      # optional — custom WorkOS API domain
-NEXT_PUBLIC_SUPABASE_URL=https://....supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your-key
-
-# Backend (worker/.dev.vars)
-API_KEY=your-api-key
-WORKOS_CLIENT_ID=client_xxx                    # overrides wrangler placeholder
-SUPABASE_SECRET_KEY=sb_secret_...
-MUKOKO_API_KEY=your-mukoko-api-key
-RESEND_API_KEY=your-resend-key
-```
-
-See [CLAUDE.md](./CLAUDE.md) for the full environment variable reference.
-
-## Project Structure
-
-```
-nhimbe/
-├── src/                          # Next.js frontend
-│   ├── app/                      # App Router pages
-│   ├── components/               # React components
-│   │   ├── ui/                   # 34 shadcn/Radix primitives + composites
-│   │   ├── auth/                 # Auth context, guards, WorkOS provider
-│   │   ├── modals/               # Responsive modal sheets
-│   │   ├── layout/               # Header, footer
-│   │   └── error/                # Error boundaries
-│   ├── hooks/                    # use-mobile, use-toast, use-memory-pressure
-│   └── lib/                      # API client, Supabase client, i18n, utils
-├── proxy.ts                      # Next.js 16 AuthKit session-cookie proxy
-├── worker/                       # Cloudflare Workers backend (Hono)
-│   └── src/
-│       ├── routes/               # 18 route modules
-│       ├── ai/                   # RAG search, assistant, description wizard
-│       ├── auth/                 # WorkOS JWT/JWKS validation
-│       ├── middleware/           # Auth, rate limit, AI safety, observability
-│       ├── payments/             # Paynow + Mukoko API gateway client
-│       ├── email/                # Resend client, templates, queue triggers
-│       ├── utils/                # Circuit breaker, retry, validation, audit
-│       ├── db/                   # PostgREST helper + row-to-API mapper
-│       └── __tests__/            # 124 tests across 5 files
-├── .github/                      # CI workflows, issue/PR templates
-├── CLAUDE.md                     # Architecture guide
-├── CONTRIBUTING.md               # Contribution guidelines
-├── SECURITY.md                   # Security policy
-└── RELEASES.md                   # Release process
-```
-
-## Testing
-
-```bash
-# Frontend (160 tests)
-npx vitest run
-
-# Backend (124 tests)
-cd worker && npx vitest run
-
-# Type check backend
-cd worker && npx tsc --noEmit
-
-# Lint
-npm run lint
-```
-
-## CI/CD
-
-GitHub Actions runs 4 parallel jobs on every push:
-
-1. **Lint & Build** -- ESLint + Next.js production build
-2. **Frontend Tests** -- 160 Vitest tests
-3. **Worker Tests** -- 124 Vitest tests
-4. **Worker Type Check** -- TypeScript strict mode
-
-All 4 must pass before merge. (The migration-validation job retired with the D1→Supabase migration; schema now lives in `nyuchi_platform_db`.)
-
-## Documentation
-
-| Document                             | Purpose                                                 |
-| ------------------------------------ | ------------------------------------------------------- |
-| [CLAUDE.md](./CLAUDE.md)             | Complete architecture guide, API reference, conventions |
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | How to contribute                                       |
-| [SECURITY.md](./SECURITY.md)         | Security policy and vulnerability reporting             |
-| [RELEASES.md](./RELEASES.md)         | Release process and versioning                          |
-
-## Security
-
-nhimbe implements defense-in-depth security: JWT auth with JWKS validation, timing-safe comparisons, HMAC-SHA512 webhook verification, prompt injection detection, rate limiting, security headers (HSTS, CSP, X-Frame-Options), CORS restriction, audit logging, and atomic database operations.
-
-See [SECURITY.md](./SECURITY.md) for the full security policy and how to report vulnerabilities.
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, code conventions, and PR guidelines.
-
-## License
-
-MIT License -- see [LICENSE](./LICENSE) for details.
+</div>
 
 ---
 
+## About
+
+**nhimbe** (pronounced /ˈnhimbɛ/) is the community events platform of the [Mukoko](https://mukoko.com) ecosystem. It takes its name from the Shona tradition of *nhimbe* — the communal work gathering where neighbours come together to get something done and share in the harvest. That spirit runs through the product: help communities find one another, and turn up.
+
+## What you can do
+
+- **Discover** — Find events around you by interest, place, and time.
+- **Host** — Create gatherings with rich details, cover art, and recurring schedules.
+- **RSVP & waitlists** — Reserve a spot with capacity limits that never oversell a room.
+- **Check in** — QR-based attendance on the day of the event.
+- **Kraal** — Community circles that live alongside your events.
+- **Reviews & referrals** — Build trust and grow reach through the people who show up.
+- **Reminders & updates** — Keep attendees in the loop so no one misses the moment.
+- **Calendar export** — Add any event to the calendar you already use.
+- **Your language** — Available in English and Shona, with more on the way.
+- **Anywhere** — Installable, fast, and accessible (WCAG AAA), in light or dark.
+
+## Getting started
+
+nhimbe is built in the open and welcomes contributors. For everything you need to run it locally and make your first change, see **[CONTRIBUTING.md](./CONTRIBUTING.md)**.
+
+## Community
+
+Have a question, an idea, or want to help shape nhimbe? Join the people building it:
+
+**→ [discord.gg/CP2P4JpPR](https://discord.gg/CP2P4JpPR)**
+
+## Documentation
+
+| Document | Purpose |
+| --- | --- |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | Set up a local environment and contribute |
+| [CLAUDE.md](./CLAUDE.md) | Architecture and contributor reference |
+| [SECURITY.md](./SECURITY.md) | Security policy and how to report a vulnerability |
+| [RELEASES.md](./RELEASES.md) | Release process and versioning |
+
+## Security
+
+We take the safety of the community seriously. If you discover a vulnerability, please report it responsibly — see **[SECURITY.md](./SECURITY.md)**. Please don't open a public issue for security reports.
+
+## Contributing
+
+Pull requests are welcome. Read **[CONTRIBUTING.md](./CONTRIBUTING.md)** for setup, conventions, and the PR process before you start.
+
+## License
+
+Released under the MIT License — see **[LICENSE](./LICENSE)**.
+
+---
+
+<div align="center">
+
 **nhimbe** is a [Mukoko](https://mukoko.com) product by [Nyuchi Web Services](https://nyuchi.com).
+
+</div>
