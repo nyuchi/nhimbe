@@ -1,92 +1,60 @@
 # Security Policy
 
-## Supported Versions
+The safety of the nhimbe community matters to us. We welcome responsible disclosure and will work with you to resolve genuine issues quickly.
 
-| Version          | Supported |
-| ---------------- | --------- |
-| Latest on `main` | Yes       |
-| Older releases   | No        |
+## Supported versions
 
-## Reporting a Vulnerability
+| Version | Supported |
+| --- | --- |
+| Latest on `main` | ✅ |
+| Older releases | ❌ |
 
-**Do not open a public GitHub issue for security vulnerabilities.**
+nhimbe is continuously deployed, so the latest `main` is the only supported version. Fixes land there and roll out from there.
 
-Instead, please report security issues by emailing **security@nyuchi.com** with:
+## Reporting a vulnerability
 
-1. Description of the vulnerability
+**Please do not open a public GitHub issue for security vulnerabilities**, and don't disclose them in the community Discord.
+
+Instead, email **security@nyuchi.com** with:
+
+1. A description of the vulnerability
 2. Steps to reproduce
-3. Potential impact
-4. Suggested fix (if any)
+3. The potential impact
+4. A suggested fix, if you have one
 
-We will acknowledge receipt within 48 hours and provide a detailed response within 5 business days. We will work with you to understand the issue and coordinate a fix before any public disclosure.
+We'll acknowledge your report within **48 hours** and aim to provide a detailed response within **5 business days**. We'll coordinate a fix with you and agree on disclosure timing before anything is made public.
 
-## Security Measures
+## Our commitments
 
-nhimbe implements the following security controls:
+- We investigate every good-faith report.
+- We keep you updated on progress toward a fix.
+- We credit reporters who'd like to be acknowledged, once a fix has shipped.
 
-### Authentication & Authorization
+## Security practices
 
-- JWT validation via WorkOS JWKS (issuer + audience + signature + expiry checks; no API secrets stored in client)
-- Timing-safe API key comparison to prevent timing attacks
-- Suspended user enforcement (403 on all authenticated routes)
-- writeAuth middleware for all mutating operations (origin check + API key)
-- Role-based access control (user, moderator, admin, super_admin)
+nhimbe is built with defense-in-depth. Without enumerating implementation that changes over time, our baseline includes:
 
-### Input Validation & Sanitization
-
-- AI safety middleware with prompt injection detection on all AI routes
-- Input length enforcement and content sanitization
-- All database access via PostgREST (`supabaseFetch()`) with typed query params — no raw SQL string concatenation in the worker
-- File upload validation (type whitelist, 10MB size limit)
-
-### Transport & Headers
-
-- HTTPS enforced via HSTS (max-age=63072000, includeSubDomains, preload)
-- X-Content-Type-Options: nosniff
-- X-Frame-Options: DENY (clickjacking protection)
-- Referrer-Policy: strict-origin-when-cross-origin
-- Permissions-Policy: camera=(), microphone=(), geolocation=()
-- CORS restricted to trusted domains (nyuchi.com, mukoko.com, nhimbe.com)
-
-### Data Protection
-
-- Soft deletes with PII anonymization on account deletion
-- Audit logging for all destructive operations
-- No error details leaked in production responses (generic error + request ID)
-- Environment validation on startup (missing bindings logged as errors)
-
-### Payments
-
-- Paynow webhook signature verification (HMAC-SHA512, timing-safe comparison)
-- Payment secrets stored via Cloudflare `wrangler secret put` (not in code or config)
-
-### Resilience
-
-- Rate limiting on all API endpoints (100 req/min)
-- Circuit breaker pattern for external service calls (Vectorize, Workers AI, R2, Supabase REST — opens after 5 transient failures, 30s cooldown, surfaces as HTTP 503)
-- Request timeout handling
-- Capacity-gate logic prevents over-registration; counter columns are flagged for migration to Postgres functions when concurrency demands stricter atomicity
-
-## Dependency Management
-
-- Dependencies are audited regularly with `npm audit`
-- Security patches are applied promptly
-- Worker dependencies: 0 known vulnerabilities
-- Frontend dependencies: monitored via Dependabot
+- **Authentication & authorization** — identity is verified on every request; access is role-based and least-privilege; suspended accounts are denied.
+- **Input handling** — user and AI inputs are validated, length-limited, and sanitized; uploads are type- and size-checked.
+- **Transport & headers** — HTTPS is enforced, with hardened response headers and a restrictive cross-origin policy.
+- **Secrets** — credentials live in managed secret storage, never in source or client code.
+- **Abuse resistance** — endpoints are rate-limited, and external dependencies are called through resilience patterns that fail safe.
+- **Accountability** — destructive actions are audit-logged, and error responses never leak internal detail.
+- **Dependencies** — kept current and monitored for known vulnerabilities; security patches are prioritized.
 
 ## Scope
 
-The following are in scope for security reports:
+In scope:
 
-- Authentication and authorization bypasses
-- Injection vulnerabilities (SQL, XSS, prompt injection)
+- Authentication or authorization bypasses
+- Injection vulnerabilities (including cross-site scripting and prompt injection)
 - Data exposure or leakage
-- CORS misconfigurations
-- Payment processing vulnerabilities
-- Rate limiting bypasses
+- Cross-origin misconfigurations
+- Payment-flow vulnerabilities
+- Rate-limit bypasses
 
 Out of scope:
 
-- Denial of service (handled by Cloudflare)
+- Denial-of-service / volumetric attacks
 - Social engineering
-- Issues in third-party services (WorkOS, Supabase, Cloudflare, Vercel)
+- Vulnerabilities in third-party services we depend on (report those to the provider)

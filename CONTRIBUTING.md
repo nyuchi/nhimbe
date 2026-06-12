@@ -1,135 +1,68 @@
 # Contributing to nhimbe
 
-nhimbe is the community events platform within the Mukoko ecosystem. We welcome contributions that improve the platform for our users across Africa and beyond.
+Thanks for your interest in nhimbe — the community events platform of the [Mukoko](https://mukoko.com) ecosystem. Contributions of every kind are welcome, from bug reports and docs to features and fixes.
 
-## Getting Started
+Come say hello first if you like: **[discord.gg/CP2P4JpPR](https://discord.gg/CP2P4JpPR)**.
 
-### Prerequisites
+## Ways to contribute
 
-- Node.js 20+
-- npm
-- Wrangler CLI (`npm install -g wrangler`)
+- **Report a bug** or **request a feature** using the [issue templates](.github/ISSUE_TEMPLATE/).
+- **Improve the docs** — typos, clarity, and missing context are all fair game.
+- **Pick up an issue** — anything labelled `good first issue` is a friendly place to start.
+- **Open a pull request** for a fix or feature.
 
-### Local Development
+## Local development
+
+You'll need a recent **Node.js LTS** and **npm**.
 
 ```bash
-# Frontend
-npm install && npm run dev        # http://localhost:3000
-
-# Backend
-cd worker && npm install && npm run dev   # http://localhost:8787
+npm install      # install dependencies
+npm run dev      # start the local dev server
+npm run lint     # lint
+npm run build    # production build
+npm run test:run # run the test suite
 ```
 
-### Environment Variables
-
-Copy the example files and fill in your values:
+Configuration is supplied through environment variables. Copy the example file and fill in your own values:
 
 ```bash
-# Frontend
 cp .env.example .env.local
-
-# Backend
-cp worker/.dev.vars.example worker/.dev.vars
 ```
 
-See [CLAUDE.md](./CLAUDE.md) for the full list of required environment variables.
+The full list of variables, and how the app fits together, lives in **[CLAUDE.md](./CLAUDE.md)** — the architecture and contributor reference. Treat it as the source of truth for anything stack-specific so this guide can stay evergreen.
 
-## Development Workflow
+## Workflow
 
-1. **Create a branch** from `main` with a descriptive name:
+1. **Branch from `main`** with a descriptive name — `feat/event-reminders`, `fix/registration-race`, `docs/readme`.
+2. **Make your change** following the conventions below.
+3. **Run the checks locally** (`lint`, `build`, `test:run`) before pushing.
+4. **Open a pull request** against `main`. CI must pass before merge.
 
-   - `feat/event-reminders` for new features
-   - `fix/registration-race-condition` for bug fixes
-   - `docs/update-api-reference` for documentation
+### Pull request style — big PR, focused commits
 
-2. **Make your changes** following the conventions below.
+The Nyuchi house style is **one pull request, many focused commits**. Group related work into a single PR as a sequence of independently readable commits, rather than chaining lots of tiny PRs. If you think of "just one more cleanup," append a commit to the open PR instead of opening another. Open PRs as **draft** until they're ready for review.
 
-3. **Run checks locally** before pushing:
+## Code conventions
 
-   ```bash
-   npm run lint                          # ESLint
-   npm run build                         # Next.js build
-   npx vitest run                        # Frontend tests (160 tests)
-   cd worker && npx tsc --noEmit         # Worker type check
-   cd worker && npx vitest run           # Worker tests (124 tests)
-   ```
+- **Brand:** always lowercase **"nhimbe"** — even at the start of a sentence.
+- **TypeScript strict mode** throughout.
+- **Accessibility:** target **WCAG AAA** — strong contrast and comfortable, consistent touch targets.
+- **No hardcoded content:** categories, cities, and stats come from data, not literals.
+- **Structured logging:** prefix log output with `[mukoko]`.
+- **Schema.org alignment:** model events and people after schema.org where it applies.
+- **Internationalisation:** keep user-facing strings translatable (English and Shona today).
+- Match the style of the surrounding code — naming, comments, and idioms.
 
-4. **Push and open a pull request** against `main`. CI runs 4 parallel jobs that must all pass. Per Nyuchi house style: **big PR, multiple commits** — group related work into one PR as a sequence of focused commits, rather than chaining tiny PRs.
+See **[CLAUDE.md](./CLAUDE.md)** for architecture, data ownership, and the deeper conventions.
 
-## Code Conventions
+## Data & schema changes
 
-- **TypeScript strict mode** in both frontend and backend
-- **Brand**: Always lowercase "nhimbe" -- even at sentence start
-- **Tailwind CSS v4** with `cn()` helper for conditional classes
-- **`"use client"`** directive required for interactive React components
-- **WCAG AAA** compliance -- 7:1+ contrast ratios, 44px touch targets
-- **Structured logging** -- `[mukoko]` prefix on all log output
-- **No hardcoded data** -- categories, cities, stats all come from the database
-- **Schema.org alignment** -- events and users modeled after schema.org specs
-- **Path alias** -- `@/*` maps to `./src/*` in frontend imports
+The data schema is owned by the platform data project, **not this repository** — this repo consumes it. If your change needs a schema modification, coordinate that change in the platform project first, then update the consumer code here. See **[CLAUDE.md](./CLAUDE.md)** for details.
 
-## Architecture
+## Reporting security issues
 
-See [CLAUDE.md](./CLAUDE.md) for the complete architecture guide including:
-
-- Backend routing (18 Hono route modules)
-- Authentication flow (WorkOS AuthKit + JWKS validation)
-- Database (Supabase Postgres via PostgREST — schema owned by `nyuchi_platform_db`)
-- AI features (RAG search, description wizard)
-- Resilience patterns (circuit breaker, retry with backoff)
-
-## Testing
-
-### Frontend Tests
-
-```bash
-npx vitest run                          # All frontend tests
-npx vitest run src/lib/api.test.ts      # Single file
-```
-
-Tests use Vitest + jsdom + React Testing Library. Config: `vitest.config.ts`.
-
-### Backend Tests
-
-```bash
-cd worker && npx vitest run                              # All worker tests
-cd worker && npx vitest run src/__tests__/auth.test.ts   # Single file
-```
-
-Tests use Vitest with a 3-layer mock architecture (D1 mock was retired with the Supabase migration). Config: `worker/vitest.config.ts`. Stub global `fetch` to test `supabaseFetch()`-based routes.
-
-### Writing Tests
-
-- Frontend tests colocate with modules (`src/lib/api.test.ts`) or live in `src/__tests__/`
-- Backend tests live in `worker/src/__tests__/`
-- Use the mock helpers in `worker/src/__tests__/mocks.ts` for backend tests
-- Test files are excluded from `worker/tsconfig.json` (type check only covers production code)
-
-## Database Migrations
-
-The schema lives in the `nyuchi_platform_db` Supabase project, **not in this repo**. Apply migrations from there using either the Supabase MCP (`apply_migration`) or `supabase db push`. This repo only consumes the schema via `worker/src/db/supabase.ts` (PostgREST) and `src/lib/supabase/`.
-
-If your change requires a schema modification, open a separate PR against `nyuchi_platform_db` first, then update consumer code in this repo to use the new columns/tables.
-
-## Pull Request Guidelines
-
-- **Big PR, multiple commits** — the Nyuchi house style. Group related work into one PR as a sequence of focused commits. Each commit is independently reviewable; the PR groups them by intent. Don't open a second PR for "just one more cleanup" — append a commit.
-- Write a clear description of what changed and why
-- Include test coverage for new functionality
-- Update `CLAUDE.md` if the architecture changes
-- All 4 CI checks must pass before merge
-
-## Reporting Issues
-
-Use the [GitHub issue templates](.github/ISSUE_TEMPLATE/) for:
-
-- Bug reports
-- Feature requests
-
-## Security
-
-See [SECURITY.md](./SECURITY.md) for reporting security vulnerabilities.
+Please **do not** open a public issue for security vulnerabilities. Follow the process in **[SECURITY.md](./SECURITY.md)**.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree that your contributions are licensed under the [MIT License](./LICENSE).
