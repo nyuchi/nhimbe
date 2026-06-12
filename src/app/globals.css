@@ -384,13 +384,17 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* Touch target minimum size — WCAG 2.5.5 (44px) */
-button,
-input,
-select,
-textarea {
-  min-height: var(--min-touch);
-}
+/*
+ * Touch target sizing — WCAG 2.5.5
+ *
+ * Intentionally NOT enforced via a blanket `min-height` on bare
+ * button/input/select/textarea elements: that floor (44px) overrode the
+ * `height` set by each component's size variant (e.g. Button `h-9`/`h-8`/`h-6`,
+ * icon `size-6`/`size-8`, Input/Select `h-9`, Textarea `h-16`), inflating every
+ * dense/secondary/icon control up to 44px. Sizing is owned by the component
+ * CVA variants in `src/components/ui/*`; the `--touch-target*` / `--min-touch`
+ * tokens above remain available for variants/utilities that opt in.
+ */
 
 /* Mobile input improvements - prevent zoom on iOS (font-size >= 16px) */
 @media (max-width: 767px) {
