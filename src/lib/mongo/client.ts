@@ -47,13 +47,17 @@ function connect(): Promise<MongoClient> {
   return new MongoClient(uri, options).connect();
 }
 
-const clientPromise: Promise<MongoClient> =
-  globalThis.__nhimbeMongoClientPromise ?? (globalThis.__nhimbeMongoClientPromise = connect());
-
 /**
  * Resolve the shared, connected MongoClient. Always `await` this at the call
  * site — it returns the cached connection on warm invocations.
+ *
+ * The connection is established lazily on the first call (not at module load)
+ * so that merely importing a route handler during `next build` — where
+ * MONGODB_URI is absent — never triggers a connection or throws.
  */
 export function getMongoClient(): Promise<MongoClient> {
-  return clientPromise;
+  if (!globalThis.__nhimbeMongoClientPromise) {
+    globalThis.__nhimbeMongoClientPromise = connect();
+  }
+  return globalThis.__nhimbeMongoClientPromise;
 }
