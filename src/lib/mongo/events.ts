@@ -53,6 +53,9 @@ export interface ListEventsResult {
 /** Build the base Mongo filter for public event listings. */
 function publishedFilter(params: ListEventsParams): Filter<EventDoc> {
   const filter: Filter<EventDoc> = { status: { $in: [...PUBLISHED_STATUSES] } };
+  // Keep private events out of public listings. `$ne` also matches docs with
+  // no mukoko.visibility set (treated as public).
+  (filter as Record<string, unknown>)["mukoko.visibility"] = { $ne: "private" };
   if (!params.includePast) {
     filter.startDate = { $gte: params.from ?? new Date() };
   } else if (params.from) {

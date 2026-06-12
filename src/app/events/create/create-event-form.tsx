@@ -13,12 +13,11 @@ import {
   AlertCircle,
   ChevronLeft,
 } from "lucide-react";
-import { createEvent, getCategories, getCities, uploadMedia, getMediaUrl, type CreateEventInput, type Category } from "@/lib/api";
-import { getInterestCategories, createEventOnSupabase } from "@/lib/supabase/api";
+import { uploadMedia, getMediaUrl, type Category } from "@/lib/api";
+import { createEvent as createEventAction } from "@/app/actions/events";
 import { mineralThemes, mineralThemeIds, getThemeColors } from "@/lib/themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAuth } from "@/components/auth/auth-context";
 import { DateTimeModal } from "@/components/modals/date-time-modal";
 import { LocationModal } from "@/components/modals/location-modal";
 import { CategoryModal } from "@/components/modals/category-modal";
@@ -140,7 +139,6 @@ function isValidUrl(url: string): boolean {
 
 export default function CreateEventForm() {
   const router = useRouter();
-  const { user, accessToken, getAccessToken } = useAuth();
   const errorRef = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<WizardStep>(1);
   const [selectedTheme, setSelectedTheme] = useState(0);
@@ -192,44 +190,14 @@ export default function CreateEventForm() {
   const [isFree, setIsFree] = useState(true);
   const [ticketUrl, setTicketUrl] = useState("");
 
-  // Data from API
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [cities, setCities] = useState<{ addressLocality: string; addressCountry: string }[]>([]);
+  // Category + city catalogs. Static, broad fallbacks keep the form reliable
+  // and offline-safe; the canonical catalog can be wired through a worker-free
+  // read endpoint later without touching the wizard.
+  const [categories] = useState<Category[]>(DEFAULT_CATEGORIES);
+  const [cities] = useState<{ addressLocality: string; addressCountry: string }[]>(DEFAULT_CITIES);
 
   // Track if form has been touched for unsaved changes warning
   const [formTouched, setFormTouched] = useState(false);
-
-  useEffect(() => {
-    async function loadData() {
-      try {
-        // Prefer the platform DB's broad 40-category catalog (engagement.interest_category).
-        // Fall back to the worker `getCategories()` and finally the static list.
-        const [supabaseCats, workerCats, citiesData] = await Promise.all([
-          getInterestCategories(),
-          getCategories(),
-          getCities(),
-        ]);
-        if (supabaseCats.length > 0) {
-          setCategories(
-            supabaseCats.map((c) => ({
-              id: c.slug || c.id,
-              name: c.name,
-              group: c.group_name || "Categories",
-            })),
-          );
-        } else if (workerCats.length > 0 && typeof workerCats[0] !== "string") {
-          setCategories(workerCats);
-        } else {
-          setCategories(DEFAULT_CATEGORIES);
-        }
-        setCities(citiesData.length > 0 ? citiesData : DEFAULT_CITIES);
-      } catch {
-        setCategories(DEFAULT_CATEGORIES);
-        setCities(DEFAULT_CITIES);
-      }
-    }
-    loadData();
-  }, []);
 
   // Unsaved changes warning
   useEffect(() => {
@@ -355,102 +323,56 @@ export default function CreateEventForm() {
     setError(null);
 
     try {
+      // Cover image upload is best-effort — if it fails, fall back to the
+      // selected gradient cover rather than blocking publishing.
       let uploadedCoverImageUrl: string | undefined;
       if (coverImageFile) {
         setUploading(true);
         try {
           const uploadResult = await uploadMedia(coverImageFile);
           uploadedCoverImageUrl = getMediaUrl(uploadResult.key);
-        } catch (uploadErr) {
-          setError(uploadErr instanceof Error ? uploadErr.message : "Failed to upload cover image. Please try again.");
-          setSubmitting(false);
+        } catch {
+          uploadedCoverImageUrl = undefined;
+        } finally {
           setUploading(false);
-          return;
         }
-        setUploading(false);
       }
 
-      const dateObj = new Date(eventDate);
-      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      // P0-5: Use browser timezone instead of hardcoded GMT+2
       const isoStart = new Date(`${eventDate}T${startTime}:00${tzOffset}`).toISOString();
+      const isoEnd = new Date(`${eventDate}T${endTime}:00${tzOffset}`).toISOString();
 
-      const eventData: CreateEventInput = {
+      const result = await createEventAction({
         name: eventName.trim(),
-        description: description.trim() || "No description provided.",
+        description: description.trim(),
         startDate: isoStart,
-        date: {
-          day: dateObj.getDate().toString(),
-          month: months[dateObj.getMonth()],
-          full: dateObj.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
-          time: `${startTime} — ${endTime} ${tzLabel}`,
-        },
-        location: isOnline
-          ? { name: "Online Event", streetAddress: "", addressLocality: "Online", addressCountry: "" }
-          : { name: venue.trim(), streetAddress: address.trim(), addressLocality: selectedCity?.addressLocality || "", addressCountry: selectedCity?.addressCountry || "" },
-        category,
+        endDate: isoEnd,
+        category: category || null,
         keywords: tags,
-        image: uploadedCoverImageUrl,
-        coverGradient: uploadedCoverImageUrl ? undefined : mineralThemeList[selectedTheme].gradient,
-        maximumAttendeeCapacity: capacity || undefined,
-        eventAttendanceMode: isOnline ? "OnlineEventAttendanceMode" : "OfflineEventAttendanceMode",
-        meetingUrl: isOnline ? meetingUrl.trim() : undefined,
-        meetingPlatform: isOnline ? meetingPlatform : undefined,
-        organizer: {
-          name: user?.name || "Event Host",
-          identifier: `@${user?.name?.toLowerCase().replace(/\s+/g, "") || "host"}`,
-          initials: user?.name
-            ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
-            : "EH",
-          eventCount: 1,
-        },
-        offers: !isFree && ticketUrl.trim() ? { url: ticketUrl.trim() } : undefined,
-      };
+        image: uploadedCoverImageUrl ?? null,
+        coverGradient: uploadedCoverImageUrl ? null : mineralThemeList[selectedTheme].gradient,
+        isOnline,
+        venue: venue.trim(),
+        streetAddress: address.trim(),
+        addressLocality: selectedCity?.addressLocality,
+        addressCountry: selectedCity?.addressCountry,
+        meetingUrl: isOnline ? meetingUrl.trim() : null,
+        meetingPlatform: isOnline ? meetingPlatform : null,
+        maximumAttendeeCapacity: capacity,
+        isFree,
+        ticketUrl: !isFree && ticketUrl.trim() ? ticketUrl.trim() : null,
+        visibility,
+        requiresApproval: requireApproval,
+        hostMode,
+        hostEntityId,
+      });
 
-      // Prefer the Supabase direct path when a personId is available.
-      // The worker path is kept as fallback for unauthenticated submissions
-      // and for environments where Supabase isn't wired yet.
-      if (user?.id) {
-        const isoEnd = endTime
-          ? new Date(`${eventDate}T${endTime}:00${tzOffset}`).toISOString()
-          : null;
-        const supabaseResult = await createEventOnSupabase({
-          ownerPersonId: user.id,
-          organizationId: hostMode === "organization" ? hostEntityId : null,
-          hostEntityId: (hostMode === "family" || hostMode === "organization") ? hostEntityId : null,
-          hostEntityType: hostMode === "family" ? "family" : hostMode === "organization" ? "organization" : null,
-          name: eventData.name,
-          description: eventData.description,
-          startdate: isoStart,
-          enddate: isoEnd,
-          timezone: tzLabel,
-          category: category || null,
-          keywords: tags,
-          image: uploadedCoverImageUrl ? [uploadedCoverImageUrl] : null,
-          placeId: null,
-          virtualLocation: isOnline && meetingUrl.trim() ? { url: meetingUrl.trim(), platform: meetingPlatform } : null,
-          attendanceMode: isOnline ? "OnlineEventAttendanceMode" : "OfflineEventAttendanceMode",
-          maximumAttendeeCapacity: capacity,
-          requiresApproval: requireApproval,
-          visibility,
-        });
-        setFormTouched(false);
-        router.push(`/events/${supabaseResult.id}`);
-      } else {
-        const token = accessToken ?? (await getAccessToken());
-        if (!token) {
-          setError("Sign in required to publish an event.");
-          setSubmitting(false);
-          return;
-        }
-        const result = await createEvent(eventData, token);
-        setFormTouched(false);
-        router.push(`/events/${result.event.id}`);
-      }
+      setFormTouched(false);
+      router.push(`/events/${result.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create event. Please try again.");
     } finally {
       setSubmitting(false);
+      setUploading(false);
     }
   };
 
