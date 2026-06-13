@@ -1,15 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { TrendingUp, Eye, Users, Star, Share2, QrCode, Flame, ArrowRight } from "lucide-react";
+import { TrendingUp, Eye, Users, Star, Share2, QrCode, Flame, ArrowRight, Hourglass } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { EventQRCode } from "./event-qr-code";
 import { ShareButton } from "./event-actions";
 import { RSVPButton } from "./rsvp-button";
 import { HostReputation } from "@/components/ui/host-reputation";
 import { EventEntityHostCard } from "./event-entity-host-card";
+import { joinWaitlist, leaveWaitlist, getWaitlistStatus } from "@/app/actions/waitlist";
+import { useAuth } from "@/components/auth/auth-context";
 import { useT } from "@/lib/i18n";
 import type { Event, EventStats, ReviewStats } from "@/lib/api";
 
@@ -32,6 +35,78 @@ function StatBox({ icon, label, value }: { icon: React.ReactNode; label: string;
         <span className="text-xs">{label}</span>
       </div>
       <div className="text-lg font-bold">{value}</div>
+    </div>
+  );
+}
+
+/**
+ * Waitlist control shown when an event is at capacity. Joins/leaves via the
+ * MongoDB-backed server actions; only interactive for signed-in users.
+ */
+function WaitlistControl({ eventId }: { eventId: string }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [onWaitlist, setOnWaitlist] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let active = true;
+    getWaitlistStatus(eventId)
+      .then((res) => {
+        if (active) setOnWaitlist(res.onWaitlist);
+      })
+      .catch(() => {
+        /* leave default (not on waitlist) on read failure */
+      });
+    return () => {
+      active = false;
+    };
+  }, [eventId, isAuthenticated]);
+
+  if (isLoading) return null;
+
+  const toggle = () => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = onWaitlist ? await leaveWaitlist(eventId) : await joinWaitlist(eventId);
+        setOnWaitlist(res.onWaitlist);
+      } catch {
+        setError("Something went wrong. Please try again.");
+      }
+    });
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--event-border)" }}>
+      <div className="flex items-center gap-1.5 text-foreground/60 mb-2">
+        <Hourglass className="w-3.5 h-3.5" />
+        <span className="text-xs">This event is full</span>
+      </div>
+      {isAuthenticated ? (
+        <Button
+          variant={onWaitlist ? "secondary" : "default"}
+          className="w-full py-4 text-base"
+          onClick={toggle}
+          disabled={pending}
+        >
+          {pending
+            ? onWaitlist
+              ? "Leaving..."
+              : "Joining..."
+            : onWaitlist
+              ? "Leave waitlist"
+              : "Join waitlist"}
+        </Button>
+      ) : (
+        <Link href={`/auth/signin?return_to=${encodeURIComponent(`/events/${eventId}`)}`}>
+          <Button variant="default" className="w-full py-4 text-base">
+            Sign in to join the waitlist
+          </Button>
+        </Link>
+      )}
+      {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
     </div>
   );
 }
@@ -73,11 +148,13 @@ export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
                 <span className="font-medium">{event.attendeeCount} / {event.maximumAttendeeCapacity}</span>
               </div>
               <Progress value={capacityPercent} className="h-2" />
-              {spotsLeft !== null && spotsLeft < event.maximumAttendeeCapacity * 0.2 && (
+              {spotsLeft !== null && spotsLeft > 0 && spotsLeft < event.maximumAttendeeCapacity * 0.2 && (
                 <p className="text-xs text-red-400 mt-2">Only {spotsLeft} spots left!</p>
               )}
             </div>
           )}
+
+          {spotsLeft !== null && spotsLeft <= 0 && <WaitlistControl eventId={event.id} />}
         </CardContent>
       </Card>
 
