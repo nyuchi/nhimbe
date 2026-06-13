@@ -25,11 +25,16 @@
   --container-malachite:  #E0F2F1;
   --container-gold:       #FFF8E1;
   --container-terracotta: #FBE9E7;
+  --container-sodalite:   #E8EAF6;
   --on-container-cobalt:     #002966;
   --on-container-tanzanite:  #2E004D;
   --on-container-malachite:  #00332B;
   --on-container-gold:       #3E2723;
   --on-container-terracotta: #5D2906;
+  --on-container-sodalite:   #1A237E;
+
+  /* Sodalite — AI / Shamwari mineral (light surface; AAA-strong navy) */
+  --sodalite: #283593;
 
   /* Five Heritage colours (atmospheric, theme-adaptive) */
   --heritage-indigo:   #1A237E;
@@ -180,6 +185,11 @@
   --nh-savanna:     var(--heritage-savanna);
   --nh-sunset:      var(--heritage-sunset);
 
+  /* nhimbe AI pair — sodalite, the Shamwari (AI) mineral */
+  --nh-ai:          var(--sodalite);
+  --nh-ai-soft:     var(--container-sodalite);
+  --nh-on-ai:       var(--on-container-sodalite);
+
   /* High contrast text for AAA compliance on gradient backgrounds */
   --hero-text: #FFFFFF;
   --hero-text-muted: #E0E0E0;
@@ -196,11 +206,13 @@
   --container-malachite:  #00251A;
   --container-gold:       #332200;
   --container-terracotta: #3E1A00;
+  --container-sodalite:   #1A1F4D;
   --on-container-cobalt:     #B3E5FC;
   --on-container-tanzanite:  #E1BEE7;
   --on-container-malachite:  #A7FFEB;
   --on-container-gold:       #FFECB3;
   --on-container-terracotta: #FFCCBC;
+  --on-container-sodalite:   #C5CAE9;
   --heritage-indigo:  #8C9EFF;
   --heritage-savanna: #FFCC80;
   --heritage-baobab:  #A5D6A7;
@@ -232,6 +244,7 @@
   --malachite: #64FFDA;
   --tanzanite: #B388FF;
   --gold: #FFD740;
+  --sodalite: #3D5AFE;
 
   --primary: var(--malachite);
   --secondary: var(--tanzanite);
@@ -247,6 +260,11 @@
   --nh-savanna:     var(--heritage-savanna);
   --nh-sunset:      var(--heritage-sunset);
   --shadow-glow:    0 4px 20px rgba(100,255,218,0.3);
+
+  /* nhimbe AI pair — sodalite (dark) */
+  --nh-ai:          var(--sodalite);
+  --nh-ai-soft:     var(--container-sodalite);
+  --nh-on-ai:       var(--on-container-sodalite);
 
   /* Hero section high contrast */
   --hero-text: #FFFFFF;
@@ -283,6 +301,7 @@
   --malachite: #00574B;        /* 7.3:1 contrast on #FAFAF8 */
   --tanzanite: #4B0082;        /* 10.5:1 contrast */
   --gold: #8B5A00;             /* 7.1:1 contrast */
+  --sodalite: #283593;         /* 8.6:1 contrast — Shamwari (AI) mineral */
 
   --primary: var(--malachite);
   --secondary: var(--tanzanite);
@@ -298,6 +317,11 @@
   --nh-savanna:     var(--heritage-savanna);
   --nh-sunset:      var(--heritage-sunset);
   --shadow-glow:    0 4px 20px rgba(0,87,75,0.20);
+
+  /* nhimbe AI pair — sodalite (light) */
+  --nh-ai:          var(--sodalite);
+  --nh-ai-soft:     var(--container-sodalite);
+  --nh-on-ai:       var(--on-container-sodalite);
 
   /* Hero section high contrast */
   --hero-text: #0A0A0A;
@@ -531,6 +555,73 @@ a {
 
 .event-themed-page .event-border {
   border-color: var(--event-surface);
+}
+
+/* ---------------------------------------------------------------------------
+   Search pill — shared AI search entry (src/components/ui/search-pill.tsx).
+   Animal-named classes per nhimbe convention. Routes to /search where
+   Shamwari (the AI assistant) takes over; the AI chip wears sodalite.
+   --------------------------------------------------------------------------- */
+
+/* .kudu — the pill itself: a Link styled like a search input.
+   Min height uses the --touch-target token (48px) for a comfortable tap;
+   generous internal padding keeps the text vertically centred. */
+.kudu {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: var(--touch-target);
+  padding-block: 0.625rem;
+  padding-inline: 1.25rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background-color: var(--card);
+  color: var(--muted-foreground);
+  text-align: left;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.kudu:hover {
+  background-color: var(--muted);
+}
+
+/* .kudu-wide — full-width modifier (hero / stacked layouts). */
+.kudu-wide {
+  width: 100%;
+}
+
+/* .kudu-inline — flexes to fill a row alongside sibling actions. */
+.kudu-inline {
+  flex: 1 1 0%;
+}
+
+/* .duiker — the placeholder label inside the pill. */
+.duiker {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* .impala — the spacer that pushes the AI chip to the trailing edge. */
+.impala {
+  flex: 1 1 0%;
+}
+
+/* .springbok — the "AI" (Shamwari) chip; wears the sodalite mineral. */
+.springbok {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 1.375rem;
+  padding-inline: 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  background-color: var(--nh-ai-soft);
+  color: var(--nh-ai);
 }
 
 /* Respect user motion preferences — WCAG 2.1 SC 2.3.3 */

@@ -2,13 +2,14 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { Loader2, ArrowRight, Globe, Sun, Cloud, CloudRain, CloudLightning, CloudSnow, CloudFog, CloudSun, TrendingUp, Flame, Clock, Users, Search, Sparkles, Plus, CalendarDays, Compass, MapPin } from "lucide-react";
+import { Loader2, ArrowRight, Globe, Sun, Cloud, CloudRain, CloudLightning, CloudSnow, CloudFog, CloudSun, TrendingUp, Flame, Clock, Users, Plus, CalendarDays, Compass, MapPin } from "lucide-react";
 import dynamic from "next/dynamic";
 import { EventCardHorizontal } from "@/components/ui/event-card-horizontal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CityDropdown } from "@/components/ui/city-dropdown";
 import { Button } from "@/components/ui/button";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { SearchPill } from "@/components/ui/search-pill";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useAuth } from "@/components/auth/auth-context";
 
@@ -312,23 +313,7 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
 
             {/* Quick actions — AI search pill + primary create CTA */}
             <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3 max-w-200">
-              <Link
-                href="/search"
-                aria-label="Ask Shamwari (AI) to find a gathering"
-                data-slot="ai-search-pill"
-                className="flex flex-1 items-center gap-2.5 h-[var(--touch-target)] px-5 rounded-full border border-border bg-card text-left text-muted-foreground hover:bg-muted transition-colors"
-              >
-                <Search className="w-[17px] h-[17px] shrink-0" aria-hidden />
-                <span className="text-sm truncate">Search gatherings, kraals, places&hellip;</span>
-                <span className="flex-1" />
-                <span
-                  className="inline-flex items-center gap-1 h-[22px] px-2 rounded-full text-[10px] font-semibold tracking-[0.03em]"
-                  style={{ background: "var(--nh-lead-soft)", color: "var(--nh-lead)" }}
-                >
-                  <Sparkles className="w-[11px] h-[11px]" strokeWidth={2.2} aria-hidden />
-                  AI
-                </span>
-              </Link>
+              <SearchPill aria-label="Ask Shamwari (AI) to find a gathering" />
               <Button asChild className="rounded-full h-[var(--touch-target)] px-6 shrink-0">
                 <Link href="/events/create">
                   <Plus className="w-4 h-4" aria-hidden />
@@ -387,27 +372,11 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
               From cultural celebrations and faith gatherings to tech meetups, comedy nights, music festivals and family days — find what brings your community together. Powered by Ubuntu philosophy.
             </p>
             {/* AI search pill — primary entry point per Nhimbe.html design.
-                Full-width button styled like an input with a malachite "AI"
+                Full-width entry styled like an input with a sodalite "AI"
                 chip at the right; tap routes to /search where Shamwari (the
                 AI assistant) takes over. */}
             <div className="max-w-150 mb-6">
-              <Link
-                href="/search"
-                aria-label="Ask Shamwari (AI) to find an event"
-                data-slot="ai-search-pill"
-                className="flex items-center gap-2.5 h-[var(--touch-target)] w-full px-5 rounded-full border border-border bg-card text-left text-muted-foreground hover:bg-muted transition-colors"
-              >
-                <Search className="w-[17px] h-[17px] shrink-0" aria-hidden />
-                <span className="text-sm">Search gatherings, kraals, places&hellip;</span>
-                <span className="flex-1" />
-                <span
-                  className="inline-flex items-center gap-1 h-[22px] px-2 rounded-full text-[10px] font-semibold tracking-[0.03em]"
-                  style={{ background: "var(--nh-lead-soft)", color: "var(--nh-lead)" }}
-                >
-                  <Sparkles className="w-[11px] h-[11px]" strokeWidth={2.2} aria-hidden />
-                  AI
-                </span>
-              </Link>
+              <SearchPill layout="full" aria-label="Ask Shamwari (AI) to find an event" />
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button asChild className="rounded-full h-[var(--touch-target-lg)] px-6">
