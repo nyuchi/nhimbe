@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Noto_Sans, Noto_Serif } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
-import Script from "next/script";
 import "./globals.css";
 
 const notoSans = Noto_Sans({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
@@ -18,6 +17,11 @@ import { WidgetErrorBoundary } from "@/components/error/widget-error-boundary";
 import { LiveRegionProvider } from "@/components/ui/live-region";
 import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { IntercomLoader } from "@/components/intercom/intercom-loader";
+
+// Local-dev only (Vercel builds run as production, so this never shows on a
+// deployed environment). A red frame makes it obvious you're on localhost.
+const IS_LOCAL_DEV = process.env.NODE_ENV !== "production";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -205,12 +209,18 @@ export default function RootLayout({
         </ErrorBoundary>
         <Analytics />
         <ServiceWorkerRegister />
-        <Script id="intercom-settings" strategy="lazyOnload">
-          {`window.intercomSettings = { api_base: "https://api-iam.intercom.io", app_id: "f1vga504" };`}
-        </Script>
-        <Script id="intercom-loader" strategy="lazyOnload">
-          {`(function(){var w=window;var ic=w.Intercom;if(typeof ic==="function"){ic('reattach_activator');ic('update',w.intercomSettings);}else{var d=document;var i=function(){i.c(arguments);};i.q=[];i.c=function(args){i.q.push(args);};w.Intercom=i;var l=function(){var s=d.createElement('script');s.type='text/javascript';s.async=true;s.src='https://widget.intercom.io/widget/f1vga504';var x=d.getElementsByTagName('script')[0];x.parentNode.insertBefore(s,x);};if(document.readyState==='complete'){l();}else if(w.attachEvent){w.attachEvent('onload',l);}else{w.addEventListener('load',l,false);}}})();`}
-        </Script>
+        {/* Intercom only mounts on support pages (/help, /contact, /support). */}
+        <IntercomLoader />
+        {IS_LOCAL_DEV && (
+          <div
+            aria-hidden
+            className="pointer-events-none fixed inset-0 z-[9998] border-2 border-red-500/70"
+          >
+            <span className="absolute bottom-2 right-2 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow">
+              Dev
+            </span>
+          </div>
+        )}
       </body>
     </html>
   );
