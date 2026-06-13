@@ -185,7 +185,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await syncUser();
   }, [syncUser]);
 
-  const isLoading = authKitLoading || syncing;
+  // Stay "loading" until the first identity sync resolves when a user is
+  // expected (WorkOS session or dev bypass). Without this, there's a tick
+  // where authKitLoading is already false but the sync hasn't set nhimbeUser
+  // yet — AuthGuard would briefly see "not authenticated" and redirect a
+  // genuinely signed-in user to /auth/signin.
+  const isLoading =
+    authKitLoading || syncing || ((!!workosUser || devBypass) && !hasSynced);
   const isAuthenticated = (!!workosUser || devBypass) && !!nhimbeUser;
 
   const hasName = !!nhimbeUser?.name && nhimbeUser.name !== "" && nhimbeUser.name !== "User";
