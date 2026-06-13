@@ -3,52 +3,37 @@
 import { useEffect, useRef, useState } from "react";
 import { Flame, Send } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  getCampfireThread,
+  postCampfireMessage,
+  type CampfireAuthor,
+  type CampfireMessage,
+} from "@/app/actions/campfire";
 
 /**
- * EventCampfire — surfaces the campfire.conversation thread attached to an
- * event when events.event.campfire_conversation_id is set. The campfire
- * is "live chat around the gathering" — distinct from the Kraal stream
- * (which is the event's persistent community).
+ * EventCampfire — surfaces the campfire conversation thread attached to an
+ * event when events.event.campfireConversationId is set. The campfire is
+ * "live chat around the gathering" — distinct from the Kraal stream (which is
+ * the event's persistent community).
  *
- * Schema (verified via Supabase MCP):
- *   campfire.conversation(id, name, conversation_type, owner_type, owner_id,
- *     circle_id, event_id, last_message_at, message_count, is_archived)
- *   campfire.message(id, conversation_id, sender, text, datesent,
- *     reply_to, edited_at, is_deleted, message_type)
- *   campfire.participant(conversation_id, person_id, role, joined_at,
- *     last_read_at, is_muted)
+ * Data path: the browser never touches Mongo. Reads and writes go through the
+ * `src/app/actions/campfire.ts` server actions (Node runtime), which resolve
+ * the acting person via AuthKit / the dev bypass and read/write the
+ * campfire.* collections on the Mukoko cluster.
  *
  * Strategy:
- *   - Loads the most recent 20 messages on mount.
- *   - Composer writes a new campfire.message row with sender=viewer person id.
- *   - participant.last_read_at is updated on render so a notification
- *     badge elsewhere stays accurate.
+ *   - Loads the most recent 20 messages on mount via getCampfireThread().
+ *   - Composer posts via postCampfireMessage(); the server records the
+ *     sender's read receipt so a notification badge elsewhere stays accurate.
  *   - Renders nothing when there's no conversation id — graceful no-op.
  *
- * Realtime: Supabase realtime channels would be the natural upgrade —
- * left out of this slice to keep scope tight; messages refresh on send.
+ * Realtime: Supabase realtime channels were the natural upgrade in the old
+ * model; on Mongo, polling or a change-stream relay would replace it. Left out
+ * of this slice to keep scope tight — messages refresh on send.
  */
 
 interface EventCampfireProps {
   conversationId: string | null | undefined;
-}
-
-interface MessageRow {
-  id: string;
-  conversation_id: string;
-  sender: string;
-  text: string;
-  datesent: string;
-  is_deleted: boolean | null;
-}
-
-interface AuthorRow {
-  id: string;
-  name: string | null;
-  givenname: string | null;
-  familyname: string | null;
-  image: string | null;
 }
 
 const MAX_MESSAGES = 20;
@@ -56,14 +41,14 @@ const MAX_MESSAGES = 20;
 export function EventCampfire({ conversationId }: EventCampfireProps) {
   const { user } = useAuth();
   const viewerPersonId = (user as { person_id?: string } | null)?.person_id ?? null;
-  const [messages, setMessages] = useState<MessageRow[]>([]);
-  const [authors, setAuthors] = useState<Map<string, AuthorRow>>(new Map());
+  const [messages, setMessages] = useState<CampfireMessage[]>([]);
+  const [authors, setAuthors] = useState<Map<string, CampfireAuthor>>(new Map());
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  // Initial load + viewer-read receipt.
+  // Initial load via the server action (which also records the read receipt).
   useEffect(() => {
     if (!conversationId) {
       setLoaded(true);
@@ -71,46 +56,21 @@ export function EventCampfire({ conversationId }: EventCampfireProps) {
     }
     let cancelled = false;
     (async () => {
-      const supabase = getSupabaseBrowserClient();
-      const { data: rawMessages } = await supabase
-        .schema("campfire")
-        .from("message")
-        .select("id,conversation_id,sender,text,datesent,is_deleted")
-        .eq("conversation_id", conversationId)
-        .eq("is_deleted", false)
-        .order("datesent", { ascending: true })
-        .limit(MAX_MESSAGES);
-      if (cancelled) return;
-      const msgs = ((rawMessages as MessageRow[] | null) ?? []).filter((m) => !!m.text);
-      setMessages(msgs);
-
-      if (msgs.length > 0) {
-        const senderIds = Array.from(new Set(msgs.map((m) => m.sender)));
-        const { data: people } = await supabase
-          .schema("identity")
-          .from("person")
-          .select("id,name,givenname,familyname,image")
-          .in("id", senderIds);
-        const map = new Map<string, AuthorRow>();
-        ((people as AuthorRow[] | null) ?? []).forEach((p) => map.set(p.id, p));
-        if (!cancelled) setAuthors(map);
-      }
-      setLoaded(true);
-
-      // Best-effort read receipt — only if the viewer is a participant.
-      if (viewerPersonId) {
-        await supabase
-          .schema("campfire")
-          .from("participant")
-          .update({ last_read_at: new Date().toISOString() })
-          .eq("conversation_id", conversationId)
-          .eq("person_id", viewerPersonId);
+      try {
+        const thread = await getCampfireThread(conversationId);
+        if (cancelled) return;
+        setMessages(thread.messages.slice(-MAX_MESSAGES));
+        const map = new Map<string, CampfireAuthor>();
+        thread.authors.forEach((a) => map.set(a.id, a));
+        setAuthors(map);
+      } finally {
+        if (!cancelled) setLoaded(true);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [conversationId, viewerPersonId]);
+  }, [conversationId]);
 
   // Scroll the message list to the bottom whenever new messages appear.
   useEffect(() => {
@@ -122,34 +82,13 @@ export function EventCampfire({ conversationId }: EventCampfireProps) {
     if (!viewerPersonId || !conversationId || !draft.trim() || sending) return;
     const text = draft.trim();
     setSending(true);
-    const supabase = getSupabaseBrowserClient();
     try {
-      const { data: inserted } = await supabase
-        .schema("campfire")
-        .from("message")
-        .insert({
-          conversation_id: conversationId,
-          sender: viewerPersonId,
-          text,
-          datesent: new Date().toISOString(),
-          messagetype: "Message",
-        })
-        .select("id,conversation_id,sender,text,datesent,is_deleted")
-        .single();
-      if (inserted) {
-        setMessages((cur) => [...cur, inserted as MessageRow]);
-        setDraft("");
-        // Ensure the sender's row appears in the authors map.
-        if (!authors.has(viewerPersonId)) {
-          const { data: me } = await supabase
-            .schema("identity")
-            .from("person")
-            .select("id,name,givenname,familyname,image")
-            .eq("id", viewerPersonId)
-            .maybeSingle();
-          if (me) setAuthors((cur) => new Map(cur).set(viewerPersonId, me as AuthorRow));
-        }
-      }
+      const { message, author } = await postCampfireMessage(conversationId, text);
+      setMessages((cur) => [...cur, message]);
+      setAuthors((cur) => new Map(cur).set(author.id, author));
+      setDraft("");
+    } catch {
+      // Leave the draft in place so the user can retry.
     } finally {
       setSending(false);
     }
@@ -182,17 +121,17 @@ export function EventCampfire({ conversationId }: EventCampfireProps) {
           </p>
         )}
         {messages.map((m) => {
-          const author = authors.get(m.sender);
-          const label = author ? (author.name || [author.givenname, author.familyname].filter(Boolean).join(" ") || "Guest") : "Guest";
-          const isMe = viewerPersonId === m.sender;
+          const author = authors.get(m.senderPersonId);
+          const label = author?.name || "Guest";
+          const isMe = viewerPersonId === m.senderPersonId;
           return (
             <article key={m.id} className={`flex items-start gap-2.5 ${isMe ? "flex-row-reverse" : ""}`}>
               <Avatar label={label} image={author?.image ?? null} isMe={isMe} />
               <div className={`flex-1 min-w-0 ${isMe ? "text-right" : ""}`}>
                 <header className={`flex items-baseline gap-2 mb-1 text-[11px] ${isMe ? "justify-end" : ""}`}>
                   <span className="font-semibold text-foreground">{isMe ? "You" : label}</span>
-                  <time className="text-muted-foreground" dateTime={m.datesent}>
-                    {formatRelative(m.datesent)}
+                  <time className="text-muted-foreground" dateTime={m.sentAt}>
+                    {formatRelative(m.sentAt)}
                   </time>
                 </header>
                 <div
