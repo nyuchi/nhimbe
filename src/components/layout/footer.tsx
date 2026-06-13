@@ -3,7 +3,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { useTheme } from "@/components/theme-provider";
 
 const platformLinks = [
   { href: "/events", label: "Discover Events" },
@@ -24,12 +23,6 @@ const legalLinks = [
 ];
 
 export function Footer() {
-  const { resolvedTheme } = useTheme();
-  const iconSrc =
-    resolvedTheme === "dark"
-      ? "/nhimbe-icon-dark.png"
-      : "/nhimbe-icon-light.png";
-
   return (
     <footer className="border-t border-elevated mt-20 pb-[env(safe-area-inset-bottom,0px)]" role="contentinfo">
       <div className="max-w-300 mx-auto px-6 py-12">
@@ -38,12 +31,22 @@ export function Footer() {
           {/* Brand column */}
           <div className="col-span-2 sm:col-span-1">
             <Link href="/" className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-surface border border-elevated flex items-center justify-center overflow-hidden">
+              {/* Mukoko Seed-of-Life mark — full palette at 32px (>=32px per brand) */}
+              <div className="rhino w-8 h-8 bg-surface border border-elevated">
                 <Image
-                  src={iconSrc}
+                  src="/mukoko-mark-full-light.svg"
                   alt="nhimbe"
                   width={32}
                   height={32}
+                  className="zebra zebra-light"
+                />
+                <Image
+                  src="/mukoko-mark-full-dark.svg"
+                  alt=""
+                  aria-hidden
+                  width={32}
+                  height={32}
+                  className="zebra zebra-dark"
                 />
               </div>
               <span className="text-xl font-bold text-primary">nhimbe</span>

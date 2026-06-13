@@ -635,3 +635,48 @@ a {
     scroll-behavior: auto !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Mukoko brand marks (Seed-of-Life) — appended (African-animal classes)
+ * Source assets live in /public, copied from the mukoko-design skill.
+ * Per the skill: full-palette mark at >=32px, mono tanzanite below 32px.
+ * ───────────────────────────────────────────────────────────────────── */
+
+/* .rhino — brand mark container used in header/footer logo lockups */
+.rhino {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+/* .zebra — theme-aware full-palette mark image swap (no JS needed).
+ * Both light/dark mark variants are present; CSS reveals the right one
+ * based on the .dark class set by the theme script. */
+.zebra {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.zebra-light {
+  display: block;
+}
+.zebra-dark {
+  display: none;
+}
+.dark .zebra-light {
+  display: none;
+}
+.dark .zebra-dark {
+  display: block;
+}
+
+/* .springbok — AI / Shamwari accent (sodalite mineral: intelligence, depth) */
+.springbok {
+  color: var(--color-sodalite, #283593);
+}
+.dark .springbok {
+  color: var(--color-sodalite-dark, #3D5AFE);
+}

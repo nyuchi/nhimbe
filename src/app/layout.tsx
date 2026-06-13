@@ -67,9 +67,15 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
-    icon: "/nhimbe-icon-light.png",
-    apple: "/nhimbe-icon-light.png",
-    shortcut: "/nhimbe-icon-light.png",
+    // Mukoko mono-tanzanite Seed-of-Life favicon (legible below 32px).
+    // SVG with a media-query dark variant first, then PNG fallbacks.
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+    shortcut: "/favicon-32.png",
   },
   manifest: "/manifest.json",
   openGraph: {

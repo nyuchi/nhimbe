@@ -5,7 +5,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { Plus, Search, User, LogIn } from "lucide-react";
-import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/components/auth/auth-context";
 
 const navLinks = [
@@ -66,11 +65,7 @@ export function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const [isScrolled, setIsScrolled] = useState(false);
-  const { resolvedTheme } = useTheme();
   const { user, isAuthenticated, isLoading } = useAuth();
-
-  // Get the appropriate icon based on theme (dark icon visible on dark bg, light icon visible on light bg)
-  const iconSrc = resolvedTheme === "dark" ? "/nhimbe-icon-dark.png" : "/nhimbe-icon-light.png";
 
   // Get user initials from auth context
   const userName = user?.name;
@@ -134,13 +129,22 @@ export function Header() {
       <div className="max-w-300 mx-auto px-6 py-3 sm:py-4 flex items-center justify-between">
         {/* Logo / Page Title */}
         <Link href="/" className="min-w-0 shrink flex items-center gap-3">
-          {/* App Icon */}
-          <div className="w-8.5 h-8.5 rounded-lg bg-surface border border-elevated flex items-center justify-center overflow-hidden">
+          {/* Mukoko Seed-of-Life mark — full palette at 34px (>=32px per brand) */}
+          <div className="rhino w-8.5 h-8.5 bg-surface border border-elevated">
             <Image
-              src={iconSrc}
+              src="/mukoko-mark-full-light.svg"
               alt="nhimbe"
               width={34}
               height={34}
+              className="zebra zebra-light"
+            />
+            <Image
+              src="/mukoko-mark-full-dark.svg"
+              alt=""
+              aria-hidden
+              width={34}
+              height={34}
+              className="zebra zebra-dark"
             />
           </div>
           <div className="relative h-8.5 flex items-center">
