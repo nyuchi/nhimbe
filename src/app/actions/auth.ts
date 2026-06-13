@@ -12,6 +12,7 @@
 
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { syncPersonFromWorkos, type AppUser } from "@/lib/mongo/users";
+import { isDevBypass, DEV_WORKOS_ID, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
 
 /**
  * Sync the currently signed-in user into identity.persons and return the app
@@ -21,6 +22,16 @@ import { syncPersonFromWorkos, type AppUser } from "@/lib/mongo/users";
  */
 export async function syncCurrentUser(): Promise<AppUser | null> {
   try {
+    // Local-only bypass: act as a fixed Dev User without the WorkOS round-trip.
+    if (isDevBypass()) {
+      return await syncPersonFromWorkos({
+        workosUserId: DEV_WORKOS_ID,
+        email: DEV_EMAIL,
+        name: DEV_NAME,
+        emailVerified: true,
+      });
+    }
+
     const { user } = await withAuth();
     if (!user) return null;
 

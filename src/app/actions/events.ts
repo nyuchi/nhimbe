@@ -13,8 +13,9 @@ import { withAuth } from "@workos-inc/authkit-nextjs";
 import { eventsCollection, personsCollection } from "@/lib/mongo/databases";
 import { newId, slugify, stampNew } from "@/lib/mongo/ids";
 import { ensureHostEntityForPerson, getEntityById } from "@/lib/mongo/entities";
-import { syncPersonFromWorkos } from "@/lib/mongo/users";
+import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { mapEventDocToApi } from "@/lib/mongo/mappers";
+import { isDevBypass, DEV_WORKOS_ID, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
 import type { EventDoc } from "@/lib/mongo/types";
 import type { Event } from "@/lib/api";
 
@@ -66,8 +67,23 @@ export interface CreateEventResult {
 }
 
 export async function createEvent(input: CreateEventActionInput): Promise<CreateEventResult> {
-  const { user } = await withAuth();
-  if (!user) throw new Error("You must be signed in to create an event.");
+  // Resolve the acting identity: WorkOS session, or the local dev bypass.
+  let syncInput: SyncPersonInput;
+  if (isDevBypass()) {
+    syncInput = { workosUserId: DEV_WORKOS_ID, email: DEV_EMAIL, name: DEV_NAME, emailVerified: true };
+  } else {
+    const { user } = await withAuth();
+    if (!user) throw new Error("You must be signed in to create an event.");
+    syncInput = {
+      workosUserId: user.id,
+      email: user.email ?? null,
+      name: [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || null,
+      givenName: user.firstName ?? null,
+      familyName: user.lastName ?? null,
+      picture: user.profilePictureUrl ?? null,
+      emailVerified: user.emailVerified ?? undefined,
+    };
+  }
 
   // Server-side validation. The form validates too, but server actions are
   // network-callable — never trust the client's checks alone.
@@ -95,18 +111,10 @@ export async function createEvent(input: CreateEventActionInput): Promise<Create
 
   // Resolve the person doc (ensure it exists; sync is idempotent).
   const persons = await personsCollection();
-  let person = await persons.findOne({ workosUserId: user.id });
+  let person = await persons.findOne({ workosUserId: syncInput.workosUserId });
   if (!person) {
-    await syncPersonFromWorkos({
-      workosUserId: user.id,
-      email: user.email ?? null,
-      name: [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || null,
-      givenName: user.firstName ?? null,
-      familyName: user.lastName ?? null,
-      picture: user.profilePictureUrl ?? null,
-      emailVerified: user.emailVerified ?? undefined,
-    });
-    person = await persons.findOne({ workosUserId: user.id });
+    await syncPersonFromWorkos(syncInput);
+    person = await persons.findOne({ workosUserId: syncInput.workosUserId });
   }
   if (!person) throw new Error("Could not resolve your account. Please try again.");
 

@@ -86,6 +86,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [syncing, setSyncing] = useState(false);
   const [hasSynced, setHasSynced] = useState(false);
 
+  // Local-only dev bypass: act as a fixed Dev User without a WorkOS session.
+  // Gated on NODE_ENV so it can never activate on a Vercel build (preview/prod
+  // run as production). Mirrors the server-side isDevBypass() guard.
+  const devBypass =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "1";
+
   // Forward the WorkOS access token into the Supabase browser client so
   // every direct supabase.* call authenticates as the signed-in person and
   // RLS that reads auth.jwt()->>sub resolves to identity.person.id.
@@ -98,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // reach Mongo. We still forward the access token to the Supabase client for
   // the read paths not yet migrated off direct Supabase access.
   const syncUser = useCallback(async () => {
-    if (!workosUser) return;
+    if (!workosUser && !devBypass) return;
 
     setSyncing(true);
     try {
@@ -107,15 +114,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const appUser = await syncCurrentUser();
       if (appUser) {
-        const fallbackName = [workosUser.firstName, workosUser.lastName]
+        const fallbackName = [workosUser?.firstName, workosUser?.lastName]
           .filter(Boolean)
           .join(" ")
           .trim();
         setNhimbeUser({
           id: appUser.id,
           personId: appUser.personId,
-          workosUserId: appUser.workosUserId || workosUser.id,
-          email: appUser.email || (workosUser.email ?? ""),
+          workosUserId: appUser.workosUserId || workosUser?.id || "",
+          email: appUser.email || (workosUser?.email ?? ""),
           name: appUser.name || fallbackName,
           image: appUser.image,
           addressLocality: appUser.addressLocality,
@@ -134,19 +141,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSyncing(false);
       setHasSynced(true);
     }
-  }, [workosUser, accessToken, getAccessToken]);
+  }, [workosUser, devBypass, accessToken, getAccessToken]);
 
   useEffect(() => {
-    // The server action reads the session cookie, so the sync no longer waits
-    // on the client access token — fire as soon as the WorkOS user resolves.
-    if (!authKitLoading && workosUser && !hasSynced) {
+    // Fire as soon as a WorkOS user resolves — or immediately in dev bypass,
+    // where there's no WorkOS session to wait for.
+    if (!authKitLoading && (workosUser || devBypass) && !hasSynced) {
       void syncUser();
     }
-    if (!authKitLoading && !workosUser) {
+    if (!authKitLoading && !workosUser && !devBypass) {
       setNhimbeUser(null);
       setHasSynced(false);
     }
-  }, [authKitLoading, workosUser, hasSynced, syncUser]);
+  }, [authKitLoading, workosUser, devBypass, hasSynced, syncUser]);
 
   const signIn = useCallback(
     (returnUrl?: string) => {
@@ -179,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [syncUser]);
 
   const isLoading = authKitLoading || syncing;
-  const isAuthenticated = !!workosUser && !!nhimbeUser;
+  const isAuthenticated = (!!workosUser || devBypass) && !!nhimbeUser;
 
   const hasName = !!nhimbeUser?.name && nhimbeUser.name !== "" && nhimbeUser.name !== "User";
   const hasAddressLocality = !!nhimbeUser?.addressLocality;
