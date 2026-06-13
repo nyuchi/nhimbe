@@ -15,17 +15,18 @@ import {
   getCirclePosts,
   joinCircle,
   togglePostReaction,
+  type KraalCircle,
   type KraalMember,
-  type KraalPostWithAuthor,
-} from "@/lib/supabase/api";
-import type { CircleRow } from "@/lib/supabase/types";
+  type KraalPerson,
+  type KraalPost,
+} from "@/app/actions/circle-detail";
 import { useT } from "@/lib/i18n";
 
 interface KraalDetailClientProps {
   circleId: string;
 }
 
-function authorLabel(p: KraalPostWithAuthor["author"] | KraalMember["person"]): string {
+function authorLabel(p: KraalPerson | null): string {
   if (!p) return "Member";
   return p.name || [p.givenname, p.familyname].filter(Boolean).join(" ") || "Member";
 }
@@ -40,10 +41,10 @@ export default function KraalDetailClient({ circleId }: KraalDetailClientProps) 
   const personId = user?.personId ?? null;
 
   const [loading, setLoading] = useState(true);
-  const [circle, setCircle] = useState<CircleRow | null>(null);
-  const [posts, setPosts] = useState<KraalPostWithAuthor[]>([]);
+  const [circle, setCircle] = useState<KraalCircle | null>(null);
+  const [posts, setPosts] = useState<KraalPost[]>([]);
   const [members, setMembers] = useState<KraalMember[]>([]);
-  const [archived, setArchived] = useState<KraalPostWithAuthor[]>([]);
+  const [archived, setArchived] = useState<KraalPost[]>([]);
   const [composer, setComposer] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,7 +106,6 @@ export default function KraalDetailClient({ circleId }: KraalDetailClientProps) 
     try {
       const newPost = await createCirclePost({
         circleId,
-        authorId: personId,
         text: composer.trim(),
       });
       // Optimistic — backfill author from current user
@@ -130,7 +130,7 @@ export default function KraalDetailClient({ circleId }: KraalDetailClientProps) 
     setSubmitting(true);
     setError(null);
     try {
-      await joinCircle({ circleId, personId });
+      await joinCircle({ circleId });
       // Refetch members so the join button flips to compose mode.
       const m = await getCircleMembers(circleId, 100);
       setMembers(m);
@@ -144,7 +144,7 @@ export default function KraalDetailClient({ circleId }: KraalDetailClientProps) 
   const handleReaction = async (postId: string) => {
     if (!personId) return;
     try {
-      const result = await togglePostReaction({ postId, personId });
+      const result = await togglePostReaction({ postId });
       setPosts((prev) =>
         prev.map((p) =>
           p.id === postId
