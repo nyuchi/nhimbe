@@ -1,5 +1,5 @@
 import { MetadataRoute } from "next";
-import { getEvents } from "@/lib/api";
+import { listEvents } from "@/lib/mongo/events";
 
 const BASE_URL = "https://nhimbe.com";
 
@@ -77,7 +77,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Dynamic event pages
   let eventPages: MetadataRoute.Sitemap = [];
   try {
-    const response = await getEvents({ limit: 500 });
+    const response = await listEvents({ limit: 500 });
     eventPages = response.events.map((event) => ({
       url: `${BASE_URL}/events/${event.id}`,
       lastModified: event.dateModified ? new Date(event.dateModified) : new Date(),
