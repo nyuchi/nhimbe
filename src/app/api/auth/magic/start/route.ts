@@ -2,6 +2,19 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
 
 /**
+ * Cheap, linear email sanity check (no regex → no ReDoS). WorkOS does the
+ * authoritative validation; this just rejects obvious junk before the API call.
+ */
+function looksLikeEmail(value: string): boolean {
+  if (value.length > 320 || /\s/.test(value)) return false;
+  const at = value.indexOf("@");
+  if (at <= 0 || at !== value.lastIndexOf("@")) return false;
+  const domain = value.slice(at + 1);
+  const dot = domain.lastIndexOf(".");
+  return dot > 0 && dot < domain.length - 1;
+}
+
+/**
  * Step 1 of the embedded (in-app) sign-in: email a one-time Magic Auth code.
  *
  * Runs as a Route Handler — cookie/SDK work that the embedded form triggers
@@ -19,7 +32,7 @@ export async function POST(request: NextRequest) {
   }
 
   email = email.trim().toLowerCase();
-  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+  if (!looksLikeEmail(email)) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   }
 
