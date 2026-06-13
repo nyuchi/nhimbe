@@ -107,4 +107,4 @@ export const trackedLinksCollection = () =>
 export const linkClicksCollection = () => getCollection<LinkClickDoc>(DB.engagement, "linkClicks");
 
 // ── device ──────────────────────────────────────────────────────────
-export const pairingsCollection = () => getCollection<PairingDoc>(DB.device, "pairing");
+export const pairingsCollection = () => getCollection<PairingDoc>(DB.device, "pairings");
