@@ -63,16 +63,16 @@
   --easing-standard: cubic-bezier(0.4, 0.0, 0.2, 1);
   --easing-spring:   cubic-bezier(0.175, 0.885, 0.32, 1.275);
 
-  /* Touch targets / component sizing — 3-tier Nyuchi scale
-   * lg  56px  primary mobile CTA (hero, FAB, bottom action bar)
-   * md  48px  default interactive elements (buttons, selects, nav items)
-   * sm  44px  chips, icon buttons, dense secondary actions (WCAG 2.5.5 min)
+  /* Touch targets / component sizing — compact 3-tier scale.
+   * lg  48px  primary mobile CTA (hero, FAB, bottom action bar)
+   * md  40px  default interactive elements (buttons, selects, nav items)
+   * sm  34px  chips, icon buttons, dense secondary actions
    */
-  --touch-target-lg: 56px;
-  --touch-target:    48px;
-  --touch-target-sm: 44px;
-  --min-touch:       44px;
-  --header-height:    56px;
+  --touch-target-lg: 48px;
+  --touch-target:    40px;
+  --touch-target-sm: 34px;
+  --min-touch:       40px;
+  --header-height:    52px;
   --bottom-nav-height: 80px;
   --page-max-width:    1280px;
   --page-margin:       20px;
