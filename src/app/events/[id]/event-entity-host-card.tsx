@@ -3,53 +3,26 @@
 import { useEffect, useState } from "react";
 import { User, Building2, Home, BadgeCheck, Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { getEventHostInfo, type EventHostInfo } from "@/lib/supabase/api";
-import { useAuth } from "@/components/auth/auth-context";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  getEventHostCard,
+  type EventHostInfo,
+  type HostReputation,
+} from "@/app/actions/host-card";
 
 interface EventEntityHostCardProps {
   eventId: string;
   onResolved?: (found: boolean) => void;
 }
 
-// nhimbe hosts come in three flavours:
-//   - Person       → identity.person row
-//   - Family       → identity.entity (entity_type='family')
-//   - Organization → identity.entity (entity_type='organization')
-// Family + Organization share one table under the "Entity" umbrella (per
-// the platform DB's identity.entity CHECK constraint). Person stands alone.
-// The Follow target on engagement.follow_action uses owner_type as
-// followed_type so all three branches read symmetrically.
-
-interface HostReputation {
-  ubuntuScore: number;
-  eventsOrganized: number;
-  followerCount: number;
-}
-
-/** Reads ubuntu.impact_scores for a person — shown on the host card when
- *  the host is a real person (not an organization). All fields default to 0
- *  when no row exists, so a new host's card stays clean.
- */
-async function loadHostReputation(personId: string): Promise<HostReputation | null> {
-  try {
-    const supabase = getSupabaseBrowserClient();
-    const { data, error } = await supabase
-      .schema("ubuntu")
-      .from("impact_scores")
-      .select("ubuntu_score,events_organized,follower_count")
-      .eq("identity_id", personId)
-      .maybeSingle();
-    if (error || !data) return null;
-    return {
-      ubuntuScore: Number(data.ubuntu_score ?? 0),
-      eventsOrganized: data.events_organized ?? 0,
-      followerCount: data.follower_count ?? 0,
-    };
-  } catch {
-    return null;
-  }
-}
+// nhimbe hosts come in three flavours, all resolved from the entity-centric
+// MongoDB model (Rule 10 — an event references entity.entities, never a person
+// directly):
+//   - Person       → a family entity standing in for an individual
+//                    (schemaOrgType "Person"); the founder person is surfaced
+//   - Family       → a family entity representing an actual family/kin group
+//   - Organization → organization / community / place_owner entities
+// The server action does the cross-database fan-out (entity.entities +
+// entity.memberships + identity.persons); the browser never touches Mongo.
 
 function HostAvatar({ info }: { info: EventHostInfo }) {
   const [errored, setErrored] = useState(false);
@@ -73,74 +46,29 @@ function HostAvatar({ info }: { info: EventHostInfo }) {
 }
 
 export function EventEntityHostCard({ eventId, onResolved }: EventEntityHostCardProps) {
-  const { user } = useAuth();
-  const viewerPersonId = (user as { person_id?: string } | null)?.person_id ?? null;
   const [hostInfo, setHostInfo] = useState<EventHostInfo | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [reputation, setReputation] = useState<HostReputation | null>(null);
-  const [following, setFollowing] = useState(false);
-  const [followBusy, setFollowBusy] = useState(false);
 
   useEffect(() => {
-    getEventHostInfo(eventId)
-      .then((info) => {
-        setHostInfo(info);
-        onResolved?.(info !== null);
+    let active = true;
+    getEventHostCard(eventId)
+      .then((card) => {
+        if (!active) return;
+        setHostInfo(card?.host ?? null);
+        setReputation(card?.reputation ?? null);
+        onResolved?.(card !== null);
       })
-      .finally(() => setLoaded(true));
+      .catch(() => {
+        if (active) onResolved?.(false);
+      })
+      .finally(() => {
+        if (active) setLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
   }, [eventId, onResolved]);
-
-  // Reputation only makes sense for the Person branch — Family and
-  // Organization hosts use entity.verification_status instead.
-  useEffect(() => {
-    if (!hostInfo || hostInfo.ownerType !== "person") return;
-    loadHostReputation(hostInfo.id).then(setReputation);
-  }, [hostInfo]);
-
-  // Check if viewer already follows this host so we can show the right label.
-  // The followed_type on engagement.follow_action mirrors owner_type so the
-  // same shape works for person / family / organization without branching.
-  useEffect(() => {
-    if (!viewerPersonId || !hostInfo) return;
-    const supabase = getSupabaseBrowserClient();
-    supabase
-      .schema("engagement")
-      .from("follow_action")
-      .select("follower_person_id")
-      .eq("follower_person_id", viewerPersonId)
-      .eq("followed_id", hostInfo.id)
-      .eq("followed_type", hostInfo.ownerType)
-      .maybeSingle()
-      .then(({ data }) => setFollowing(!!data));
-  }, [viewerPersonId, hostInfo]);
-
-  const onToggleFollow = async () => {
-    if (!viewerPersonId || !hostInfo || followBusy) return;
-    setFollowBusy(true);
-    const supabase = getSupabaseBrowserClient();
-    try {
-      if (following) {
-        await supabase
-          .schema("engagement")
-          .from("follow_action")
-          .delete()
-          .eq("follower_person_id", viewerPersonId)
-          .eq("followed_id", hostInfo.id)
-          .eq("followed_type", hostInfo.ownerType);
-        setFollowing(false);
-      } else {
-        await supabase.schema("engagement").from("follow_action").insert({
-          follower_person_id: viewerPersonId,
-          followed_id: hostInfo.id,
-          followed_type: hostInfo.ownerType,
-          starttime: new Date().toISOString(),
-        });
-        setFollowing(true);
-      }
-    } finally {
-      setFollowBusy(false);
-    }
-  };
 
   if (!loaded || !hostInfo) return null;
 
@@ -175,23 +103,6 @@ export function EventEntityHostCard({ eventId, onResolved }: EventEntityHostCard
             </div>
             <div className="text-xs text-foreground/50">{typeLabel}</div>
           </div>
-          {viewerPersonId && (
-            <button
-              type="button"
-              onClick={onToggleFollow}
-              disabled={followBusy}
-              data-slot="event-host-follow"
-              aria-pressed={following}
-              className="inline-flex items-center h-8 px-3 rounded-full text-xs font-semibold border transition-colors disabled:opacity-60"
-              style={
-                following
-                  ? { background: "var(--nh-lead-soft)", color: "var(--nh-lead)", borderColor: "transparent" }
-                  : { borderColor: "var(--border)" }
-              }
-            >
-              {following ? "Following" : "Follow"}
-            </button>
-          )}
         </div>
         {hostInfo.description && (
           <p className="mt-2.5 text-xs text-foreground/60 line-clamp-2">
