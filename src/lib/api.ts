@@ -3,7 +3,9 @@
  * Handles all communication with the Cloudflare Workers backend
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://events-api.mukoko.com";
+// Default to same-origin (Vercel route handlers) — the Cloudflare Worker is
+// being retired. Set NEXT_PUBLIC_API_URL only to point at an external API.
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 // Types matching backend (schema.org-aligned)
 export interface EventLocation {

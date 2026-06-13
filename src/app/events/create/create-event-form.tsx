@@ -13,7 +13,7 @@ import {
   AlertCircle,
   ChevronLeft,
 } from "lucide-react";
-import { uploadMedia, getMediaUrl, type Category } from "@/lib/api";
+import { uploadMedia, getMediaUrl, getCategories, getCities, type Category } from "@/lib/api";
 import { createEvent as createEventAction } from "@/app/actions/events";
 import { mineralThemes, mineralThemeIds, getThemeColors } from "@/lib/themes";
 import { Button } from "@/components/ui/button";
@@ -190,11 +190,24 @@ export default function CreateEventForm() {
   const [isFree, setIsFree] = useState(true);
   const [ticketUrl, setTicketUrl] = useState("");
 
-  // Category + city catalogs. Static, broad fallbacks keep the form reliable
-  // and offline-safe; the canonical catalog can be wired through a worker-free
-  // read endpoint later without touching the wizard.
-  const [categories] = useState<Category[]>(DEFAULT_CATEGORIES);
-  const [cities] = useState<{ addressLocality: string; addressCountry: string }[]>(DEFAULT_CITIES);
+  // Category + city catalogs. Seeded from the static fallback for instant
+  // render, then replaced by the live Mongo-backed catalog (/api/categories,
+  // /api/cities) once it loads. The static lists keep the form offline-safe.
+  const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
+  const [cities, setCities] = useState<{ addressLocality: string; addressCountry: string }[]>(DEFAULT_CITIES);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [cats, cityList] = await Promise.allSettled([getCategories(), getCities()]);
+      if (cancelled) return;
+      if (cats.status === "fulfilled" && cats.value.length > 0) setCategories(cats.value);
+      if (cityList.status === "fulfilled" && cityList.value.length > 0) setCities(cityList.value);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Track if form has been touched for unsaved changes warning
   const [formTouched, setFormTouched] = useState(false);
