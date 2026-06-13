@@ -36,7 +36,9 @@ import {
   getUserReferralCode,
 } from './api';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://events-api.mukoko.com';
+// Mirror the production default in src/lib/api.ts: same-origin (Vercel route
+// handlers) when NEXT_PUBLIC_API_URL is unset — the Cloudflare Worker is retired.
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 beforeEach(() => {
   vi.restoreAllMocks();
