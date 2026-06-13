@@ -673,10 +673,9 @@ a {
   display: block;
 }
 
-/* .springbok — AI / Shamwari accent (sodalite mineral: intelligence, depth) */
-.springbok {
-  color: var(--color-sodalite, #283593);
-}
-.dark .springbok {
-  color: var(--color-sodalite-dark, #3D5AFE);
+/* .dikdik — AI / Shamwari accent colour for inline glyphs (sodalite mineral:
+ * intelligence, depth). Distinct from .springbok (the full AI chip). Uses the
+ * theme-aware --nh-ai token so it flips automatically in dark/light. */
+.dikdik {
+  color: var(--nh-ai);
 }
