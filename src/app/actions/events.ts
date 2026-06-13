@@ -12,11 +12,24 @@
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { eventsCollection, personsCollection } from "@/lib/mongo/databases";
 import { newId, slugify, stampNew } from "@/lib/mongo/ids";
-import { ensureHostEntityForPerson } from "@/lib/mongo/entities";
+import { ensureHostEntityForPerson, getEntityById } from "@/lib/mongo/entities";
 import { syncPersonFromWorkos } from "@/lib/mongo/users";
 import { mapEventDocToApi } from "@/lib/mongo/mappers";
 import type { EventDoc } from "@/lib/mongo/types";
 import type { Event } from "@/lib/api";
+
+const MAX_NAME_LENGTH = 200;
+const MAX_DESCRIPTION_LENGTH = 5000;
+
+/** http(s)-only URL check — rejects javascript:, data:, and malformed URLs. */
+function isHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 
 export interface CreateEventActionInput {
   name: string;
@@ -56,8 +69,29 @@ export async function createEvent(input: CreateEventActionInput): Promise<Create
   const { user } = await withAuth();
   if (!user) throw new Error("You must be signed in to create an event.");
 
-  if (!input.name?.trim()) throw new Error("Event name is required.");
+  // Server-side validation. The form validates too, but server actions are
+  // network-callable — never trust the client's checks alone.
+  const name = input.name?.trim() ?? "";
+  if (!name) throw new Error("Event name is required.");
+  if (name.length > MAX_NAME_LENGTH) {
+    throw new Error(`Event name must be ${MAX_NAME_LENGTH} characters or fewer.`);
+  }
+  if ((input.description?.length ?? 0) > MAX_DESCRIPTION_LENGTH) {
+    throw new Error(`Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`);
+  }
   if (!input.startDate) throw new Error("A start date is required.");
+  if (input.maximumAttendeeCapacity != null && input.maximumAttendeeCapacity < 1) {
+    throw new Error("Capacity must be at least 1 attendee.");
+  }
+  if (input.isOnline && input.meetingUrl && !isHttpUrl(input.meetingUrl)) {
+    throw new Error("The meeting URL must be a valid http(s) link.");
+  }
+  if (input.ticketUrl && !isHttpUrl(input.ticketUrl)) {
+    throw new Error("The ticket URL must be a valid http(s) link.");
+  }
+  if ((input.hostMode === "organization" || input.hostMode === "family") && !input.hostEntityId) {
+    throw new Error(`Pick which ${input.hostMode} is hosting, or switch back to a personal host.`);
+  }
 
   // Resolve the person doc (ensure it exists; sync is idempotent).
   const persons = await personsCollection();
@@ -85,7 +119,11 @@ export async function createEvent(input: CreateEventActionInput): Promise<Create
 
   const start = new Date(input.startDate);
   if (Number.isNaN(start.getTime())) throw new Error("The start date is invalid.");
-  const end = input.endDate ? new Date(input.endDate) : new Date(start.getTime() + 60 * 60 * 1000);
+  let end = input.endDate ? new Date(input.endDate) : new Date(start.getTime() + 60 * 60 * 1000);
+  if (Number.isNaN(end.getTime()) || end <= start) {
+    // Match the form's "end after start" rule; degrade odd input to start + 1h.
+    end = new Date(start.getTime() + 60 * 60 * 1000);
+  }
 
   const id = newId();
   const location = input.isOnline
@@ -111,11 +149,18 @@ export async function createEvent(input: CreateEventActionInput): Promise<Create
       ? [{ "@type": "Offer", url: input.ticketUrl, availability: "https://schema.org/InStock" }]
       : [];
 
+  // The chosen category leads the tags array so the tag-based category filter
+  // in listEvents and the display mapper agree with the user's selection.
+  const tags = [
+    ...(input.category ? [input.category] : []),
+    ...(input.keywords ?? []).filter((k) => k !== input.category),
+  ];
+
   const doc: EventDoc = {
     ...stampNew(id),
     iCalUid: `${id}@nhimbe.com`,
-    slug: slugify(input.name),
-    name: input.name.trim(),
+    slug: slugify(name),
+    name,
     description: input.description?.trim() || null,
     schemaOrgType: "SocialEvent",
     attendanceMode: input.isOnline ? "OnlineEventAttendanceMode" : "OfflineEventAttendanceMode",
@@ -133,7 +178,7 @@ export async function createEvent(input: CreateEventActionInput): Promise<Create
     circleId: null,
     offers,
     image: input.image ? [input.image] : [],
-    tags: input.keywords ?? [],
+    tags,
     inLanguage: "en",
     maximumAttendeeCapacity: input.maximumAttendeeCapacity ?? null,
     // nhimbe-specific metadata not in the canonical schema lives under `mukoko`.
@@ -148,5 +193,8 @@ export async function createEvent(input: CreateEventActionInput): Promise<Create
   const col = await eventsCollection();
   await col.insertOne(doc);
 
-  return { id, event: mapEventDocToApi(doc, { hostEntity: null, hostPerson: person }) };
+  // Resolve the host entity for the response so the organizer block matches
+  // what list/detail reads will show (entity name, not the person's name).
+  const hostEntity = await getEntityById(primaryHostEntityId);
+  return { id, event: mapEventDocToApi(doc, { hostEntity, hostPerson: person }) };
 }

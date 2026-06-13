@@ -145,6 +145,30 @@ describe("mapEventDocToApi", () => {
     expect(e.location.url).toBe("https://maps.example/csc");
   });
 
+  it("prefers the chosen category (mukoko.category) over tags[0]", () => {
+    const e = mapEventDocToApi(baseEvent({ mukoko: { category: "music" } }));
+    expect(e.category).toBe("music");
+    // Without the explicit choice, the first tag wins.
+    expect(mapEventDocToApi(baseEvent()).category).toBe("Music");
+  });
+
+  it("surfaces the meeting link for online events from the VirtualLocation", () => {
+    const doc = baseEvent({
+      attendanceMode: "OnlineEventAttendanceMode",
+      location: { "@type": "VirtualLocation", name: "Online", url: "https://zoom.us/j/123", platform: "zoom" },
+    });
+    const e = mapEventDocToApi(doc);
+    expect(e.meetingUrl).toBe("https://zoom.us/j/123");
+    expect(e.meetingPlatform).toBe("zoom");
+    // Physical events expose no meeting link.
+    expect(mapEventDocToApi(baseEvent()).meetingUrl).toBeUndefined();
+  });
+
+  it("surfaces the chosen cover gradient from mukoko metadata", () => {
+    const e = mapEventDocToApi(baseEvent({ mukoko: { coverGradient: "malachite-gradient" } }));
+    expect(e.coverGradient).toBe("malachite-gradient");
+  });
+
   it("falls back to the embedded location when no place is resolved", () => {
     const doc = baseEvent({
       location: { "@type": "Place", name: "Backyard", addressLocality: "Bulawayo", addressCountry: "ZW" },

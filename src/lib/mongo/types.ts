@@ -199,6 +199,10 @@ export interface PersonDoc extends BaseDoc {
   birthdate?: Date | null;
   isActive: boolean;
   lastSeenAt?: Date | null;
+  /** App role. Not part of the v3.1 required set (the validator allows extra
+   *  fields); set out-of-band (ops/admin tooling) to grant elevated access.
+   *  Never written by the sync path so a grant can't be clobbered. */
+  role?: "user" | "moderator" | "admin" | "super_admin" | null;
   bundu?: {
     defaultFamilyEntityId?: string;
     familyMembership?: Record<string, unknown>;

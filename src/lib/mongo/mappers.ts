@@ -142,8 +142,17 @@ function isPublished(doc: EventDoc): boolean {
   return doc.status === "published" || doc.status === "live";
 }
 
-/** Derive a single display category from the event's tags / schema.org type. */
+/** nhimbe-specific metadata stored under the event doc's free-form `mukoko` bag. */
+function mukokoMeta(doc: EventDoc): Record<string, unknown> {
+  return (doc.mukoko ?? {}) as Record<string, unknown>;
+}
+
+/** Derive the display category: the explicitly chosen category first, else the
+ * first tag (matches listEvents' tag-based category filter, which createEvent
+ * keeps consistent by writing the category into tags as well). */
 function deriveCategory(doc: EventDoc): string {
+  const chosen = mukokoMeta(doc).category;
+  if (typeof chosen === "string" && chosen) return chosen;
   const tags = doc.tags;
   if (Array.isArray(tags) && tags.length > 0 && typeof tags[0] === "string") {
     return tags[0] as string;
@@ -166,6 +175,9 @@ function deriveKeywords(doc: EventDoc): string[] {
 export function mapEventDocToApi(doc: EventDoc, relations: EventRelations = {}): Event {
   const start = doc.startDate instanceof Date ? doc.startDate : new Date(doc.startDate);
   const end = doc.endDate instanceof Date ? doc.endDate : doc.endDate ? new Date(doc.endDate) : undefined;
+  const meta = mukokoMeta(doc);
+  const loc = (doc.location ?? {}) as Record<string, unknown>;
+  const isVirtual = loc["@type"] === "VirtualLocation";
 
   return {
     id: doc._id,
@@ -186,6 +198,12 @@ export function mapEventDocToApi(doc: EventDoc, relations: EventRelations = {}):
     eventAttendanceMode: doc.attendanceMode ?? undefined,
     eventStatus: doc.eventStatus ?? undefined,
     isPublished: isPublished(doc),
+    // Online events embed the meeting link in the VirtualLocation — surface it
+    // so the detail page's Join button renders.
+    meetingUrl: isVirtual ? ((loc.url as string | undefined) ?? undefined) : undefined,
+    meetingPlatform: isVirtual ? ((loc.platform as string | undefined) ?? undefined) : undefined,
+    // Theme gradient chosen at creation (only when there's no cover photo).
+    coverGradient: (meta.coverGradient as string | undefined) ?? undefined,
     organizer: mapOrganizer(relations),
     offers: mapOffers(doc),
     placeId: doc.placeId ?? undefined,

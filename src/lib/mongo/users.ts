@@ -41,6 +41,8 @@ export interface AppUser {
   suspended: boolean;
 }
 
+const KNOWN_ROLES: ReadonlySet<string> = new Set(["user", "moderator", "admin", "super_admin"]);
+
 export function mapPersonToAppUser(doc: PersonDoc): AppUser {
   return {
     id: doc._id,
@@ -53,8 +55,9 @@ export function mapPersonToAppUser(doc: PersonDoc): AppUser {
     addressLocality: undefined,
     addressCountry: undefined,
     interests: [],
-    // No role field on the canonical schema; everyone is "user" for now.
-    role: "user",
+    // Role is an extra (validator-permitted) field set out-of-band on the
+    // person doc; unknown/absent values fall back to plain "user".
+    role: doc.role && KNOWN_ROLES.has(doc.role) ? (doc.role as AppUserRole) : "user",
     // Heuristic: a synced user with a name has cleared the minimum bar.
     onboardingCompleted: Boolean(doc.name),
     suspended: doc.isActive === false,
@@ -89,7 +92,11 @@ export async function syncPersonFromWorkos(input: SyncPersonInput): Promise<AppU
         givenName: input.givenName ?? null,
         familyName: input.familyName ?? null,
         picture: input.picture ?? null,
-        emailVerified: input.emailVerified ?? false,
+        // Only write emailVerified when the claim is actually present — a
+        // momentarily-missing claim must not regress a verified user to false.
+        ...(typeof input.emailVerified === "boolean"
+          ? { emailVerified: input.emailVerified }
+          : {}),
         lastSeenAt: now,
         updatedAt: now,
       },
@@ -97,6 +104,8 @@ export async function syncPersonFromWorkos(input: SyncPersonInput): Promise<AppU
         _id: newId(),
         _schemaVersion: WRITE_SCHEMA_VERSION,
         // workosUserId is supplied by the filter on insert.
+        // emailVerified is required by the validator — default new docs only.
+        ...(typeof input.emailVerified === "boolean" ? {} : { emailVerified: false }),
         isActive: true,
         phoneNumberVerified: false,
         createdAt: now,
