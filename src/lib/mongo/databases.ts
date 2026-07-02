@@ -21,6 +21,7 @@ import type {
   EntityDoc,
   EntityMembershipDoc,
   EventDoc,
+  EventEmbeddingDoc,
   EventUpdateDoc,
   LinkClickDoc,
   PairingDoc,
@@ -77,6 +78,9 @@ export const programmeItemsCollection = () =>
   getCollection<ProgrammeItemDoc>(DB.events, "programmeItems");
 export const pollsCollection = () => getCollection<PollDoc>(DB.events, "polls");
 export const eventUpdatesCollection = () => getCollection<EventUpdateDoc>(DB.events, "updates");
+/** Per-event RAG embeddings (Atlas Vector Search source collection). */
+export const eventEmbeddingsCollection = () =>
+  getCollection<EventEmbeddingDoc>(DB.events, "eventEmbeddings");
 
 // ── identity ────────────────────────────────────────────────────────
 export const personsCollection = () => getCollection<PersonDoc>(DB.identity, "persons");

@@ -87,6 +87,24 @@ export interface EventDoc extends BaseDoc {
   mukoko?: Record<string, unknown>;
 }
 
+/**
+ * Per-event embedding row for Atlas Vector Search (RAG). Kept in its own
+ * collection so the 768-float vector never bloats hot event reads and so the
+ * validated `events.events` document stays untouched. `_id` is the event id
+ * (1:1), and a few plaintext fields are duplicated for optional pre-filtering
+ * and for rebuilds without re-reading the event.
+ */
+export interface EventEmbeddingDoc extends BaseDoc {
+  /** BGE base (768-dim) vector produced by the Shamwari gateway. */
+  embedding: number[];
+  /** The source text the vector was built from (for debugging / rebuilds). */
+  sourceText: string;
+  /** Denormalized filter fields (mirror the event; may drift — best-effort). */
+  city?: string | null;
+  category?: string | null;
+  startDate?: Date | null;
+}
+
 export type RsvpResponse = "RsvpResponseYes" | "RsvpResponseNo" | "RsvpResponseMaybe";
 
 export interface RsvpDoc extends BaseDoc {
