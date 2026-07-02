@@ -7,7 +7,8 @@ import { AuthGuard } from "@/components/auth/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getCities, getCategories, updateProfile, type Category } from "@/lib/api";
+import { getCities, getCategories, type Category } from "@/lib/api";
+import { updateMyProfile, type ProfileFields } from "@/app/actions/profile";
 import {
   ArrowLeft,
   Loader2,
@@ -75,7 +76,7 @@ function ProfileEditContent() {
       }
 
       // Only send fields that changed
-      const changedFields: Record<string, string | string[]> = {};
+      const changedFields: ProfileFields = {};
       if (name !== (user?.name || "")) changedFields.name = name;
       if (city !== (user?.addressLocality || "")) changedFields.addressLocality = city;
       if (country !== (user?.addressCountry || "")) changedFields.addressCountry = country;
@@ -88,7 +89,7 @@ function ProfileEditContent() {
         return;
       }
 
-      await updateProfile(user.personId, changedFields);
+      await updateMyProfile(changedFields);
       await refreshUser();
       router.push("/profile");
     } catch (err) {

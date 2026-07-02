@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
-import { updateProfile } from "@/lib/api";
+import { updateMyProfile } from "@/app/actions/profile";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +33,7 @@ export function NamePrompt({ onComplete }: NamePromptProps) {
     setError(null);
 
     try {
-      await updateProfile(user.personId, { name: name.trim() });
+      await updateMyProfile({ name: name.trim() });
       await refreshUser();
       onComplete();
     } catch (err) {

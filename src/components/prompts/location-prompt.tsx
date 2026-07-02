@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { X, MapPin, Loader2 } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
-import { updateProfile, getCities } from "@/lib/api";
+import { getCities } from "@/lib/api";
+import { updateMyProfile } from "@/app/actions/profile";
 import { Button } from "@/components/ui/button";
 
 // sessionStorage so dismissals reset per browser session — prompt reappears next visit
@@ -32,7 +33,7 @@ export function LocationPrompt() {
     if (!selected || !user?.personId) return;
     setLoading(true);
     try {
-      await updateProfile(user.personId, { addressLocality: selected.addressLocality, addressCountry: selected.addressCountry });
+      await updateMyProfile({ addressLocality: selected.addressLocality, addressCountry: selected.addressCountry });
       await refreshUser();
     } catch {
       // Silently fail — non-blocking prompt

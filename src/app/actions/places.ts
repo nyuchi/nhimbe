@@ -30,7 +30,7 @@ import { isDevBypass } from "@/lib/auth/dev";
 import type { PlaceDoc } from "@/lib/mongo/types";
 
 /** Rich place data for the EventDetail venue card. Mirrors the field names the
- *  card consumes (formerly `PlaceDetail` from `@/lib/supabase/api`). Fields with
+ *  card consumes (formerly the Supabase PlaceDetail helper). Fields with
  *  no source in the v3.1 `places.places` document are surfaced as null/[] so
  *  the card hides the corresponding cells. */
 export interface PlaceDetail {

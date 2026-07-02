@@ -32,14 +32,6 @@ vi.mock("@workos-inc/authkit-nextjs/components", () => ({
   }),
 }));
 
-// Mock Supabase client setter — auth-context still forwards the access token
-// to the Supabase client for read paths not yet migrated off direct access.
-const mockSetSupabaseAccessToken = vi.fn();
-vi.mock("@/lib/supabase/client", () => ({
-  setSupabaseAccessToken: (t: string | null) => mockSetSupabaseAccessToken(t),
-  getSupabaseBrowserClient: () => ({}),
-}));
-
 // Mock the server action that syncs the WorkOS session into identity.persons
 // (MongoDB). The browser can't reach Mongo, so the sync runs server-side and
 // the client calls it as an action.
@@ -158,9 +150,6 @@ describe("AuthContext", () => {
     expect(mockSyncCurrentUser).toHaveBeenCalled();
     expect(screen.getByTestId("authenticated").textContent).toBe("yes");
     expect(screen.getByTestId("user-name").textContent).toBe("Backend User");
-    // The access token is still forwarded to the Supabase client for the
-    // not-yet-migrated read paths.
-    expect(mockSetSupabaseAccessToken).toHaveBeenCalledWith("mock-access-token");
   });
 
   it("stays logged out when the sync returns null (no session / suspended)", async () => {
