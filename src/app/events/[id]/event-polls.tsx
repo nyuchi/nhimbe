@@ -2,166 +2,65 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Vote, Clock, CheckCircle2 } from "lucide-react";
-import { useAuth } from "@/components/auth/auth-context";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getEventPolls, castVote, type PollView } from "@/app/actions/polls";
 
 /**
- * EventPolls — surfaces events.poll rows attached to this event.
+ * EventPolls — surfaces events.polls documents attached to this event.
  *
- * Schema (verified via Supabase MCP):
- *   events.poll(id, event_id, question, options jsonb, closes_at,
- *               is_closed, accepted_answer jsonb, suggested_answer jsonb,
- *               created_by, created_at)
- *   events.poll_vote(poll_id, person_id, option_id text, voted_at)
+ * The browser never touches the database: this component reads polls and casts
+ * votes through the `polls` server actions (Vercel server runtime → MongoDB).
+ * The acting person is resolved server-side via AuthKit, so the client no
+ * longer needs the viewer's person id — `canVote` from the action gates the UI.
  *
- * The options jsonb is the schema.org suggestedAnswer pattern: an array
- * of `{ id: string, text: string }` objects. We narrow defensively because
- * the column is freeform (legacy rows may carry just strings).
- *
- * Votes are idempotent per (poll, person) — the composite-key conflict
- * means changing a vote is a delete-then-insert. We do it as two queries
- * rather than upsert because option_id is part of the row body, not the
- * key; PostgREST upsert on the PK would write any option without checking.
+ * Storage (`events.polls`): each poll embeds `options` ({ id, text }) and
+ * `votes` ({ personId, optionId, votedAt }). The action returns per-poll
+ * tallies plus the viewer's own option. Re-voting is idempotent.
  */
 
 interface EventPollsProps {
   eventId: string;
 }
 
-interface PollRow {
-  id: string;
-  question: string;
-  options: PollOption[];
-  closes_at: string | null;
-  is_closed: boolean;
-}
-
-interface PollOption {
-  id: string;
-  text: string;
-}
-
-interface VoteRow {
-  poll_id: string;
-  option_id: string;
-}
-
-function normaliseOptions(raw: unknown): PollOption[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((o, i): PollOption | null => {
-      if (typeof o === "string") return { id: String(i), text: o };
-      if (o && typeof o === "object") {
-        const obj = o as Record<string, unknown>;
-        const id = typeof obj.id === "string" ? obj.id : String(i);
-        const text = typeof obj.text === "string" ? obj.text : typeof obj.name === "string" ? obj.name : null;
-        if (!text) return null;
-        return { id, text };
-      }
-      return null;
-    })
-    .filter((o): o is PollOption => o !== null);
-}
-
 export function EventPolls({ eventId }: EventPollsProps) {
-  const { user } = useAuth();
-  const viewerPersonId = (user as { person_id?: string } | null)?.person_id ?? null;
-
-  const [polls, setPolls] = useState<PollRow[]>([]);
+  const [polls, setPolls] = useState<PollView[]>([]);
+  const [canVote, setCanVote] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [tallies, setTallies] = useState<Map<string, Map<string, number>>>(new Map());
-  const [myVotes, setMyVotes] = useState<Map<string, string>>(new Map());
   const [busyPollId, setBusyPollId] = useState<string | null>(null);
 
-  // Fetch the polls for this event + per-poll vote tallies.
+  // Fetch the polls for this event + per-poll vote tallies + the viewer's vote.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const supabase = getSupabaseBrowserClient();
-      const { data: rawPolls } = await supabase
-        .schema("events")
-        .from("poll")
-        .select("id,question,options,closes_at,is_closed")
-        .eq("event_id", eventId)
-        .order("created_at", { ascending: false });
-      if (cancelled) return;
-      const normalised: PollRow[] = ((rawPolls as Array<{ id: string; question: string; options: unknown; closes_at: string | null; is_closed: boolean }> | null) ?? []).map((p) => ({
-        id: p.id,
-        question: p.question,
-        options: normaliseOptions(p.options),
-        closes_at: p.closes_at,
-        is_closed: p.is_closed,
-      }));
-      setPolls(normalised);
-
-      if (normalised.length > 0) {
-        const ids = normalised.map((p) => p.id);
-        const { data: voteRows } = await supabase
-          .schema("events")
-          .from("poll_vote")
-          .select("poll_id,option_id")
-          .in("poll_id", ids);
-        const counts = new Map<string, Map<string, number>>();
-        ((voteRows as VoteRow[] | null) ?? []).forEach((v) => {
-          const inner = counts.get(v.poll_id) ?? new Map<string, number>();
-          inner.set(v.option_id, (inner.get(v.option_id) ?? 0) + 1);
-          counts.set(v.poll_id, inner);
-        });
-        if (!cancelled) setTallies(counts);
-
-        if (viewerPersonId) {
-          const { data: mine } = await supabase
-            .schema("events")
-            .from("poll_vote")
-            .select("poll_id,option_id")
-            .in("poll_id", ids)
-            .eq("person_id", viewerPersonId);
-          const map = new Map<string, string>();
-          ((mine as VoteRow[] | null) ?? []).forEach((v) => map.set(v.poll_id, v.option_id));
-          if (!cancelled) setMyVotes(map);
-        }
+      try {
+        const result = await getEventPolls(eventId);
+        if (cancelled) return;
+        setPolls(result.polls);
+        setCanVote(result.canVote);
+      } catch {
+        if (!cancelled) setPolls([]);
+      } finally {
+        if (!cancelled) setLoaded(true);
       }
-      if (!cancelled) setLoaded(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [eventId, viewerPersonId]);
+  }, [eventId]);
 
-  const onVote = async (poll: PollRow, optionId: string) => {
-    if (!viewerPersonId || poll.is_closed || busyPollId) return;
-    if (myVotes.get(poll.id) === optionId) return; // no-op re-click
+  const onVote = async (poll: PollView, optionId: string) => {
+    if (!canVote || poll.isClosed || busyPollId) return;
+    if (poll.myOptionId === optionId) return; // no-op re-click
     setBusyPollId(poll.id);
-    const supabase = getSupabaseBrowserClient();
     try {
-      // Change-vote = delete prior row then insert new one.
-      await supabase
-        .schema("events")
-        .from("poll_vote")
-        .delete()
-        .eq("poll_id", poll.id)
-        .eq("person_id", viewerPersonId);
-      await supabase.schema("events").from("poll_vote").insert({
-        poll_id: poll.id,
-        person_id: viewerPersonId,
-        option_id: optionId,
-        voted_at: new Date().toISOString(),
-      });
-      // Optimistic local update — increment new, decrement prior.
-      const prior = myVotes.get(poll.id);
-      setTallies((cur) => {
-        const next = new Map(cur);
-        const inner = new Map(next.get(poll.id) ?? new Map<string, number>());
-        if (prior) inner.set(prior, Math.max(0, (inner.get(prior) ?? 0) - 1));
-        inner.set(optionId, (inner.get(optionId) ?? 0) + 1);
-        next.set(poll.id, inner);
-        return next;
-      });
-      setMyVotes((cur) => {
-        const next = new Map(cur);
-        next.set(poll.id, optionId);
-        return next;
-      });
+      const result = await castVote(poll.id, optionId);
+      // Apply the server's authoritative tally + viewer option for this poll.
+      setPolls((cur) =>
+        cur.map((p) =>
+          p.id === result.pollId
+            ? { ...p, tally: result.tally, myOptionId: result.myOptionId }
+            : p,
+        ),
+      );
     } finally {
       setBusyPollId(null);
     }
@@ -184,9 +83,7 @@ export function EventPolls({ eventId }: EventPollsProps) {
         <PollCard
           key={poll.id}
           poll={poll}
-          tally={tallies.get(poll.id) ?? new Map()}
-          myOption={myVotes.get(poll.id) ?? null}
-          canVote={!!viewerPersonId && !poll.is_closed}
+          canVote={canVote && !poll.isClosed}
           busy={busyPollId === poll.id}
           onVote={(optionId) => onVote(poll, optionId)}
         />
@@ -197,25 +94,21 @@ export function EventPolls({ eventId }: EventPollsProps) {
 
 function PollCard({
   poll,
-  tally,
-  myOption,
   canVote,
   busy,
   onVote,
 }: {
-  poll: PollRow;
-  tally: Map<string, number>;
-  myOption: string | null;
+  poll: PollView;
   canVote: boolean;
   busy: boolean;
   onVote: (optionId: string) => void;
 }) {
   const total = useMemo(() => {
     let n = 0;
-    for (const c of tally.values()) n += c;
+    for (const c of Object.values(poll.tally)) n += c;
     return n;
-  }, [tally]);
-  const closesIn = closesInLabel(poll.closes_at);
+  }, [poll.tally]);
+  const closesIn = closesInLabel(poll.closesAt);
 
   return (
     <article
@@ -226,7 +119,7 @@ function PollCard({
         <h4 className="font-serif text-base font-semibold text-foreground leading-snug flex-1">
           {poll.question}
         </h4>
-        {poll.is_closed ? (
+        {poll.isClosed ? (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground shrink-0">
             <CheckCircle2 className="w-3 h-3" aria-hidden /> Closed
           </span>
@@ -238,9 +131,9 @@ function PollCard({
       </div>
       <ul className="space-y-2">
         {poll.options.map((opt) => {
-          const count = tally.get(opt.id) ?? 0;
+          const count = poll.tally[opt.id] ?? 0;
           const pct = total === 0 ? 0 : Math.round((count / total) * 100);
-          const mine = myOption === opt.id;
+          const mine = poll.myOptionId === opt.id;
           return (
             <li key={opt.id}>
               <button
@@ -280,14 +173,11 @@ function PollCard({
       </ul>
       <footer className="mt-3 text-[11px] text-muted-foreground">
         {total} {total === 1 ? "vote" : "votes"}
-        {!canVote && !poll.is_closed && " · sign in to vote"}
-        {mine(myOption) && " · your vote saved"}
+        {!canVote && !poll.isClosed && " · sign in to vote"}
+        {poll.myOptionId && " · your vote saved"}
       </footer>
     </article>
   );
-}
-function mine(opt: string | null): boolean {
-  return !!opt;
 }
 
 function closesInLabel(closesAt: string | null): string | null {

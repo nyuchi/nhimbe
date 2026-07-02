@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { registerForEvent, trackEventView } from "@/lib/api";
+import { trackEventView } from "@/lib/api";
+import { rsvpToEvent } from "@/app/actions/registrations";
 import { useAuth } from "@/components/auth/auth-context";
 import { NamePrompt } from "@/components/prompts/name-prompt";
 import { LogIn } from "lucide-react";
@@ -25,7 +26,7 @@ export function RSVPButton({ eventId, price }: RSVPButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const pathname = usePathname();
-  const { user, isAuthenticated, isLoading, accessToken, getAccessToken } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
 
   // Track view on mount
   useEffect(() => {
@@ -41,21 +42,14 @@ export function RSVPButton({ eventId, price }: RSVPButtonProps) {
     setError(null);
 
     try {
-      const token = accessToken ?? (await getAccessToken());
-      if (!token) {
-        setError("Sign in expired. Please refresh the page.");
-        setLoading(false);
-        return;
-      }
-      await registerForEvent({
-        eventId: eventId,
-        ticketType: price?.price ? "paid" : "free",
-        ticketPrice: price?.price,
-        ticketCurrency: price?.priceCurrency,
-      }, token);
+      // The server action resolves the signed-in person via AuthKit on the
+      // server — no access token needs to cross from the client.
+      await rsvpToEvent({ eventId });
       setRegistered(true);
     } catch (err) {
-      setError("Failed to register. Please try again.");
+      const message =
+        err instanceof Error && err.message ? err.message : "Failed to register. Please try again.";
+      setError(message);
       console.error("RSVP error:", err);
     } finally {
       setLoading(false);

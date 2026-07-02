@@ -1,106 +1,75 @@
 # Release Process
 
-nhimbe uses continuous deployment with manual version tagging for milestones.
+nhimbe uses **continuous deployment** with manual version tags for milestones.
 
 ## Deployment
 
-### Frontend (Vercel)
+- **Preview** — every pull request gets an isolated preview deployment so changes can be reviewed in a running environment.
+- **Production** — merging to `main` deploys to production automatically.
+- **Rollback** — previous deployments can be promoted again from the hosting dashboard if a release needs to be reverted.
 
-Deploys automatically on push to `main`:
-
-- Preview deployments for all PRs
-- Production deployment on merge to `main`
-- Rollback available via Vercel dashboard
-
-### Backend (Cloudflare Workers)
-
-```bash
-cd worker && npm run deploy
-```
-
-Deploy manually after merging backend changes. Cloudflare Workers supports instant rollback via the dashboard.
-
-### Database Migrations
-
-Run migrations manually before deploying code that depends on schema changes:
-
-```bash
-cd worker && wrangler d1 execute mukoko-nhimbe-db --file=./src/db/migrations/NNN_description.sql
-```
-
-**Important**: Always run migrations before deploying the code that uses them.
+Anything stack- or environment-specific (bindings, secrets, data ownership) is documented in **[CLAUDE.md](./CLAUDE.md)**, which is kept current as the architecture evolves.
 
 ## Versioning
 
-We use [Semantic Versioning](https://semver.org/):
+We follow [Semantic Versioning](https://semver.org/):
 
-- **MAJOR** (X.0.0): Breaking API changes, major platform shifts
-- **MINOR** (0.X.0): New features, non-breaking additions
-- **PATCH** (0.0.X): Bug fixes, security patches, documentation
+- **MAJOR** (`X.0.0`) — breaking changes or major platform shifts
+- **MINOR** (`0.X.0`) — new features, backwards-compatible
+- **PATCH** (`0.0.X`) — bug fixes, security patches, documentation
 
-## Creating a Release
+## Cutting a release
 
-1. Ensure `main` is stable and all CI checks pass
-
-2. Create a git tag:
+1. Make sure `main` is stable and all CI checks pass.
+2. Tag the release:
 
    ```bash
    git tag -a v1.0.0 -m "v1.0.0: Launch release"
    git push origin v1.0.0
    ```
 
-3. Create a GitHub Release:
-   - Go to Releases > Draft a new release
-   - Select the tag
-   - Write release notes following the format below
-   - Publish
+3. Draft a GitHub Release from the tag, write the notes (format below), and publish.
 
-### Release Notes Format
+### Release notes format
 
 ```markdown
 ## What's New
-
 - Feature description (#PR)
 
 ## Bug Fixes
-
 - Fix description (#PR)
 
 ## Security
-
 - Security improvement (#PR)
 
 ## Infrastructure
-
-- CI/deployment changes (#PR)
+- CI / deployment changes (#PR)
 
 ## Breaking Changes
-
-- Description of what changed and migration steps
+- What changed and the steps to migrate
 ```
 
-## Hotfix Process
+## Hotfix process
 
-For critical production issues:
+For a critical production issue:
 
-1. Create a branch from `main`: `hotfix/description`
-2. Fix the issue with minimal changes
-3. Add a test that covers the fix
-4. Open a PR, get review, merge
-5. Deploy immediately
-6. Tag a patch release
+1. Branch from `main`: `hotfix/<description>`.
+2. Make the smallest change that fixes it.
+3. Add a test that covers the fix.
+4. Open a PR, get review, and merge.
+5. Confirm the production deployment.
+6. Tag a patch release.
 
-## Pre-Launch Checklist
+## Pre-release checklist
 
-Before any major release:
+Before a major release:
 
-- [ ] All CI checks passing (lint, build, frontend tests, worker tests, type check, migrations)
-- [ ] Security audit completed (no high-severity vulnerabilities)
-- [ ] Database migrations applied to production
-- [ ] Environment variables and secrets configured
-- [ ] Rate limiting and CORS verified for production domains
-- [ ] Health endpoint responding (`/api/health`)
-- [ ] Email sending verified (Resend API key set)
-- [ ] Payment webhook URL configured (Paynow)
-- [ ] DNS and custom domains configured
-- [ ] Monitoring and alerting set up
+- [ ] All CI checks passing
+- [ ] Security review completed (no high-severity issues outstanding)
+- [ ] Environment variables and secrets configured for production
+- [ ] Cross-origin and rate-limit settings verified for production domains
+- [ ] Health check responding
+- [ ] Transactional email verified
+- [ ] Payment webhooks configured
+- [ ] DNS and custom domains in place
+- [ ] Monitoring and alerting active

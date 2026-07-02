@@ -2,13 +2,15 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { Loader2, ArrowRight, Globe, Sun, Cloud, CloudRain, CloudLightning, CloudSnow, CloudFog, CloudSun, TrendingUp, Flame, Clock, Users, Search, Sparkles } from "lucide-react";
+import { Loader2, ArrowRight, Globe, Sun, Cloud, CloudRain, CloudLightning, CloudSnow, CloudFog, CloudSun, TrendingUp, Flame, Clock, Users, Plus, CalendarDays, Compass, MapPin } from "lucide-react";
 import dynamic from "next/dynamic";
 import { EventCardHorizontal } from "@/components/ui/event-card-horizontal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CityDropdown } from "@/components/ui/city-dropdown";
 import { Button } from "@/components/ui/button";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { SearchPill } from "@/components/ui/search-pill";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useAuth } from "@/components/auth/auth-context";
 
 const CommunityInsightsCompact = dynamic(
@@ -39,6 +41,77 @@ function WeatherIcon({ icon }: { icon: string }) {
 function formatCount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`;
   return String(n);
+}
+
+// Time-of-day greeting. Local time on the client; "Welcome" before hydration.
+function useGreeting(): string {
+  const [greeting, setGreeting] = useState("Welcome");
+  useEffect(() => {
+    const h = new Date().getHours();
+    if (h < 12) setGreeting("Good morning");
+    else if (h < 18) setGreeting("Good afternoon");
+    else setGreeting("Good evening");
+  }, []);
+  return greeting;
+}
+
+// First name only — keeps the greeting personal without overflowing on mobile.
+function firstName(name?: string | null): string {
+  if (!name) return "";
+  const first = name.trim().split(/\s+/)[0];
+  return first && first.toLowerCase() !== "user" ? first : "";
+}
+
+// Honeycomb grain — the Mukoko brand texture rendered as a tiling SVG, masked
+// to fade out so it reads as a wash, never as foreground clutter. Mineral hue is
+// configurable so the same mark can wear malachite (lead) on the signed-in hero.
+function HoneycombBackdrop({ tint = "var(--nh-lead)" }: { tint?: string }) {
+  const hex = encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'><g fill='none' stroke='%23000' stroke-width='2'><path d='M28 0 L56 16 L56 50 L28 66 L0 50 L0 16 Z'/><path d='M28 66 L56 82 L56 116 M28 66 L0 82 L0 116'/></g></svg>`
+  );
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      {/* Mineral wash */}
+      <div
+        className="absolute inset-0 opacity-[0.10] dark:opacity-[0.16]"
+        style={{
+          backgroundImage: `radial-gradient(900px 360px at 8% -10%, ${tint} 0%, transparent 62%), radial-gradient(720px 320px at 100% 0%, var(--nh-secondary) 0%, transparent 60%)`,
+        }}
+      />
+      {/* Honeycomb tile, faded with a top-down mask */}
+      <div
+        className="absolute inset-0 opacity-[0.05] dark:opacity-[0.07]"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,${hex}")`,
+          backgroundSize: "56px 100px",
+          color: tint,
+          WebkitMaskImage: "linear-gradient(to bottom, black, transparent 85%)",
+          maskImage: "linear-gradient(to bottom, black, transparent 85%)",
+        }}
+      />
+    </div>
+  );
+}
+
+// Seed-of-Life mark, mono in the lead mineral — used as a small brand glyph in
+// the signed-in hero. Stays crisp small (mono per Mukoko brand rules <32px).
+function SeedMark({ className }: { className?: string }) {
+  const r = 7;
+  const d = Math.sqrt(3) * r;
+  const centers = [
+    [0, 0],
+    ...Array.from({ length: 6 }, (_, i) => {
+      const a = (Math.PI / 180) * (30 + 60 * i);
+      return [Math.cos(a) * d, Math.sin(a) * d];
+    }),
+  ];
+  return (
+    <svg viewBox="-20 -20 40 40" className={className} aria-hidden role="presentation">
+      {centers.map(([cx, cy], i) => (
+        <circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={1.4} />
+      ))}
+    </svg>
+  );
 }
 
 // Community Stats Bar — 4-col grid with mineral-tinted icons + serif numerals.
@@ -93,7 +166,8 @@ interface HomeClientProps {
 }
 
 export function HomeClient({ initialEvents, initialCategories }: HomeClientProps) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const greeting = useGreeting();
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [loading, setLoading] = useState(false);
@@ -206,6 +280,70 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
         </div>
       )}
 
+      {/* Signed-in hero — personalized greeting, brand wash + quick actions.
+          Mirrors the public hero's rhythm but leads with the member, not the
+          pitch. Honeycomb backdrop wears the lead mineral (malachite). */}
+      {isAuthenticated && (
+        <section className="relative overflow-hidden pt-10 pb-8 md:pt-14 md:pb-10">
+          <HoneycombBackdrop />
+          <div className="max-w-300 mx-auto px-6">
+            <div className="flex items-center gap-2 mb-3">
+              <SeedMark className="w-5 h-5 text-nh-lead" />
+              <span className="font-sans text-[11px] font-semibold uppercase tracking-[0.12em] text-nh-lead">
+                nhimbe
+              </span>
+              <StatusIndicator status="live" size="sm" className="ml-1" />
+              <span className="text-[11px] font-medium text-text-tertiary">
+                {filteredEvents.length} gathering{filteredEvents.length === 1 ? "" : "s"} live
+              </span>
+            </div>
+
+            <h1 className="font-serif text-3xl md:text-5xl font-bold text-foreground leading-[1.06] tracking-tight">
+              {greeting}
+              {firstName(user?.name) ? (
+                <>
+                  , <span className="text-primary">{firstName(user?.name)}</span>
+                </>
+              ) : null}
+            </h1>
+            <p className="mt-3 text-base md:text-lg text-text-secondary max-w-150">
+              Here&apos;s what&apos;s bringing your community together
+              {user?.addressLocality ? <> around <span className="font-medium text-foreground">{user.addressLocality}</span></> : null}.
+            </p>
+
+            {/* Quick actions — AI search pill + primary create CTA */}
+            <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3 max-w-200">
+              <SearchPill aria-label="Ask Shamwari (AI) to find a gathering" />
+              <Button asChild className="rounded-full h-[var(--touch-target)] px-6 shrink-0">
+                <Link href="/events/create">
+                  <Plus className="w-4 h-4" aria-hidden />
+                  Host a gathering
+                </Link>
+              </Button>
+            </div>
+
+            {/* Quick links — secondary navigation chips */}
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              {[
+                { href: "/events", label: "Discover", Icon: Compass },
+                { href: "/calendar", label: "Calendar", Icon: CalendarDays },
+                { href: "/my-events", label: "My events", Icon: CalendarDays },
+                { href: "/map", label: "Near me", Icon: MapPin },
+              ].map(({ href, label, Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-foreground/5 text-sm font-medium text-foreground/70 hover:bg-foreground/10 hover:text-foreground transition-colors"
+                >
+                  <Icon className="w-3.5 h-3.5" aria-hidden />
+                  {label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Hero Section — public only */}
       {!isAuthenticated && (
         <section className="py-16 md:py-24 relative overflow-hidden">
@@ -234,27 +372,11 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
               From cultural celebrations and faith gatherings to tech meetups, comedy nights, music festivals and family days — find what brings your community together. Powered by Ubuntu philosophy.
             </p>
             {/* AI search pill — primary entry point per Nhimbe.html design.
-                Full-width button styled like an input with a malachite "AI"
+                Full-width entry styled like an input with a sodalite "AI"
                 chip at the right; tap routes to /search where Shamwari (the
                 AI assistant) takes over. */}
             <div className="max-w-150 mb-6">
-              <Link
-                href="/search"
-                aria-label="Ask Shamwari (AI) to find an event"
-                data-slot="ai-search-pill"
-                className="flex items-center gap-2.5 h-[var(--touch-target)] w-full px-5 rounded-full border border-border bg-card text-left text-muted-foreground hover:bg-muted transition-colors"
-              >
-                <Search className="w-[17px] h-[17px] shrink-0" aria-hidden />
-                <span className="text-sm">Search gatherings, kraals, places&hellip;</span>
-                <span className="flex-1" />
-                <span
-                  className="inline-flex items-center gap-1 h-[22px] px-2 rounded-full text-[10px] font-semibold tracking-[0.03em]"
-                  style={{ background: "var(--nh-lead-soft)", color: "var(--nh-lead)" }}
-                >
-                  <Sparkles className="w-[11px] h-[11px]" strokeWidth={2.2} aria-hidden />
-                  AI
-                </span>
-              </Link>
+              <SearchPill layout="full" aria-label="Ask Shamwari (AI) to find an event" />
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button asChild className="rounded-full h-[var(--touch-target-lg)] px-6">
@@ -269,32 +391,35 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
       )}
 
       {/* Popular Events Section */}
-      <section className="pb-16">
+      <section className={isAuthenticated ? "pt-4 pb-20 md:pb-16" : "pb-16"}>
         <div className="max-w-300 mx-auto px-6">
           {/* Community Stats Bar - Open Data */}
           <CommunityStatsBar eventCount={filteredEvents.length} stats={communityStats} />
 
           {/* Section Header with City Selector */}
-          <div className="flex items-start justify-between mb-8">
+          <div className="flex items-end justify-between gap-4 mb-6">
             <div>
-              <h2 className="text-2xl font-bold text-foreground mb-1">Popular Events</h2>
-
+              <h2 className="font-serif text-2xl md:text-[26px] font-bold text-foreground leading-tight">
+                {isAuthenticated ? "Discover near you" : "Popular events"}
+              </h2>
               {/* City Dropdown */}
-              <CityDropdown
-                value={activeCity || ""}
-                onChange={setActiveCity}
-                cities={availableCities.map((city) => ({ value: city, label: city }))}
-                displayLabel={activeCity || "All Cities"}
-                variant="subtle"
-              />
+              <div className="mt-1.5">
+                <CityDropdown
+                  value={activeCity || ""}
+                  onChange={setActiveCity}
+                  cities={availableCities.map((city) => ({ value: city, label: city }))}
+                  displayLabel={activeCity || "All Cities"}
+                  variant="subtle"
+                />
+              </div>
             </div>
 
             <Link
               href="/events"
-              className="flex items-center gap-1.5 text-sm text-text-secondary hover:text-foreground font-medium transition-colors"
+              className="flex shrink-0 items-center gap-1.5 text-sm text-text-secondary hover:text-foreground font-medium transition-colors"
             >
-              View All
-              <ArrowRight className="w-4 h-4" />
+              View all
+              <ArrowRight className="w-4 h-4" aria-hidden />
             </Link>
           </div>
 
@@ -375,11 +500,51 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
               </aside>
             </div>
           ) : (
-            <div className="text-center py-16 text-text-secondary">
-              <p className="text-lg">No events found in {activeCity}.</p>
-              <p className="text-sm mt-2 text-text-tertiary">
-                Try selecting a different city or category.
-              </p>
+            <div
+              data-slot="empty-state"
+              className="relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-card px-6 py-14 md:py-20 text-center"
+            >
+              <HoneycombBackdrop />
+              <div className="mx-auto flex max-w-md flex-col items-center">
+                <span
+                  className="inline-flex h-16 w-16 items-center justify-center rounded-full"
+                  style={{ background: "var(--nh-lead-soft)", color: "var(--nh-lead)" }}
+                >
+                  <SeedMark className="h-9 w-9" />
+                </span>
+                <h3 className="mt-5 font-serif text-xl md:text-2xl font-bold text-foreground">
+                  {activeCategory !== "All" || (activeCity && availableCities.length > 0)
+                    ? "Nothing here just yet"
+                    : "Be the first to gather"}
+                </h3>
+                <p className="mt-2 text-sm md:text-base text-text-secondary">
+                  {activeCategory !== "All"
+                    ? <>No {activeCategory.toLowerCase()} gatherings{activeCity ? <> in {activeCity}</> : null} right now. Try another category or start one yourself.</>
+                    : activeCity && availableCities.length > 0
+                      ? <>No gatherings in {activeCity} yet. Switch cities, or be the one who brings people together.</>
+                      : <>There are no gatherings to discover yet. Host the first one and set the tone for your community.</>}
+                </p>
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  <Button asChild className="rounded-full h-[var(--touch-target)] px-6">
+                    <Link href="/events/create">
+                      <Plus className="w-4 h-4" aria-hidden />
+                      Host a gathering
+                    </Link>
+                  </Button>
+                  {(activeCategory !== "All" || activeCity) && (
+                    <Button
+                      variant="outline"
+                      className="rounded-full h-[var(--touch-target)] px-6"
+                      onClick={() => {
+                        setActiveCategory("All");
+                        if (availableCities.length === 0) setActiveCity(null);
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 

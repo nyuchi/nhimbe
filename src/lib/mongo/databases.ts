@@ -1,0 +1,110 @@
+/**
+ * Typed accessors for the Mukoko MongoDB databases nhimbe consumes.
+ *
+ * The Mukoko data model is spread across many databases — individuals
+ * (`identity`) and the entities they act through (`entity`) live separately
+ * from `events`, `engagement`, `places` and `circles`. Assembling a single
+ * API object (e.g. an event with its host, venue and circle) means fanning out
+ * across several of these. Each accessor below returns a strongly-typed
+ * `Collection<T>` so call sites get autocomplete and the mappers stay honest.
+ */
+
+import "server-only";
+import type { Collection, Db, Document } from "mongodb";
+import { getMongoClient } from "./client";
+import type {
+  AttendanceHistoryDoc,
+  CheckInDoc,
+  CircleDoc,
+  CircleMembershipDoc,
+  CirclePostDoc,
+  EntityDoc,
+  EntityMembershipDoc,
+  EventDoc,
+  EventUpdateDoc,
+  LinkClickDoc,
+  PairingDoc,
+  PersonDoc,
+  PlaceCategoryDoc,
+  PlaceDoc,
+  PlacesGeoDoc,
+  PollDoc,
+  ProgrammeItemDoc,
+  RatingDoc,
+  ReferralDoc,
+  ReviewDoc,
+  RsvpDoc,
+  TrackedLinkDoc,
+} from "./types";
+
+/** Canonical database names on the cluster. */
+export const DB = {
+  events: "events",
+  identity: "identity",
+  entity: "entity",
+  engagement: "engagement",
+  places: "places",
+  circles: "circles",
+  device: "device",
+  wallet: "wallet",
+  system: "system",
+} as const;
+
+export type DatabaseName = (typeof DB)[keyof typeof DB];
+
+/** Resolve a database handle from the shared client. */
+export async function getDb(name: DatabaseName): Promise<Db> {
+  const client = await getMongoClient();
+  return client.db(name);
+}
+
+/** Generic typed collection accessor. Prefer the named helpers below. */
+export async function getCollection<T extends Document>(
+  database: DatabaseName,
+  collection: string,
+): Promise<Collection<T>> {
+  const db = await getDb(database);
+  return db.collection<T>(collection);
+}
+
+// ── events ──────────────────────────────────────────────────────────
+export const eventsCollection = () => getCollection<EventDoc>(DB.events, "events");
+export const rsvpsCollection = () => getCollection<RsvpDoc>(DB.events, "rsvps");
+export const checkInsCollection = () => getCollection<CheckInDoc>(DB.events, "checkIns");
+export const attendanceHistoryCollection = () =>
+  getCollection<AttendanceHistoryDoc>(DB.events, "attendanceHistory");
+export const programmeItemsCollection = () =>
+  getCollection<ProgrammeItemDoc>(DB.events, "programmeItems");
+export const pollsCollection = () => getCollection<PollDoc>(DB.events, "polls");
+export const eventUpdatesCollection = () => getCollection<EventUpdateDoc>(DB.events, "updates");
+
+// ── identity ────────────────────────────────────────────────────────
+export const personsCollection = () => getCollection<PersonDoc>(DB.identity, "persons");
+
+// ── entity ──────────────────────────────────────────────────────────
+export const entitiesCollection = () => getCollection<EntityDoc>(DB.entity, "entities");
+export const entityMembershipsCollection = () =>
+  getCollection<EntityMembershipDoc>(DB.entity, "memberships");
+
+// ── places ──────────────────────────────────────────────────────────
+export const placesCollection = () => getCollection<PlaceDoc>(DB.places, "places");
+export const placesGeoCollection = () => getCollection<PlacesGeoDoc>(DB.places, "placesGeo");
+export const placeCategoriesCollection = () =>
+  getCollection<PlaceCategoryDoc>(DB.places, "categories");
+
+// ── circles ─────────────────────────────────────────────────────────
+export const circlesCollection = () => getCollection<CircleDoc>(DB.circles, "circles");
+export const circleMembershipsCollection = () =>
+  getCollection<CircleMembershipDoc>(DB.circles, "memberships");
+export const circlePostsCollection = () => getCollection<CirclePostDoc>(DB.circles, "posts");
+
+// ── engagement ──────────────────────────────────────────────────────
+export const reviewsCollection = () => getCollection<ReviewDoc>(DB.engagement, "reviews");
+export const ratingsCollection = () => getCollection<RatingDoc>(DB.engagement, "ratings");
+export const referralsCollection = () => getCollection<ReferralDoc>(DB.engagement, "referrals");
+export const trackedLinksCollection = () =>
+  getCollection<TrackedLinkDoc>(DB.engagement, "trackedLinks");
+export const linkClicksCollection = () => getCollection<LinkClickDoc>(DB.engagement, "linkClicks");
+
+// ── device ──────────────────────────────────────────────────────────
+export const pairingsCollection = () => getCollection<PairingDoc>(DB.device, "pairings");

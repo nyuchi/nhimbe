@@ -6,9 +6,8 @@ import { Users, Flame, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/components/auth/auth-context";
-import { getCirclesForPerson } from "@/lib/supabase/api";
+import { getMyCircles, type KraalSummary } from "@/app/actions/circles";
 import { useT } from "@/lib/i18n";
-import type { CircleRow } from "@/lib/supabase/types";
 
 export default function KraalIndexClient() {
   const { t } = useT();
@@ -18,13 +17,13 @@ export default function KraalIndexClient() {
   // off a fetch in the effect's async callback, which keeps the React 19
   // `set-state-in-effect` rule happy.
   const [loading, setLoading] = useState<boolean>(Boolean(personId));
-  const [circles, setCircles] = useState<CircleRow[]>([]);
+  const [circles, setCircles] = useState<KraalSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!personId) return;
     let cancelled = false;
-    getCirclesForPerson(personId)
+    getMyCircles()
       .then((rows) => {
         if (!cancelled) setCircles(rows);
       })

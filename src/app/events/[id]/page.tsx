@@ -1,17 +1,31 @@
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import type { Metadata } from "next";
-import { findEvent, getEvents } from "@/lib/api";
+import { getEventByIdOrSlug, listEvents } from "@/lib/mongo/events";
 import { EventDetailContent } from "./event-detail-content";
 
 interface EventDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
-// Generate static params for all events (fetched at build time)
+// Direct Mongo read on the server — events created via the createEvent server
+// action are immediately visible here (no dependency on NEXT_PUBLIC_API_URL /
+// the retired worker). React cache() dedupes the generateMetadata + page
+// calls into one query per request. Errors degrade to null → notFound().
+const loadEvent = cache(async (id: string) => {
+  try {
+    return await getEventByIdOrSlug(id);
+  } catch {
+    return null;
+  }
+});
+
+// Generate static params for upcoming events (fetched at build time; empty
+// when the cluster isn't reachable from the build, e.g. CI).
 export async function generateStaticParams() {
   try {
-    const response = await getEvents({ limit: 100 });
-    return response.events.map((event) => ({
+    const { events } = await listEvents({ limit: 100 });
+    return events.map((event) => ({
       id: event.id,
     }));
   } catch {
@@ -22,7 +36,7 @@ export async function generateStaticParams() {
 // Dynamic OpenGraph metadata
 export async function generateMetadata({ params }: EventDetailPageProps): Promise<Metadata> {
   const { id } = await params;
-  const event = await findEvent(id);
+  const event = await loadEvent(id);
 
   if (!event) {
     return {
@@ -93,7 +107,7 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
 
 export default async function EventDetailPage({ params }: EventDetailPageProps) {
   const { id } = await params;
-  const event = await findEvent(id);
+  const event = await loadEvent(id);
 
   if (!event) {
     notFound();

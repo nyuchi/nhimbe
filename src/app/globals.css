@@ -25,11 +25,16 @@
   --container-malachite:  #E0F2F1;
   --container-gold:       #FFF8E1;
   --container-terracotta: #FBE9E7;
+  --container-sodalite:   #E8EAF6;
   --on-container-cobalt:     #002966;
   --on-container-tanzanite:  #2E004D;
   --on-container-malachite:  #00332B;
   --on-container-gold:       #3E2723;
   --on-container-terracotta: #5D2906;
+  --on-container-sodalite:   #1A237E;
+
+  /* Sodalite — AI / Shamwari mineral (light surface; AAA-strong navy) */
+  --sodalite: #283593;
 
   /* Five Heritage colours (atmospheric, theme-adaptive) */
   --heritage-indigo:   #1A237E;
@@ -63,16 +68,16 @@
   --easing-standard: cubic-bezier(0.4, 0.0, 0.2, 1);
   --easing-spring:   cubic-bezier(0.175, 0.885, 0.32, 1.275);
 
-  /* Touch targets / component sizing — 3-tier Nyuchi scale
-   * lg  56px  primary mobile CTA (hero, FAB, bottom action bar)
-   * md  48px  default interactive elements (buttons, selects, nav items)
-   * sm  44px  chips, icon buttons, dense secondary actions (WCAG 2.5.5 min)
+  /* Touch targets / component sizing — compact 3-tier scale.
+   * lg  48px  primary mobile CTA (hero, FAB, bottom action bar)
+   * md  40px  default interactive elements (buttons, selects, nav items)
+   * sm  34px  chips, icon buttons, dense secondary actions
    */
-  --touch-target-lg: 56px;
-  --touch-target:    48px;
-  --touch-target-sm: 44px;
-  --min-touch:       44px;
-  --header-height:    56px;
+  --touch-target-lg: 48px;
+  --touch-target:    40px;
+  --touch-target-sm: 34px;
+  --min-touch:       40px;
+  --header-height:    52px;
   --bottom-nav-height: 80px;
   --page-max-width:    1280px;
   --page-margin:       20px;
@@ -180,6 +185,11 @@
   --nh-savanna:     var(--heritage-savanna);
   --nh-sunset:      var(--heritage-sunset);
 
+  /* nhimbe AI pair — sodalite, the Shamwari (AI) mineral */
+  --nh-ai:          var(--sodalite);
+  --nh-ai-soft:     var(--container-sodalite);
+  --nh-on-ai:       var(--on-container-sodalite);
+
   /* High contrast text for AAA compliance on gradient backgrounds */
   --hero-text: #FFFFFF;
   --hero-text-muted: #E0E0E0;
@@ -196,11 +206,13 @@
   --container-malachite:  #00251A;
   --container-gold:       #332200;
   --container-terracotta: #3E1A00;
+  --container-sodalite:   #1A1F4D;
   --on-container-cobalt:     #B3E5FC;
   --on-container-tanzanite:  #E1BEE7;
   --on-container-malachite:  #A7FFEB;
   --on-container-gold:       #FFECB3;
   --on-container-terracotta: #FFCCBC;
+  --on-container-sodalite:   #C5CAE9;
   --heritage-indigo:  #8C9EFF;
   --heritage-savanna: #FFCC80;
   --heritage-baobab:  #A5D6A7;
@@ -232,6 +244,7 @@
   --malachite: #64FFDA;
   --tanzanite: #B388FF;
   --gold: #FFD740;
+  --sodalite: #3D5AFE;
 
   --primary: var(--malachite);
   --secondary: var(--tanzanite);
@@ -247,6 +260,11 @@
   --nh-savanna:     var(--heritage-savanna);
   --nh-sunset:      var(--heritage-sunset);
   --shadow-glow:    0 4px 20px rgba(100,255,218,0.3);
+
+  /* nhimbe AI pair — sodalite (dark) */
+  --nh-ai:          var(--sodalite);
+  --nh-ai-soft:     var(--container-sodalite);
+  --nh-on-ai:       var(--on-container-sodalite);
 
   /* Hero section high contrast */
   --hero-text: #FFFFFF;
@@ -283,6 +301,7 @@
   --malachite: #00574B;        /* 7.3:1 contrast on #FAFAF8 */
   --tanzanite: #4B0082;        /* 10.5:1 contrast */
   --gold: #8B5A00;             /* 7.1:1 contrast */
+  --sodalite: #283593;         /* 8.6:1 contrast — Shamwari (AI) mineral */
 
   --primary: var(--malachite);
   --secondary: var(--tanzanite);
@@ -298,6 +317,11 @@
   --nh-savanna:     var(--heritage-savanna);
   --nh-sunset:      var(--heritage-sunset);
   --shadow-glow:    0 4px 20px rgba(0,87,75,0.20);
+
+  /* nhimbe AI pair — sodalite (light) */
+  --nh-ai:          var(--sodalite);
+  --nh-ai-soft:     var(--container-sodalite);
+  --nh-on-ai:       var(--on-container-sodalite);
 
   /* Hero section high contrast */
   --hero-text: #0A0A0A;
@@ -384,13 +408,17 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* Touch target minimum size — WCAG 2.5.5 (44px) */
-button,
-input,
-select,
-textarea {
-  min-height: var(--min-touch);
-}
+/*
+ * Touch target sizing — WCAG 2.5.5
+ *
+ * Intentionally NOT enforced via a blanket `min-height` on bare
+ * button/input/select/textarea elements: that floor (44px) overrode the
+ * `height` set by each component's size variant (e.g. Button `h-9`/`h-8`/`h-6`,
+ * icon `size-6`/`size-8`, Input/Select `h-9`, Textarea `h-16`), inflating every
+ * dense/secondary/icon control up to 44px. Sizing is owned by the component
+ * CVA variants in `src/components/ui/*`; the `--touch-target*` / `--min-touch`
+ * tokens above remain available for variants/utilities that opt in.
+ */
 
 /* Mobile input improvements - prevent zoom on iOS (font-size >= 16px) */
 @media (max-width: 767px) {
@@ -529,6 +557,73 @@ a {
   border-color: var(--event-surface);
 }
 
+/* ---------------------------------------------------------------------------
+   Search pill — shared AI search entry (src/components/ui/search-pill.tsx).
+   Animal-named classes per nhimbe convention. Routes to /search where
+   Shamwari (the AI assistant) takes over; the AI chip wears sodalite.
+   --------------------------------------------------------------------------- */
+
+/* .kudu — the pill itself: a Link styled like a search input.
+   Min height uses the --touch-target token (48px) for a comfortable tap;
+   generous internal padding keeps the text vertically centred. */
+.kudu {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: var(--touch-target);
+  padding-block: 0.625rem;
+  padding-inline: 1.25rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background-color: var(--card);
+  color: var(--muted-foreground);
+  text-align: left;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.kudu:hover {
+  background-color: var(--muted);
+}
+
+/* .kudu-wide — full-width modifier (hero / stacked layouts). */
+.kudu-wide {
+  width: 100%;
+}
+
+/* .kudu-inline — flexes to fill a row alongside sibling actions. */
+.kudu-inline {
+  flex: 1 1 0%;
+}
+
+/* .duiker — the placeholder label inside the pill. */
+.duiker {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* .impala — the spacer that pushes the AI chip to the trailing edge. */
+.impala {
+  flex: 1 1 0%;
+}
+
+/* .springbok — the "AI" (Shamwari) chip; wears the sodalite mineral. */
+.springbok {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 1.375rem;
+  padding-inline: 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  background-color: var(--nh-ai-soft);
+  color: var(--nh-ai);
+}
+
 /* Respect user motion preferences — WCAG 2.1 SC 2.3.3 */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -539,4 +634,48 @@ a {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Mukoko brand marks (Seed-of-Life) — appended (African-animal classes)
+ * Source assets live in /public, copied from the mukoko-design skill.
+ * Per the skill: full-palette mark at >=32px, mono tanzanite below 32px.
+ * ───────────────────────────────────────────────────────────────────── */
+
+/* .rhino — brand mark container used in header/footer logo lockups */
+.rhino {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+/* .zebra — theme-aware full-palette mark image swap (no JS needed).
+ * Both light/dark mark variants are present; CSS reveals the right one
+ * based on the .dark class set by the theme script. */
+.zebra {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.zebra-light {
+  display: block;
+}
+.zebra-dark {
+  display: none;
+}
+.dark .zebra-light {
+  display: none;
+}
+.dark .zebra-dark {
+  display: block;
+}
+
+/* .dikdik — AI / Shamwari accent colour for inline glyphs (sodalite mineral:
+ * intelligence, depth). Distinct from .springbok (the full AI chip). Uses the
+ * theme-aware --nh-ai token so it flips automatically in dark/light. */
+.dikdik {
+  color: var(--nh-ai);
 }

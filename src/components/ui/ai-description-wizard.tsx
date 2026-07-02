@@ -267,7 +267,8 @@ export function AIDescriptionWizard({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-primary" />
+                  {/* Shamwari AI glyph — sodalite mineral (intelligence, depth) */}
+                  <Sparkles className="dikdik w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-semibold">Shamwari</h3>
@@ -384,7 +385,8 @@ export function AIDescriptionWizard({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-primary" />
+                {/* Shamwari AI glyph — sodalite mineral (intelligence, depth) */}
+                <Sparkles className="dikdik w-5 h-5" />
               </div>
               <div>
                 <h3 className="font-semibold">Shamwari</h3>

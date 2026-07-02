@@ -2,50 +2,48 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isEventSaved, saveEvent, unsaveEvent } from "@/app/actions/saves";
 
 /**
- * Persists event bookmarks to events.save_action.
+ * Persists event bookmarks to `events.savedEvents` in MongoDB (Mukoko v3.1).
  *
- * Schema (verified against platform-db via Supabase MCP):
- *   events.save_action(
- *     person_id  uuid NOT NULL,
- *     event_id   uuid NOT NULL,
- *     saved_at   timestamptz DEFAULT now(),
- *     PRIMARY KEY (person_id, event_id)
- *   )
+ * The browser never touches Mongo — every read/write goes through the server
+ * actions in `@/app/actions/saves`, which resolve the acting person via AuthKit
+ * `withAuth()` (or the dev bypass) on Vercel's Node runtime. This replaces the
+ * old direct-Supabase path that read/wrote `events.save_action` with the anon
+ * key from the browser.
  *
- * The composite PK makes save idempotent (a second insert would conflict —
- * we use upsert with ignoreDuplicates so re-saving is a no-op). Unsave is
- * just DELETE WHERE (person_id, event_id) — no soft-delete column exists.
+ * The save is idempotent (the server upserts on a deterministic per-(person,
+ * event) key), so a re-save from a second tab is silently absorbed. Unsave is a
+ * plain delete — no soft-delete column.
  *
  * Returns null saved-state until the initial check resolves so callers can
- * render a loading state if they want; the toggle no-ops while the auth
- * context is empty (unauthenticated users get nothing to click).
+ * render a loading state if they want; the toggle no-ops while the auth context
+ * is empty (unauthenticated users get nothing to click).
+ *
+ * NOTE: the previous implementation read `user.person_id`, but the auth context
+ * exposes the field as `personId`. That typo meant `personId` was always null,
+ * so saving silently never worked. Fixed here to read `personId`.
  */
 export function useSaveEvent(eventId: string) {
   const { user, isAuthenticated } = useAuth();
-  const personId = (user as { person_id?: string } | null)?.person_id ?? null;
+  const personId = user?.personId ?? null;
   const [saved, setSaved] = useState<boolean | null>(isAuthenticated ? null : false);
   const [busy, setBusy] = useState(false);
 
-  // Initial read — does a row exist for (person, event)?
+  // Initial read — is there a saved-event row for (person, event)?
   useEffect(() => {
     if (!personId) {
       setSaved(false);
       return;
     }
     let cancelled = false;
-    const supabase = getSupabaseBrowserClient();
-    supabase
-      .schema("events")
-      .from("save_action")
-      .select("person_id")
-      .eq("person_id", personId)
-      .eq("event_id", eventId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled) setSaved(!!data);
+    isEventSaved(eventId)
+      .then((result) => {
+        if (!cancelled) setSaved(result);
+      })
+      .catch(() => {
+        if (!cancelled) setSaved(false);
       });
     return () => {
       cancelled = true;
@@ -55,27 +53,13 @@ export function useSaveEvent(eventId: string) {
   const toggle = useCallback(async () => {
     if (!personId || busy) return;
     setBusy(true);
-    const supabase = getSupabaseBrowserClient();
     try {
       if (saved) {
-        await supabase
-          .schema("events")
-          .from("save_action")
-          .delete()
-          .eq("person_id", personId)
-          .eq("event_id", eventId);
-        setSaved(false);
+        const next = await unsaveEvent(eventId);
+        setSaved(next);
       } else {
-        // upsert with ignoreDuplicates means a concurrent save from a
-        // second tab is silently absorbed instead of throwing.
-        await supabase
-          .schema("events")
-          .from("save_action")
-          .upsert(
-            { person_id: personId, event_id: eventId },
-            { onConflict: "person_id,event_id", ignoreDuplicates: true },
-          );
-        setSaved(true);
+        const next = await saveEvent(eventId);
+        setSaved(next);
       }
     } finally {
       setBusy(false);

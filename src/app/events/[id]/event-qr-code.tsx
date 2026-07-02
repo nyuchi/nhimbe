@@ -36,8 +36,9 @@ export function EventQRCode({ shortCode, title }: EventQRCodeProps) {
         <span className="text-sm text-foreground/80 flex-1 truncate">{shortUrl}</span>
         <button
           onClick={handleCopy}
-          className="text-primary hover:text-primary/80 transition-colors"
+          className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-primary hover:text-primary/80 transition-colors"
           title="Copy link"
+          aria-label="Copy link"
         >
           {copied ? (
             <Check className="w-4 h-4" />

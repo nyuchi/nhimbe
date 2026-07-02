@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Mountain, Music, Calendar as CalendarIcon, Utensils, Sparkles, ArrowUpRight } from "lucide-react";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { listProgrammeItems, type ProgrammeItem } from "@/app/actions/programme";
 import type { Event } from "@/lib/api";
 
 /**
@@ -19,7 +19,7 @@ import type { Event } from "@/lib/api";
  * Strategy:
  *   1. Outdoor categories (hike/run/walk/climb/swim/bike/marathon/parkrun)
  *      → <TerrainBand> reading elevation_m / distance_km from event.about.
- *   2. Anything that has rows in events.programme_item
+ *   2. Anything that has rows in events.programmeItems (Mongo)
  *      → <ProgrammeCard> with a category-aware label:
  *        - music/festival       → "Lineup"
  *        - conference/workshop  → "Schedule"
@@ -49,40 +49,28 @@ function categoryProgrammeLabel(cat: string): { title: string; Icon: React.Compo
   return { title: "Programme", Icon: Sparkles };
 }
 
-interface ProgrammeRow {
-  id: string;
-  position: number | null;
-  name: string;
-  description: string | null;
-  startdate: string | null;
-  enddate: string | null;
-  performer: Record<string, unknown> | null;
-  item_type: string | null;
-}
-
 export function EventSpecifics({ event }: EventSpecificsProps) {
   const category = (event.category || "").toLowerCase();
   const isOutdoor = OUTDOOR_CATEGORIES.has(category);
   const terrain = isOutdoor ? readTerrain(event.about) : null;
 
-  const [programme, setProgramme] = useState<ProgrammeRow[]>([]);
+  const [programme, setProgramme] = useState<ProgrammeItem[]>([]);
   const [programmeLoaded, setProgrammeLoaded] = useState(false);
 
-  // events.programme_item is RLS-protected by the platform DB; the
-  // publishable-key client reads via the same policy that powers Kraal posts.
+  // The browser never touches Mongo: read events.programmeItems through a
+  // Node-runtime Server Action. Ordering (sequence → start time) and performer
+  // name resolution happen server-side.
   useEffect(() => {
     let cancelled = false;
-    const supabase = getSupabaseBrowserClient();
-    supabase
-      .schema("events")
-      .from("programme_item")
-      .select("id,position,name,description,startdate,enddate,performer,item_type")
-      .eq("event_id", event.id)
-      .order("position", { ascending: true, nullsFirst: false })
-      .order("startdate", { ascending: true, nullsFirst: false })
-      .then(({ data }) => {
+    listProgrammeItems(event.id)
+      .then((rows) => {
         if (cancelled) return;
-        setProgramme((data as ProgrammeRow[] | null) ?? []);
+        setProgramme(rows);
+        setProgrammeLoaded(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setProgramme([]);
         setProgrammeLoaded(true);
       });
     return () => {
@@ -206,7 +194,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ProgrammeCard({ rows, category }: { rows: ProgrammeRow[]; category: string }) {
+function ProgrammeCard({ rows, category }: { rows: ProgrammeItem[]; category: string }) {
   const { title, Icon } = categoryProgrammeLabel(category);
   return (
     <div
@@ -226,7 +214,7 @@ function ProgrammeCard({ rows, category }: { rows: ProgrammeRow[]; category: str
         {rows.map((r) => (
           <li key={r.id} className="flex items-start gap-3">
             <span className="font-mono text-[11px] text-muted-foreground pt-0.5 w-10 shrink-0">
-              {formatProgrammeTime(r.startdate)}
+              {formatProgrammeTime(r.startDate)}
             </span>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold text-foreground line-clamp-1">{r.name}</div>
@@ -236,7 +224,7 @@ function ProgrammeCard({ rows, category }: { rows: ProgrammeRow[]; category: str
               {r.performer && (
                 <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: "var(--nh-lead)" }}>
                   <ArrowUpRight className="w-3 h-3" aria-hidden />
-                  {performerLabel(r.performer)}
+                  {r.performer}
                 </div>
               )}
             </div>
@@ -252,12 +240,4 @@ function formatProgrammeTime(iso: string | null): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
   return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-}
-
-function performerLabel(p: Record<string, unknown>): string {
-  if (typeof p.name === "string") return p.name;
-  if (Array.isArray(p) && p.length > 0 && typeof (p[0] as { name?: unknown })?.name === "string") {
-    return (p[0] as { name: string }).name;
-  }
-  return "Performer";
 }

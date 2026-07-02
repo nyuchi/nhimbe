@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Layers, ArrowLeft, MapPin, Mountain } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import type { Event } from "@/lib/api";
-import { getPlaceById } from "@/lib/supabase/api";
+import { getMapPlaceById } from "@/app/actions/map-places";
 
 /**
  * Map-first discovery view. Uses OpenStreetMap raster tiles directly (no API
@@ -150,7 +150,7 @@ export function MapClient({ initialEvents }: MapClientProps) {
     (async () => {
       const results = await Promise.all(
         toResolve.map(async ({ id, placeId }) => {
-          const place = await getPlaceById(placeId);
+          const place = await getMapPlaceById(placeId);
           if (place?.latitude != null && place?.longitude != null) {
             return [id, [place.latitude, place.longitude] as [number, number]] as const;
           }

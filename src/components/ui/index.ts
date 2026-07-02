@@ -12,6 +12,7 @@ export { LazySection } from "./lazy-section";
 export { Progress } from "./progress";
 export { Rating } from "./rating";
 export { ResponsiveModal } from "./responsive-modal";
+export { SearchPill } from "./search-pill";
 export { Separator } from "./separator";
 export { ShareDialog } from "./share-dialog";
 export { Skeleton } from "./skeleton";
