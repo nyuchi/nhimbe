@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { User, Building2, Home, BadgeCheck, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/components/auth/auth-context";
-import { getEntitiesForPerson } from "@/lib/supabase/api";
-import type { EntityRow } from "@/lib/supabase/types";
+import { getMyHostEntities, type HostEntityOption } from "@/app/actions/host-entities";
 
 export type HostMode = "person" | "organization" | "family";
 
@@ -36,7 +35,7 @@ interface HostModePickerProps {
   hostMode: HostMode;
   hostEntityId: string | null;
   onChange: (mode: HostMode, entityId: string | null) => void;
-  onEntitiesLoaded?: (entities: EntityRow[]) => void;
+  onEntitiesLoaded?: (entities: HostEntityOption[]) => void;
 }
 
 function PickerRow({
@@ -94,7 +93,7 @@ export function HostModePicker({
   onEntitiesLoaded,
 }: HostModePickerProps) {
   const { user } = useAuth();
-  const [entities, setEntities] = useState<EntityRow[]>([]);
+  const [entities, setEntities] = useState<HostEntityOption[]>([]);
   const [loading, setLoading] = useState(false);
 
   const personId = user?.id ?? null;
@@ -103,7 +102,7 @@ export function HostModePicker({
     let cancelled = false;
     if (!personId) return;
     setLoading(true);
-    getEntitiesForPerson(personId)
+    getMyHostEntities()
       .then((res) => {
         if (cancelled) return;
         setEntities(res);
@@ -116,8 +115,8 @@ export function HostModePicker({
   }, [personId, onEntitiesLoaded]);
 
   const { orgs, families } = useMemo(() => ({
-    orgs: entities.filter((e) => e.entity_type === "organization"),
-    families: entities.filter((e) => e.entity_type === "family"),
+    orgs: entities.filter((e) => e.entityType === "organization"),
+    families: entities.filter((e) => e.entityType === "family"),
   }), [entities]);
   const personLabel = user?.name || "You";
 
@@ -152,7 +151,7 @@ export function HostModePicker({
             }
             label={entity.name}
             sublabel={entity.description || "Family host"}
-            verified={entity.verification_status === "verified"}
+            verified={entity.verified}
           />
         ))}
 
@@ -171,7 +170,7 @@ export function HostModePicker({
             }
             label={entity.name}
             sublabel={entity.description || "Organisation host"}
-            verified={entity.verification_status === "verified"}
+            verified={entity.verified}
           />
         ))}
 

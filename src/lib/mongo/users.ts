@@ -51,10 +51,10 @@ export function mapPersonToAppUser(doc: PersonDoc): AppUser {
     email: doc.email ?? "",
     name: doc.name ?? "",
     image: doc.picture ?? undefined,
-    // Not modeled on the v3.1 person doc — defaulted until they have a home.
-    addressLocality: undefined,
-    addressCountry: undefined,
-    interests: [],
+    // nhimbe profile extras, stored on the person doc as permitted extras.
+    addressLocality: doc.addressLocality ?? undefined,
+    addressCountry: doc.addressCountry ?? undefined,
+    interests: doc.interests ?? [],
     // Role is an extra (validator-permitted) field set out-of-band on the
     // person doc; unknown/absent values fall back to plain "user".
     role: doc.role && KNOWN_ROLES.has(doc.role) ? (doc.role as AppUserRole) : "user",

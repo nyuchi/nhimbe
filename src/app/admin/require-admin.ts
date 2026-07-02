@@ -16,7 +16,7 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 import { withAuth } from "@workos-inc/authkit-nextjs";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getPersonByWorkosId } from "@/lib/mongo/users";
 
 // Server-side mirror of UserRole / hasPermission from
 // src/components/auth/auth-context.tsx. That module is "use client", so we
@@ -58,30 +58,25 @@ export async function requireAdmin(
   // ensureSignedIn:true redirects unauthenticated users to the AuthKit flow,
   // so by the time we reach here both user and accessToken are present.
 
-  const supabase = getSupabaseServerClient(accessToken);
-  const { data, error } = await supabase
-    .schema("identity")
-    .from("person")
-    .select("id, role")
-    .eq("workos_user_id", user.id)
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (error) {
+  let person: Awaited<ReturnType<typeof getPersonByWorkosId>>;
+  try {
+    person = await getPersonByWorkosId(user.id);
+  } catch (err) {
     // Treat lookup failures as forbidden — better to bounce a real admin
-    // to "/" once than to leak the admin shell when the DB is wobbly.
-    console.error("[mukoko] requireAdmin: identity.person lookup failed", error);
+    // to "/" once than to leak the admin shell when the cluster is wobbly.
+    console.error("[mukoko] requireAdmin: identity.persons lookup failed", err);
     redirect("/");
   }
 
-  const role = normaliseRole((data as { role?: string | null } | null)?.role);
-  if (!hasRole(role, requiredRole)) {
+  // Suspended accounts and non-admins get bounced.
+  const role = normaliseRole(person?.role);
+  if (!person || person.suspended || !hasRole(role, requiredRole)) {
     redirect("/");
   }
 
   return {
     workosUserId: user.id,
-    personId: (data as { id?: string } | null)?.id ?? null,
+    personId: person.personId,
     role,
     accessToken,
   };

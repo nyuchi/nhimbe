@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { X, Sparkles, Loader2 } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
-import { updateProfile, getCategories, type Category } from "@/lib/api";
+import { getCategories, type Category } from "@/lib/api";
+import { updateMyProfile } from "@/app/actions/profile";
 import { Button } from "@/components/ui/button";
 
 // sessionStorage so dismissals reset per browser session — prompt reappears next visit
@@ -38,7 +39,7 @@ export function InterestsPrompt() {
     if (selected.length === 0 || !user?.personId) return;
     setLoading(true);
     try {
-      await updateProfile(user.personId, { interests: selected });
+      await updateMyProfile({ interests: selected });
       await refreshUser();
     } catch {
       // Silently fail — non-blocking prompt

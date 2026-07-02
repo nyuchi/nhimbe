@@ -10,7 +10,6 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth as useAuthKit, useAccessToken } from "@workos-inc/authkit-nextjs/components";
-import { setSupabaseAccessToken } from "@/lib/supabase/client";
 import { syncCurrentUser } from "@/app/actions/auth";
 
 export type UserRole = "user" | "moderator" | "admin" | "super_admin";
@@ -93,25 +92,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     process.env.NODE_ENV !== "production" &&
     process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "1";
 
-  // Forward the WorkOS access token into the Supabase browser client so
-  // every direct supabase.* call authenticates as the signed-in person and
-  // RLS that reads auth.jwt()->>sub resolves to identity.person.id.
-  useEffect(() => {
-    setSupabaseAccessToken(accessToken ?? null);
-  }, [accessToken]);
-
   // Server-side sync. The WorkOS session is resolved on the server via
   // AuthKit and mirrored into identity.persons (MongoDB) — the browser can't
-  // reach Mongo. We still forward the access token to the Supabase client for
-  // the read paths not yet migrated off direct Supabase access.
+  // reach Mongo. All data access is server-side now; there's no browser DB
+  // client to seed a token into.
   const syncUser = useCallback(async () => {
     if (!workosUser && !devBypass) return;
 
     setSyncing(true);
     try {
-      const token = accessToken ?? (await getAccessToken().catch(() => null));
-      if (token) setSupabaseAccessToken(token);
-
       const appUser = await syncCurrentUser();
       if (appUser) {
         const fallbackName = [workosUser?.firstName, workosUser?.lastName]

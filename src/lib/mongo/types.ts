@@ -203,6 +203,11 @@ export interface PersonDoc extends BaseDoc {
    *  fields); set out-of-band (ops/admin tooling) to grant elevated access.
    *  Never written by the sync path so a grant can't be clobbered. */
   role?: "user" | "moderator" | "admin" | "super_admin" | null;
+  /** nhimbe profile extras (validator permits additional fields). Written by
+   *  the profile-edit server action; not part of the canonical v3.1 person. */
+  addressLocality?: string | null;
+  addressCountry?: string | null;
+  interests?: string[] | null;
   bundu?: {
     defaultFamilyEntityId?: string;
     familyMembership?: Record<string, unknown>;
