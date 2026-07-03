@@ -13,6 +13,7 @@ import { withAuth } from "@workos-inc/authkit-nextjs";
 import { eventsCollection, personsCollection } from "@/lib/mongo/databases";
 import { newId, slugify, stampNew } from "@/lib/mongo/ids";
 import { ensureHostEntityForPerson, getEntityById } from "@/lib/mongo/entities";
+import { indexEventEmbedding } from "@/lib/ai/event-index";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { mapEventDocToApi } from "@/lib/mongo/mappers";
 import { isDevBypass, DEV_WORKOS_ID, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
@@ -200,6 +201,11 @@ export async function createEvent(input: CreateEventActionInput): Promise<Create
 
   const col = await eventsCollection();
   await col.insertOne(doc);
+
+  // Index the event for semantic search (Atlas Vector Search). Best-effort and
+  // awaited so the embedding exists by the time the create flow returns, but a
+  // failure never blocks event creation — indexEventEmbedding swallows errors.
+  await indexEventEmbedding(doc);
 
   // Resolve the host entity for the response so the organizer block matches
   // what list/detail reads will show (entity name, not the person's name).

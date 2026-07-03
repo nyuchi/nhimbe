@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { Search, MapPin, Clock, ArrowRight, Loader2, X } from "lucide-react";
+import { Search, MapPin, Clock, ArrowRight, Loader2, X, Sparkles } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getEvents, getCategories, type Event, type Category } from "@/lib/api";
+import { searchEventsAction } from "@/app/actions/search";
 
 export default function SearchPage() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -14,6 +15,12 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  // Semantic (RAG) results from the server action. Preferred when present;
+  // otherwise we fall back to the local substring filter below so search keeps
+  // working even before the Atlas vector index is populated.
+  const [semanticEvents, setSemanticEvents] = useState<Event[] | null>(null);
+  const [aiSummary, setAiSummary] = useState<string>("");
+  const [searching, setSearching] = useState(false);
 
   // Load data and recent searches
   useEffect(() => {
@@ -52,7 +59,7 @@ export default function SearchPage() {
     localStorage.removeItem("nhimbe-recent-searches");
   };
 
-  const filteredEvents = useMemo(() => {
+  const localFiltered = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const query = searchQuery.toLowerCase();
     return events.filter(
@@ -65,6 +72,45 @@ export default function SearchPage() {
         (e.keywords || []).some((tag) => tag.toLowerCase().includes(query))
     );
   }, [events, searchQuery]);
+
+  // Debounced semantic search via the server action (Atlas Vector Search +
+  // Shamwari gateway). Runs 300ms after the query settles; results override the
+  // local filter when the server returns matches.
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSemanticEvents(null);
+      setAiSummary("");
+      setSearching(false);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const handle = setTimeout(async () => {
+      try {
+        const result = await searchEventsAction({ query: q, limit: 30 });
+        if (cancelled) return;
+        setSemanticEvents(result.events);
+        setAiSummary(result.events.length > 0 ? result.aiSummary : "");
+      } catch {
+        if (!cancelled) {
+          setSemanticEvents(null);
+          setAiSummary("");
+        }
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [searchQuery]);
+
+  // Prefer server (semantic/text) results; fall back to the local substring
+  // filter until the server responds or if it returns nothing.
+  const filteredEvents =
+    semanticEvents && semanticEvents.length > 0 ? semanticEvents : localFiltered;
 
   const popularCategories = categories.slice(0, 6);
 
@@ -105,7 +151,15 @@ export default function SearchPage() {
       ) : searchQuery ? (
         /* Search Results */
         <div>
-          <p className="text-sm text-text-secondary mb-4">
+          {/* Shamwari AI summary of the matches (RAG) */}
+          {aiSummary && (
+            <div className="mb-4 flex items-start gap-3 bg-primary/10 border border-primary/20 rounded-xl p-4">
+              <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+              <p className="text-sm text-foreground leading-relaxed">{aiSummary}</p>
+            </div>
+          )}
+          <p className="text-sm text-text-secondary mb-4 flex items-center gap-2">
+            {searching && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             {filteredEvents.length} result{filteredEvents.length !== 1 ? "s" : ""} for &ldquo;{searchQuery}&rdquo;
           </p>
           {filteredEvents.length > 0 ? (

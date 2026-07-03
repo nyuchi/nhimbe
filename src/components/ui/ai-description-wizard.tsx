@@ -4,12 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Sparkles, ArrowRight, ArrowLeft, Loader2, RefreshCw, Check, X } from "lucide-react";
 import { Button } from "./button";
 import { Textarea } from "./textarea";
-import {
-  generateEventDescription,
-  regenerateEventDescription,
-  type DescriptionContext,
-  type GeneratedDescription,
-} from "@/lib/api";
+import type { DescriptionContext, GeneratedDescription } from "@/lib/api";
+import { generateEventDescription, regenerateEventDescription } from "@/app/actions/ai";
 import { useAuth } from "@/components/auth/auth-context";
 import {
   logShamwariFeedback,

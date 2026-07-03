@@ -7,11 +7,11 @@
  * `shamwari.toolUsage` collection on MongoDB (no Supabase). All writes are
  * best-effort: any failure is swallowed so it can never break the user flow.
  *
- * Conversation/message persistence and feedback capture will be modelled
- * properly when the AI stack is re-platformed onto the Claude API (the
- * `shamwari.conversations`/`messages` collections are built for Anthropic
- * content blocks). For now `startShamwariConversation` mints a grouping id
- * without a conversation row, and feedback is a no-op.
+ * Conversation/message persistence and feedback capture are deferred: the
+ * `shamwari.conversations`/`messages` collections aren't modelled yet. For now
+ * `startShamwariConversation` mints a grouping id without a conversation row,
+ * and feedback is a no-op. Generation itself runs through the Shamwari
+ * Cloudflare AI Gateway (Qwen) in `src/app/actions/ai.ts`.
  */
 
 import { getMongoClient } from "@/lib/mongo/client";

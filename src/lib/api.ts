@@ -499,48 +499,10 @@ export interface GeneratedDescription {
   suggestions?: string[];
 }
 
-/**
- * Get wizard steps for the description generator
- */
-export async function getDescriptionWizardSteps(category?: string): Promise<{ steps: DescriptionWizardStep[] }> {
-  const url = `${API_URL}/api/ai/description/wizard-steps`;
-
-  if (category) {
-    return apiFetch<{ steps: DescriptionWizardStep[] }>(url, {
-      method: "POST",
-      body: JSON.stringify({ category }),
-    });
-  }
-
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error("Failed to get wizard steps");
-  }
-  return response.json();
-}
-
-/**
- * Generate an event description using AI
- */
-export async function generateEventDescription(context: DescriptionContext): Promise<GeneratedDescription> {
-  return apiFetch<GeneratedDescription>(`${API_URL}/api/ai/description/generate`, {
-    method: "POST",
-    body: JSON.stringify(context),
-  });
-}
-
-/**
- * Regenerate description with feedback
- */
-export async function regenerateEventDescription(
-  context: DescriptionContext,
-  feedback: string
-): Promise<GeneratedDescription> {
-  return apiFetch<GeneratedDescription>(`${API_URL}/api/ai/description/regenerate`, {
-    method: "POST",
-    body: JSON.stringify({ ...context, feedback }),
-  });
-}
+// AI description generation moved to the `src/app/actions/ai.ts` server action
+// (Qwen via the Shamwari Cloudflare AI Gateway) — the worker AI routes are
+// retired. The DescriptionContext / GeneratedDescription / DescriptionWizardStep
+// types stay here as the shared shapes consumed by the wizard and the action.
 
 // ============================================
 // Open Data APIs - Reviews, Referrals, Stats
