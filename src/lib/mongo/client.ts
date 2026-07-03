@@ -57,7 +57,16 @@ function connect(): Promise<MongoClient> {
  */
 export function getMongoClient(): Promise<MongoClient> {
   if (!globalThis.__nhimbeMongoClientPromise) {
-    globalThis.__nhimbeMongoClientPromise = connect();
+    // Never cache a *rejected* connection. If the very first connect() fails
+    // (a transient Atlas blip during a cold start, a brief network hiccup),
+    // a cached rejected promise would poison this serverless instance — every
+    // later request would re-await the same rejection and fast-fail until the
+    // instance is recycled. Clearing the cache on failure lets the next
+    // request retry with a fresh connection.
+    globalThis.__nhimbeMongoClientPromise = connect().catch((err) => {
+      globalThis.__nhimbeMongoClientPromise = undefined;
+      throw err;
+    });
   }
   return globalThis.__nhimbeMongoClientPromise;
 }
