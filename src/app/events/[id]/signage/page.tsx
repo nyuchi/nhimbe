@@ -4,14 +4,16 @@ import { useState, useEffect, useCallback } from "react";
 import { Loader2, Users, UserCheck, Clock, TrendingUp, RotateCcw } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
-  getEventById,
-  getCheckinStats,
-  getEventRegistrations,
   type Event,
   type CheckinStats,
   type Registration,
   type KioskSession,
 } from "@/lib/api";
+import { findEventAction } from "@/app/actions/discovery";
+import {
+  getCheckinStatsAction,
+  getEventRegistrationsAction,
+} from "@/app/actions/host-registrations";
 import {
   requestKioskPairingAction,
   getKioskPairingStatusAction,
@@ -273,11 +275,13 @@ function HostSignageContent({ session }: { session: KioskSession }) {
 
   const loadData = useCallback(async () => {
     const [eventData, checkinStats, regs] = await Promise.all([
-      getEventById(session.eventId),
-      getCheckinStats(session.eventId).catch(() => null),
-      getEventRegistrations(session.eventId).catch(() => []),
+      findEventAction(session.eventId),
+      getCheckinStatsAction(session.eventId).catch(() => null),
+      // Host-gated: on an unauthenticated signage screen this resolves to [] so
+      // no attendee PII is shown; the check-in counts above still render.
+      getEventRegistrationsAction(session.eventId).catch(() => []),
     ]);
-    if (eventData) setEvent(eventData.event);
+    if (eventData) setEvent(eventData);
     if (checkinStats) setStats(checkinStats);
     const attended = regs
       .filter((r) => r.checkedInAt)
