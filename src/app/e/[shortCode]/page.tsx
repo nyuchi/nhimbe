@@ -1,6 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { findEvent, getEvents } from "@/lib/api";
+import { findEventAction, getEventsAction } from "@/app/actions/discovery";
 
 interface ShortCodePageProps {
   params: Promise<{ shortCode: string }>;
@@ -9,7 +9,7 @@ interface ShortCodePageProps {
 // Generate static params for all short codes (fetched at build time)
 export async function generateStaticParams() {
   try {
-    const response = await getEvents({ limit: 100 });
+    const response = await getEventsAction({ limit: 100 });
     return response.events.map((event) => ({
       shortCode: event.shortCode,
     }));
@@ -21,7 +21,7 @@ export async function generateStaticParams() {
 // Dynamic metadata for short URL sharing
 export async function generateMetadata({ params }: ShortCodePageProps): Promise<Metadata> {
   const { shortCode } = await params;
-  const event = await findEvent(shortCode);
+  const event = await findEventAction(shortCode);
 
   if (!event) {
     return {
@@ -56,7 +56,7 @@ export async function generateMetadata({ params }: ShortCodePageProps): Promise<
 
 export default async function ShortCodePage({ params }: ShortCodePageProps) {
   const { shortCode } = await params;
-  const event = await findEvent(shortCode);
+  const event = await findEventAction(shortCode);
 
   if (!event) {
     notFound();
