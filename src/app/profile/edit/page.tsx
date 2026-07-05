@@ -7,7 +7,8 @@ import { AuthGuard } from "@/components/auth/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getCities, getCategories, type Category } from "@/lib/api";
+import { type Category } from "@/lib/api";
+import { getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
 import { updateMyProfile, type ProfileFields } from "@/app/actions/profile";
 import {
   ArrowLeft,
@@ -45,7 +46,7 @@ function ProfileEditContent() {
 
   // Load cities and categories
   useEffect(() => {
-    Promise.all([getCities(), getCategories()])
+    Promise.all([getCitiesAction(), getCategoriesAction()])
       .then(([citiesData, categoriesData]) => {
         setCities(citiesData);
         setCategories(categoriesData);

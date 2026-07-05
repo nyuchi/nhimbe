@@ -13,7 +13,8 @@ import {
   AlertCircle,
   ChevronLeft,
 } from "lucide-react";
-import { uploadMedia, getMediaUrl, getCategories, getCities, type Category } from "@/lib/api";
+import { uploadMedia, getMediaUrl, type Category } from "@/lib/api";
+import { getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
 import { createEvent as createEventAction } from "@/app/actions/events";
 import { mineralThemes, mineralThemeIds, getThemeColors } from "@/lib/themes";
 import { Button } from "@/components/ui/button";
@@ -199,7 +200,7 @@ export default function CreateEventForm() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [cats, cityList] = await Promise.allSettled([getCategories(), getCities()]);
+      const [cats, cityList] = await Promise.allSettled([getCategoriesAction(), getCitiesAction()]);
       if (cancelled) return;
       if (cats.status === "fulfilled" && cats.value.length > 0) setCategories(cats.value);
       if (cityList.status === "fulfilled" && cityList.value.length > 0) setCities(cityList.value);
