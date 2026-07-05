@@ -37,9 +37,19 @@ const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 6;
 
 function generatePairingCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(CODE_LENGTH));
+  const n = CODE_ALPHABET.length;
+  // Rejection sampling: `% n` on a raw byte is biased because 256 isn't a
+  // multiple of n (31), so low indices are slightly over-represented. Discard
+  // bytes at or above the largest multiple of n so every accepted byte maps
+  // uniformly onto the alphabet.
+  const limit = Math.floor(256 / n) * n;
   let out = "";
-  for (let i = 0; i < CODE_LENGTH; i++) out += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+  while (out.length < CODE_LENGTH) {
+    const bytes = crypto.getRandomValues(new Uint8Array(CODE_LENGTH));
+    for (let i = 0; i < bytes.length && out.length < CODE_LENGTH; i++) {
+      if (bytes[i] < limit) out += CODE_ALPHABET[bytes[i] % n];
+    }
+  }
   return out;
 }
 
