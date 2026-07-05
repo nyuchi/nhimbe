@@ -24,6 +24,7 @@ import {
 import { listHostEntitiesForPerson } from "./entities";
 import { initialsFromName } from "./mappers";
 import type {
+  EventReview,
   EventReviewsResponse,
   HostStats,
   ReferralLeaderboardEntry,
@@ -71,15 +72,78 @@ export async function getEventRatingStats(eventId: string): Promise<ReviewStats>
 }
 
 /**
- * Reviews for an event. Bodies are E2E-encrypted, so the `reviews` array is
- * always empty for now — only the star aggregate (`stats`) is readable. When a
- * client-side decryption path lands, hydrate `reviews` there, not here.
+ * Reviews for an event. E2E was disabled for engagements, so review bodies are
+ * now plaintext (`reviewBody`) and readable here. Reads the shared
+ * `engagement.reviews` substrate target-filtered to the event, computes the
+ * star aggregate over the same docs (no second query), and resolves reviewer
+ * display names in one batched persons lookup.
  */
 export async function getEventReviews(eventId: string): Promise<EventReviewsResponse> {
-  return {
-    reviews: [],
-    stats: await getEventRatingStats(eventId),
+  const reviews = await reviewsCollection();
+  const docs = await reviews
+    .find({
+      targetReferenceType: "event",
+      targetProductId: eventId,
+      isActive: true,
+      visibility: "public",
+      moderationStatus: { $ne: "removed" },
+    })
+    .sort({ datePublished: -1, createdAt: -1 })
+    .limit(100)
+    .toArray();
+
+  // Star aggregate over the same docs.
+  const distribution = emptyDistribution();
+  let sum = 0;
+  let count = 0;
+  for (const d of docs) {
+    const raw = d.reviewRating?.ratingValue;
+    if (typeof raw !== "number") continue;
+    const bucket = Math.round(raw);
+    if (bucket >= 1 && bucket <= 5) distribution[bucket as 1 | 2 | 3 | 4 | 5] += 1;
+    sum += raw;
+    count += 1;
+  }
+  const stats: ReviewStats = {
+    averageRating: count > 0 ? Math.round((sum / count) * 10) / 10 : 0,
+    totalReviews: count,
+    distribution,
   };
+
+  // Batch-resolve reviewer display names.
+  const personIds = [...new Set(docs.map((d) => d.reviewerPersonId).filter(Boolean))];
+  const persons = personIds.length
+    ? await (await personsCollection()).find({ _id: { $in: personIds } }).toArray()
+    : [];
+  const nameById = new Map(persons.map((p) => [p._id, p.name ?? ""]));
+
+  const mapped: EventReview[] = docs.map((d) => {
+    const name = nameById.get(d.reviewerPersonId) || "Member";
+    const created = d.datePublished ?? d.createdAt;
+    return {
+      id: d._id,
+      eventId,
+      userId: d.reviewerPersonId,
+      userName: name,
+      userInitials: initialsFromName(name),
+      rating: d.reviewRating?.ratingValue ?? 0,
+      reviewBody: d.reviewBody ?? undefined,
+      helpfulCount: d.helpfulCount ?? 0,
+      isVerifiedAttendee: d.verifiedPurchase ?? false,
+      dateCreated: created instanceof Date ? created.toISOString() : "",
+    };
+  });
+
+  return { reviews: mapped, stats };
+}
+
+/** Increment a review's plaintext helpful counter (post-E2E). Best-effort. */
+export async function markReviewHelpful(reviewId: string): Promise<void> {
+  const reviews = await reviewsCollection();
+  await reviews.updateOne(
+    { _id: reviewId },
+    { $inc: { helpfulCount: 1 }, $set: { updatedAt: new Date() } },
+  );
 }
 
 /**

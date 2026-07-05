@@ -21,6 +21,7 @@ import {
   getHostReputation,
   getReferralLeaderboard,
   getUserReferralCode,
+  markReviewHelpful,
 } from "@/lib/mongo/engagement";
 import { getEventStats } from "@/lib/mongo/stats";
 import type {
@@ -63,12 +64,15 @@ export async function getUserReferralCodeAction(userId: string): Promise<UserRef
 // ── writes (graceful stubs) ──────────────────────────────────────────
 
 /**
- * Marking a review "helpful" is a no-op in v3.1: the encrypted
- * `engagement.reviews` document has no `helpfulCount` field to increment (only
- * the star `reviewRating` and moderation flags are plaintext). The component
- * already updates its own optimistic UI, so we just acknowledge the click.
+ * Mark a review "helpful" — now that E2E is disabled on engagements, the review
+ * carries a plaintext `helpfulCount` we can increment. Best-effort.
  */
-export async function markReviewHelpfulAction(_reviewId: string): Promise<{ message: string }> {
+export async function markReviewHelpfulAction(reviewId: string): Promise<{ message: string }> {
+  try {
+    await markReviewHelpful(reviewId);
+  } catch {
+    // Best-effort; the component keeps its optimistic UI regardless.
+  }
   return { message: "ok" };
 }
 
