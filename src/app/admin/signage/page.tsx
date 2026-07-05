@@ -16,14 +16,16 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
-  requestKioskPairing,
-  getKioskPairingStatus,
-  getKioskSession,
   type Event,
   type CommunityStats,
   type KioskSession,
 } from "@/lib/api";
 import { getEventsAction, getCommunityStatsAction } from "@/app/actions/discovery";
+import {
+  requestKioskPairingAction,
+  getKioskPairingStatusAction,
+  getKioskSessionAction,
+} from "@/app/actions/kiosk";
 
 type Orientation = "horizontal" | "vertical";
 
@@ -73,7 +75,7 @@ function PairingScreen({ onPaired }: { onPaired: (session: KioskSession) => void
   const requestCode = useCallback(async () => {
     try {
       setError(null);
-      const result = await requestKioskPairing("signage-admin");
+      const result = await requestKioskPairingAction("signage-admin");
       setCode(result.code);
       setExpiresAt(Date.now() + result.expiresIn * 1000);
     } catch {
@@ -98,10 +100,10 @@ function PairingScreen({ onPaired }: { onPaired: (session: KioskSession) => void
     if (!code) return;
     const interval = setInterval(async () => {
       try {
-        const status = await getKioskPairingStatus(code);
+        const status = await getKioskPairingStatusAction(code);
         if (status.status === "confirmed" && status.sessionToken) {
           clearInterval(interval);
-          const { session } = await getKioskSession(status.sessionToken);
+          const { session } = await getKioskSessionAction(status.sessionToken);
           localStorage.setItem("nhimbe_signage_admin_token", status.sessionToken);
           onPaired(session);
         }
@@ -491,7 +493,7 @@ export default function AdminSignagePage() {
       const token = localStorage.getItem("nhimbe_signage_admin_token");
       if (token) {
         try {
-          const { session: existing } = await getKioskSession(token);
+          const { session: existing } = await getKioskSessionAction(token);
           setSession(existing);
         } catch {
           localStorage.removeItem("nhimbe_signage_admin_token");

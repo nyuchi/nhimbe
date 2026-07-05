@@ -7,14 +7,16 @@ import {
   getEventById,
   getCheckinStats,
   getEventRegistrations,
-  requestKioskPairing,
-  getKioskPairingStatus,
-  getKioskSession,
   type Event,
   type CheckinStats,
   type Registration,
   type KioskSession,
 } from "@/lib/api";
+import {
+  requestKioskPairingAction,
+  getKioskPairingStatusAction,
+  getKioskSessionAction,
+} from "@/app/actions/kiosk";
 
 type Orientation = "horizontal" | "vertical";
 
@@ -132,7 +134,7 @@ function PairingScreen({ onPaired }: { onPaired: (session: KioskSession, token: 
   const requestCode = useCallback(async () => {
     try {
       setError(null);
-      const result = await requestKioskPairing("signage-host");
+      const result = await requestKioskPairingAction("signage-host");
       setCode(result.code);
       setExpiresAt(Date.now() + result.expiresIn * 1000);
     } catch {
@@ -157,10 +159,10 @@ function PairingScreen({ onPaired }: { onPaired: (session: KioskSession, token: 
     if (!code) return;
     const interval = setInterval(async () => {
       try {
-        const status = await getKioskPairingStatus(code);
+        const status = await getKioskPairingStatusAction(code);
         if (status.status === "confirmed" && status.sessionToken) {
           clearInterval(interval);
-          const { session } = await getKioskSession(status.sessionToken);
+          const { session } = await getKioskSessionAction(status.sessionToken);
           localStorage.setItem("nhimbe_signage_host_token", status.sessionToken);
           onPaired(session, status.sessionToken);
         }
@@ -373,7 +375,7 @@ export default function EventSignagePage() {
       const token = localStorage.getItem("nhimbe_signage_host_token");
       if (token) {
         try {
-          const { session: existing } = await getKioskSession(token);
+          const { session: existing } = await getKioskSessionAction(token);
           setSession(existing);
         } catch {
           localStorage.removeItem("nhimbe_signage_host_token");

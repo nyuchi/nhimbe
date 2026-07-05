@@ -17,14 +17,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
-  checkinViaKiosk,
   getCheckinStats,
-  requestKioskPairing,
-  getKioskPairingStatus,
-  getKioskSession,
   type CheckinStats,
   type KioskSession,
 } from "@/lib/api";
+import {
+  checkinViaKioskAction,
+  requestKioskPairingAction,
+  getKioskPairingStatusAction,
+  getKioskSessionAction,
+} from "@/app/actions/kiosk";
 
 type CheckinResult = {
   status: "success" | "error" | "already";
@@ -43,7 +45,7 @@ function PairingScreen({ onPaired }: { onPaired: (session: KioskSession, token: 
   const requestCode = useCallback(async () => {
     try {
       setError(null);
-      const result = await requestKioskPairing();
+      const result = await requestKioskPairingAction();
       setCode(result.code);
       setExpiresAt(Date.now() + result.expiresIn * 1000);
     } catch {
@@ -75,10 +77,10 @@ function PairingScreen({ onPaired }: { onPaired: (session: KioskSession, token: 
 
     pollRef.current = setInterval(async () => {
       try {
-        const status = await getKioskPairingStatus(code);
+        const status = await getKioskPairingStatusAction(code);
         if (status.status === "confirmed" && status.sessionToken) {
           if (pollRef.current) clearInterval(pollRef.current);
-          const { session } = await getKioskSession(status.sessionToken);
+          const { session } = await getKioskSessionAction(status.sessionToken);
           if (typeof window !== "undefined") sessionStorage.setItem("nhimbe_kiosk_token", status.sessionToken);
           onPaired(session, status.sessionToken);
         }
@@ -315,7 +317,7 @@ function CheckinScreen({ session, token }: { session: KioskSession; token: strin
         // session token via X-Kiosk-Token, not the WorkOS Bearer slot.
         // The host's organizer-only `/api/events/:id/checkin` endpoint is
         // for the host's own page; paired devices don't carry a JWT.
-        await checkinViaKiosk(session.eventId, registrationId, token);
+        await checkinViaKioskAction(session.eventId, registrationId, token);
         setResult({
           status: "success",
           name: "Guest",
@@ -438,7 +440,7 @@ export default function KioskPage() {
       const token = typeof window !== "undefined" ? sessionStorage.getItem("nhimbe_kiosk_token") : null;
       if (token) {
         try {
-          const { session: existing } = await getKioskSession(token);
+          const { session: existing } = await getKioskSessionAction(token);
           setSession(existing);
           setSessionToken(token);
         } catch {
