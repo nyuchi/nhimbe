@@ -20,7 +20,8 @@ const CommunityInsightsCompact = dynamic(
     loading: () => <Skeleton className="h-40 w-full rounded-xl" />,
   }
 );
-import { getEvents, getCategories, getCommunityStats, type Event, type Category, type CommunityStats } from "@/lib/api";
+import { type Event, type Category, type CommunityStats } from "@/lib/api";
+import { getEventsAction, getCategoriesAction, getCommunityStatsAction } from "@/app/actions/discovery";
 import { getUserTimezone, getCurrentTimeWithTimezone, getWeather, type WeatherData } from "@/lib/timezone";
 
 // Weather icon component
@@ -200,8 +201,8 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
       setLoading(true);
       try {
         const [eventsResponse, categoriesData] = await Promise.all([
-          getEvents({ limit: 50 }),
-          getCategories(),
+          getEventsAction({ limit: 50 }),
+          getCategoriesAction(),
         ]);
 
         setEvents(eventsResponse.events);
@@ -225,7 +226,7 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
 
   // Fetch community stats when city changes
   useEffect(() => {
-    getCommunityStats(activeCity || undefined)
+    getCommunityStatsAction(activeCity || undefined)
       .then(setCommunityStats)
       .catch(() => setCommunityStats(null));
   }, [activeCity]);
