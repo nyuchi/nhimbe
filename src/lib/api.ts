@@ -7,6 +7,12 @@
 // being retired. Set NEXT_PUBLIC_API_URL only to point at an external API.
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+// Media is served from the shared Mukoko R2 bucket (mukoko-storage) via its
+// public custom domain — NOT a per-app silo. Reads need no credentials.
+// Override with NEXT_PUBLIC_ASSETS_URL (e.g. https://assets.mukoko.com) if the
+// canonical assets host differs from the bucket's default domain.
+const ASSETS_URL = process.env.NEXT_PUBLIC_ASSETS_URL ?? "https://assets-s001.mukoko.com";
+
 // Types matching backend (schema.org-aligned)
 export interface EventLocation {
   type?: string;
@@ -460,8 +466,14 @@ export async function uploadMedia(file: File): Promise<UploadMediaResponse> {
  * @param options - Optional image transformation options
  */
 export function getMediaUrl(key: string, options?: { width?: number; height?: number; format?: "webp" | "avif" | "jpeg" | "png" }): string {
-  let url = `${API_URL}/api/media/${key}`;
+  // Already-absolute URLs (or data URIs) pass through unchanged.
+  if (/^(https?:|data:)/i.test(key)) return key;
 
+  // Serve from the shared R2 assets bucket's public domain (no worker hop).
+  let url = `${ASSETS_URL.replace(/\/$/, "")}/${key.replace(/^\//, "")}`;
+
+  // Transform hints (width/height/format) are honoured by a Cloudflare Images
+  // layer if one fronts the assets domain; harmless query params otherwise.
   if (options) {
     const params = new URLSearchParams();
     if (options.width) params.set("w", options.width.toString());
