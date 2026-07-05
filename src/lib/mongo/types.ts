@@ -437,11 +437,18 @@ export interface ReviewDoc extends BaseDoc {
   targetEntityId: string;
   targetReferenceType: EngagementReferenceType;
   targetProductId?: string | null;
-  ciphertext: string;
+  // E2E was disabled for engagements (not web3-ready yet): the ciphertext fields
+  // are now optional and reviews may carry plaintext bodies instead.
+  ciphertext?: string | null;
   ciphertextHeadline?: string | null;
   ciphertextReply?: string | null;
-  encryptionEnvelope: EncryptionEnvelope;
-  recipientKeyRefs: unknown[];
+  encryptionEnvelope?: EncryptionEnvelope | null;
+  recipientKeyRefs?: unknown[];
+  /** Plaintext review body (post-E2E). */
+  reviewBody?: string | null;
+  reviewHeadline?: string | null;
+  reviewReply?: string | null;
+  helpfulCount?: number;
   visibility: "private" | "public" | "circle_members" | "self_only";
   reviewRating: { ratingValue: number; bestRating?: number; worstRating?: number };
   moderationStatus: string;

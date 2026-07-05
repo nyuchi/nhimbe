@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, MapPin, Loader2 } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
-import { getCities } from "@/lib/api";
+import { getCitiesAction } from "@/app/actions/discovery";
 import { updateMyProfile } from "@/app/actions/profile";
 import { Button } from "@/components/ui/button";
 
@@ -24,7 +24,7 @@ export function LocationPrompt() {
   }, []);
 
   useEffect(() => {
-    getCities().then(setCities).catch(() => {});
+    getCitiesAction().then(setCities).catch(() => {});
   }, []);
 
   if (!isAuthenticated || user?.addressLocality || dismissed) return null;

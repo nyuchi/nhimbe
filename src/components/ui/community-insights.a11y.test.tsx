@@ -5,8 +5,11 @@ import { CommunityInsights, CommunityInsightsCompact } from "./community-insight
 
 const mockGetCommunityStats = vi.fn();
 
-vi.mock("@/lib/api", () => ({
-  getCommunityStats: (...args: unknown[]) => mockGetCommunityStats(...args),
+// community-insights reads through the discovery server action now (not the
+// worker-era @/lib/api helper), so mock that — importing the real action would
+// pull in `server-only` and blow up in jsdom.
+vi.mock("@/app/actions/discovery", () => ({
+  getCommunityStatsAction: (...args: unknown[]) => mockGetCommunityStats(...args),
 }));
 
 describe("CommunityInsights accessibility", () => {

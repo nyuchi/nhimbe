@@ -4,17 +4,21 @@ import { useState, useEffect, useCallback } from "react";
 import { Loader2, Users, UserCheck, Clock, TrendingUp, RotateCcw } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
-  getEventById,
-  getCheckinStats,
-  getEventRegistrations,
-  requestKioskPairing,
-  getKioskPairingStatus,
-  getKioskSession,
   type Event,
   type CheckinStats,
   type Registration,
   type KioskSession,
 } from "@/lib/api";
+import { findEventAction } from "@/app/actions/discovery";
+import {
+  getCheckinStatsAction,
+  getEventRegistrationsAction,
+} from "@/app/actions/host-registrations";
+import {
+  requestKioskPairingAction,
+  getKioskPairingStatusAction,
+  getKioskSessionAction,
+} from "@/app/actions/kiosk";
 
 type Orientation = "horizontal" | "vertical";
 
@@ -132,7 +136,7 @@ function PairingScreen({ onPaired }: { onPaired: (session: KioskSession, token: 
   const requestCode = useCallback(async () => {
     try {
       setError(null);
-      const result = await requestKioskPairing("signage-host");
+      const result = await requestKioskPairingAction("signage-host");
       setCode(result.code);
       setExpiresAt(Date.now() + result.expiresIn * 1000);
     } catch {
@@ -157,10 +161,10 @@ function PairingScreen({ onPaired }: { onPaired: (session: KioskSession, token: 
     if (!code) return;
     const interval = setInterval(async () => {
       try {
-        const status = await getKioskPairingStatus(code);
+        const status = await getKioskPairingStatusAction(code);
         if (status.status === "confirmed" && status.sessionToken) {
           clearInterval(interval);
-          const { session } = await getKioskSession(status.sessionToken);
+          const { session } = await getKioskSessionAction(status.sessionToken);
           localStorage.setItem("nhimbe_signage_host_token", status.sessionToken);
           onPaired(session, status.sessionToken);
         }
@@ -271,11 +275,13 @@ function HostSignageContent({ session }: { session: KioskSession }) {
 
   const loadData = useCallback(async () => {
     const [eventData, checkinStats, regs] = await Promise.all([
-      getEventById(session.eventId),
-      getCheckinStats(session.eventId).catch(() => null),
-      getEventRegistrations(session.eventId).catch(() => []),
+      findEventAction(session.eventId),
+      getCheckinStatsAction(session.eventId).catch(() => null),
+      // Host-gated: on an unauthenticated signage screen this resolves to [] so
+      // no attendee PII is shown; the check-in counts above still render.
+      getEventRegistrationsAction(session.eventId).catch(() => []),
     ]);
-    if (eventData) setEvent(eventData.event);
+    if (eventData) setEvent(eventData);
     if (checkinStats) setStats(checkinStats);
     const attended = regs
       .filter((r) => r.checkedInAt)
@@ -373,7 +379,7 @@ export default function EventSignagePage() {
       const token = localStorage.getItem("nhimbe_signage_host_token");
       if (token) {
         try {
-          const { session: existing } = await getKioskSession(token);
+          const { session: existing } = await getKioskSessionAction(token);
           setSession(existing);
         } catch {
           localStorage.removeItem("nhimbe_signage_host_token");

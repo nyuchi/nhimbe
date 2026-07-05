@@ -4,11 +4,10 @@ import { useState, useEffect, useCallback } from "react";
 import { Loader2, Calendar, MapPin, Users, Clock, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
-  getEvents,
-  getCommunityStats,
   type Event,
   type CommunityStats,
 } from "@/lib/api";
+import { getEventsAction, getCommunityStatsAction } from "@/app/actions/discovery";
 
 type Orientation = "horizontal" | "vertical";
 
@@ -313,8 +312,8 @@ export default function PublicSignagePage() {
   const loadData = useCallback(async () => {
     try {
       const [eventsData, statsData] = await Promise.all([
-        getEvents({ limit: 12 }),
-        getCommunityStats().catch(() => null),
+        getEventsAction({ limit: 12 }),
+        getCommunityStatsAction().catch(() => null),
       ]);
       setEvents(eventsData.events);
       if (statsData) setStats(statsData);

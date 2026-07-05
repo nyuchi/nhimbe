@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { Star, Award, Users, Calendar, TrendingUp, CheckCircle, Shield, Loader2 } from "lucide-react";
 import { Rating } from "@/components/ui/rating";
 import { Badge } from "@/components/ui/badge";
-import { getHostReputation, type HostStats as ApiHostStats } from "@/lib/api";
+import { type HostStats as ApiHostStats } from "@/lib/api";
+import { getHostReputationAction } from "@/app/actions/engagement";
 
 interface HostStats {
   name: string;
@@ -217,7 +218,7 @@ export function HostReputationFetch({
   useEffect(() => {
     async function fetchHost() {
       try {
-        const data = await getHostReputation(userId);
+        const data = await getHostReputationAction(userId);
         setHostStats(data);
       } catch (error) {
         console.error("Failed to fetch host reputation:", error);

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { MapClient } from "./map-client";
-import { getEvents } from "@/lib/api";
+import { getEventsAction } from "@/app/actions/discovery";
 
 export const metadata = {
   title: "Map",
@@ -10,9 +10,9 @@ export const metadata = {
 export default async function MapPage() {
   // Server-fetched events as the initial payload — the client takes over
   // from there for filter / selection state.
-  let initialEvents: Awaited<ReturnType<typeof getEvents>>["events"] = [];
+  let initialEvents: Awaited<ReturnType<typeof getEventsAction>>["events"] = [];
   try {
-    const res = await getEvents({ limit: 100 });
+    const res = await getEventsAction({ limit: 100 });
     initialEvents = res.events;
   } catch {
     initialEvents = [];

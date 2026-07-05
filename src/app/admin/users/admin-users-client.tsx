@@ -17,10 +17,7 @@ import {
   Calendar,
   MapPin,
 } from "lucide-react";
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://mukoko-nhimbe-api.nyuchi.workers.dev";
+import { fetchAdminUsers, suspendUser, activateUser } from "@/app/actions/admin";
 
 export interface AdminUser {
   id: string;
@@ -40,15 +37,12 @@ export interface AdminUsersClientProps {
   /** Pre-fetched first page rendered by the RSC shell. */
   initialUsers: AdminUser[];
   initialTotal: number;
-  /** WorkOS access token, forwarded as a Bearer for subsequent worker fetches. */
-  accessToken: string;
   pageSize?: number;
 }
 
 export default function AdminUsersClient({
   initialUsers,
   initialTotal,
-  accessToken,
   pageSize = 20,
 }: AdminUsersClientProps) {
   const limit = pageSize;
@@ -72,32 +66,22 @@ export default function AdminUsersClient({
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        limit: limit.toString(),
-        offset: ((page - 1) * limit).toString(),
+      const data = await fetchAdminUsers({
+        limit,
+        offset: (page - 1) * limit,
+        search: search || undefined,
       });
-      if (search) {
-        params.set("search", search);
-      }
-
-      const response = await fetch(`${API_URL}/api/admin/users?${params}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data.users || []);
-        setTotalPages(Math.max(1, Math.ceil((data.total || 0) / limit)));
-      }
+      setUsers(data.users);
+      setTotalPages(Math.max(1, Math.ceil(data.total / limit)));
     } catch (error) {
       console.error("Failed to fetch users:", error);
     } finally {
       setLoading(false);
     }
-  }, [accessToken, limit, page, search]);
+  }, [limit, page, search]);
 
   // Skip the first effect run: initial data is already in state from props.
-  // Only fetch when the user changes search / page / accessToken.
+  // Only fetch when the user changes search / page.
   const [hasMounted, setHasMounted] = useState(false);
   useEffect(() => {
     if (!hasMounted) {
@@ -109,10 +93,11 @@ export default function AdminUsersClient({
 
   async function handleAction(userId: string, action: "suspend" | "activate") {
     try {
-      await fetch(`${API_URL}/api/admin/users/${userId}/${action}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      if (action === "suspend") {
+        await suspendUser(userId);
+      } else {
+        await activateUser(userId);
+      }
       fetchUsers();
     } catch (error) {
       console.error(`Failed to ${action} user:`, error);

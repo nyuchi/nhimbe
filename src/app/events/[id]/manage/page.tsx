@@ -48,14 +48,16 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
-  findEvent,
   deleteEvent,
-  getEventRegistrations,
-  updateRegistrationStatus,
-  checkinRegistration,
   type Event,
   type Registration as APIRegistration,
 } from "@/lib/api";
+import { findEventAction } from "@/app/actions/discovery";
+import {
+  getEventRegistrationsAction,
+  updateRegistrationStatusAction,
+  checkinRegistrationAction,
+} from "@/app/actions/host-registrations";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { PairKiosk } from "../kiosk/pair-kiosk";
 import { useAuth } from "@/components/auth/auth-context";
@@ -109,7 +111,7 @@ function ManageEventContent() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const eventData = await findEvent(params.id as string);
+        const eventData = await findEventAction(params.id as string);
         setEvent(eventData);
 
         if (eventData && user) {
@@ -124,7 +126,7 @@ function ManageEventContent() {
 
           // Only fetch registrations if user is owner
           if (ownerCheck) {
-            const regs = await getEventRegistrations(eventData.id);
+            const regs = await getEventRegistrationsAction(eventData.id);
             const formattedRegs: Registration[] = regs.map((r: APIRegistration) => ({
               id: r.id,
               name: r.userName || "Unknown User",
@@ -216,8 +218,7 @@ function ManageEventContent() {
 
   const handleApprove = async (id: string) => {
     try {
-      const token = await tokenOrThrow();
-      await updateRegistrationStatus(id, "approved", token);
+      await updateRegistrationStatusAction(id, "approved");
       setRegistrations((prev) =>
         prev.map((r) => (r.id === id ? { ...r, status: "approved" } : r))
       );
@@ -230,8 +231,7 @@ function ManageEventContent() {
 
   const handleReject = async (id: string) => {
     try {
-      const token = await tokenOrThrow();
-      await updateRegistrationStatus(id, "rejected", token);
+      await updateRegistrationStatusAction(id, "rejected");
       setRegistrations((prev) =>
         prev.map((r) => (r.id === id ? { ...r, status: "rejected" } : r))
       );
@@ -254,8 +254,7 @@ function ManageEventContent() {
       prev.map((r) => (r.id === id ? { ...r, checkedIn: !r.checkedIn } : r))
     );
     try {
-      const token = await tokenOrThrow();
-      await checkinRegistration(event.id, id, token);
+      await checkinRegistrationAction(event.id, id);
       toast.success("Checked in");
     } catch (error) {
       // Roll back the optimistic flip on failure so the UI matches the server.

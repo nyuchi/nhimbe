@@ -6,7 +6,8 @@ import { Search, MapPin, Clock, ArrowRight, Loader2, X, Sparkles } from "lucide-
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getEvents, getCategories, type Event, type Category } from "@/lib/api";
+import { type Event, type Category } from "@/lib/api";
+import { getEventsAction, getCategoriesAction } from "@/app/actions/discovery";
 import { searchEventsAction } from "@/app/actions/search";
 
 export default function SearchPage() {
@@ -27,8 +28,8 @@ export default function SearchPage() {
     async function fetchData() {
       try {
         const [eventsResponse, categoriesData] = await Promise.all([
-          getEvents({ limit: 100 }),
-          getCategories(),
+          getEventsAction({ limit: 100 }),
+          getCategoriesAction(),
         ]);
         setEvents(eventsResponse.events);
         setCategories(categoriesData);

@@ -22,12 +22,13 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { AuthGuard } from "@/components/auth/auth-guard";
-import { useAuth } from "@/components/auth/auth-context";
+import { findEventAction } from "@/app/actions/discovery";
 import {
-  getEventById,
-  getEventRegistrations,
-  checkinRegistration,
-  getCheckinStats,
+  getEventRegistrationsAction,
+  checkinRegistrationAction,
+  getCheckinStatsAction,
+} from "@/app/actions/host-registrations";
+import {
   type Event,
   type Registration,
   type CheckinStats,
@@ -35,7 +36,6 @@ import {
 
 function HostKioskContent() {
   const { id } = useParams<{ id: string }>();
-  const { accessToken, getAccessToken } = useAuth();
   const [event, setEvent] = useState<Event | null>(null);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [stats, setStats] = useState<CheckinStats | null>(null);
@@ -49,11 +49,11 @@ function HostKioskContent() {
   const loadData = useCallback(async () => {
     try {
       const [eventData, regs, checkinStats] = await Promise.all([
-        getEventById(id),
-        getEventRegistrations(id),
-        getCheckinStats(id),
+        findEventAction(id),
+        getEventRegistrationsAction(id),
+        getCheckinStatsAction(id),
       ]);
-      if (eventData) setEvent(eventData.event);
+      if (eventData) setEvent(eventData);
       setRegistrations(regs);
       setStats(checkinStats);
     } catch {
@@ -70,8 +70,8 @@ function HostKioskContent() {
     const interval = setInterval(async () => {
       try {
         const [regs, checkinStats] = await Promise.all([
-          getEventRegistrations(id),
-          getCheckinStats(id),
+          getEventRegistrationsAction(id),
+          getCheckinStatsAction(id),
         ]);
         setRegistrations(regs);
         setStats(checkinStats);
@@ -93,9 +93,7 @@ function HostKioskContent() {
       if (checking) return;
       setChecking(registration.id);
       try {
-        const token = accessToken ?? (await getAccessToken());
-        if (!token) throw new Error("Sign in required");
-        await checkinRegistration(id, registration.id, token);
+        await checkinRegistrationAction(id, registration.id);
         setLastCheckin({
           name: registration.userName || "Guest",
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -109,7 +107,7 @@ function HostKioskContent() {
           )
         );
         // Refresh stats
-        const checkinStats = await getCheckinStats(id);
+        const checkinStats = await getCheckinStatsAction(id);
         setStats(checkinStats);
       } catch {
         // Error handled silently — the button state resets

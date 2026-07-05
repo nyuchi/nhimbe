@@ -29,7 +29,13 @@ import { EventVenueCard } from "./event-venue-card";
 import { EventPolls } from "./event-polls";
 import { EventCampfire } from "./event-campfire";
 import { useAuth } from "@/components/auth/auth-context";
-import { getUserReferralCode, generateUserReferralCode, getEventStats, getEventReviews, type UserReferralCode, type EventStats, type ReviewStats } from "@/lib/api";
+import { type UserReferralCode, type EventStats, type ReviewStats } from "@/lib/api";
+import {
+  getUserReferralCodeAction,
+  generateUserReferralCodeAction,
+  getEventStatsAction,
+  getEventReviewsAction,
+} from "@/app/actions/engagement";
 import type { Event } from "@/lib/api";
 import { useSaveEvent } from "@/lib/use-save-event";
 
@@ -74,7 +80,7 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
 
   useEffect(() => {
     const controller = new AbortController();
-    getEventStats(event.id).then(data => {
+    getEventStatsAction(event.id).then(data => {
       if (!controller.signal.aborted) setStats(data);
     }).catch(() => {});
     return () => controller.abort();
@@ -82,7 +88,7 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
 
   useEffect(() => {
     const controller = new AbortController();
-    getEventReviews(event.id).then(r => {
+    getEventReviewsAction(event.id).then(r => {
       if (!controller.signal.aborted) setReviewStats(r.stats);
     }).catch(() => {});
     return () => controller.abort();
@@ -92,9 +98,9 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
     async function fetchReferralCode() {
       if (!user?.id) return;
       try {
-        let referral = await getUserReferralCode(user.id);
+        let referral = await getUserReferralCodeAction(user.id);
         if (!referral) {
-          const result = await generateUserReferralCode(user.id);
+          const result = await generateUserReferralCodeAction(user.id);
           referral = { code: result.code, totalReferrals: 0, totalConversions: 0 };
         }
         setUserReferral(referral);

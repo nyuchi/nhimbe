@@ -6,7 +6,8 @@ import { ChevronLeft, ChevronRight, MapPin, Loader2, Moon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MoonPhase } from "@/components/ui/moon-phase";
-import { getEvents, type Event } from "@/lib/api";
+import { type Event } from "@/lib/api";
+import { getEventsAction } from "@/app/actions/discovery";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -26,7 +27,7 @@ export default function CalendarPage() {
   useEffect(() => {
     async function fetchEvents() {
       try {
-        const response = await getEvents({ limit: 100 });
+        const response = await getEventsAction({ limit: 100 });
         setEvents(response.events);
       } catch (error) {
         console.error("Failed to fetch events:", error);

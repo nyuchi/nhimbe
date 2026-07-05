@@ -9,7 +9,8 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { Badge } from "@/components/ui/badge";
 import { EventCard } from "@/components/ui/event-card";
 import { CityDropdown } from "@/components/ui/city-dropdown";
-import { getEvents, getCategories, getCities, type Event, type Category } from "@/lib/api";
+import { type Event, type Category } from "@/lib/api";
+import { getEventsAction, getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
 import { LocationPrompt } from "@/components/prompts/location-prompt";
 import { InterestsPrompt } from "@/components/prompts/interests-prompt";
 
@@ -39,9 +40,9 @@ export function EventsClient({ initialEvents, initialCategories, initialCities }
       setLoading(true);
       try {
         const [eventsResponse, categoriesData, citiesData] = await Promise.all([
-          getEvents({ limit: 100 }),
-          getCategories(),
-          getCities(),
+          getEventsAction({ limit: 100 }),
+          getCategoriesAction(),
+          getCitiesAction(),
         ]);
         setEvents(eventsResponse.events);
         setCategories(categoriesData);

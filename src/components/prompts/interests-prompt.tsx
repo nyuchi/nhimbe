@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { X, Sparkles, Loader2 } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
-import { getCategories, type Category } from "@/lib/api";
+import { type Category } from "@/lib/api";
+import { getCategoriesAction } from "@/app/actions/discovery";
 import { updateMyProfile } from "@/app/actions/profile";
 import { Button } from "@/components/ui/button";
 
@@ -24,7 +25,7 @@ export function InterestsPrompt() {
   }, []);
 
   useEffect(() => {
-    getCategories().then(setCategories).catch(() => {});
+    getCategoriesAction().then(setCategories).catch(() => {});
   }, []);
 
   if (!isAuthenticated || (user?.interests && user.interests.length > 0) || dismissed) return null;

@@ -315,9 +315,9 @@ describe('trackEventView', () => {
 // ============================================
 
 describe('getMediaUrl', () => {
-  it('returns base URL without options', () => {
+  it('returns the assets-bucket URL without options', () => {
     const url = getMediaUrl('my-image.jpg');
-    expect(url).toBe(`${API_URL}/api/media/my-image.jpg`);
+    expect(url).toBe('https://assets-s001.mukoko.com/my-image.jpg');
   });
 
   it('adds width parameter', () => {
@@ -344,7 +344,7 @@ describe('getMediaUrl', () => {
 
   it('omits query string when options are empty', () => {
     const url = getMediaUrl('img.jpg', {});
-    expect(url).toBe(`${API_URL}/api/media/img.jpg`);
+    expect(url).toBe('https://assets-s001.mukoko.com/img.jpg');
   });
 });
 

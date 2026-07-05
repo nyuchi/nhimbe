@@ -5,7 +5,8 @@ import { Star, MessageSquare, ThumbsUp, Loader2 } from "lucide-react";
 import { Rating } from "@/components/ui/rating";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getEventReviews, markReviewHelpful, type EventReview as ApiReview, type ReviewStats } from "@/lib/api";
+import { type EventReview as ApiReview, type ReviewStats } from "@/lib/api";
+import { getEventReviewsAction, markReviewHelpfulAction } from "@/app/actions/engagement";
 import { useAuth } from "@/components/auth/auth-context";
 
 interface Review {
@@ -55,7 +56,7 @@ export function EventRatings({
   useEffect(() => {
     async function fetchReviews() {
       try {
-        const data = await getEventReviews(eventId);
+        const data = await getEventReviewsAction(eventId);
         // Transform API data to component format
         const transformedReviews: Review[] = data.reviews.map((r) => ({
           id: r.id,
@@ -101,7 +102,7 @@ export function EventRatings({
         if (!token) {
           throw new Error("Sign in required");
         }
-        await markReviewHelpful(reviewId, token);
+        await markReviewHelpfulAction(reviewId);
       } catch {
         // Revert on failure
         setHelpfulClicked((prev) => {

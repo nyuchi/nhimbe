@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Loader2, Monitor, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { confirmKioskPairing } from "@/lib/api";
+import { confirmKioskPairingAction } from "@/app/actions/kiosk";
 
 interface PairKioskProps {
   eventId: string;
@@ -26,7 +26,7 @@ export function PairKiosk({ eventId }: PairKioskProps) {
     setLoading(true);
     setError(null);
     try {
-      const result = await confirmKioskPairing(trimmed, eventId);
+      const result = await confirmKioskPairingAction(trimmed, eventId);
       setSuccess(result.eventName);
       setCode("");
     } catch (err) {

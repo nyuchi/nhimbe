@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { Trophy, Users, Share2, Crown, Medal, Award, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getEventReferralLeaderboard, type ReferralLeaderboardEntry } from "@/lib/api";
+import { type ReferralLeaderboardEntry } from "@/lib/api";
+import { getEventReferralLeaderboardAction } from "@/app/actions/engagement";
 
 interface Referrer {
   id: string;
@@ -38,7 +39,7 @@ export function ReferralLeaderboard({
   useEffect(() => {
     async function fetchLeaderboard() {
       try {
-        const data = await getEventReferralLeaderboard(eventId);
+        const data = await getEventReferralLeaderboardAction(eventId);
         setLeaderboard(data);
       } catch (error) {
         console.error("Failed to fetch referral leaderboard:", error);

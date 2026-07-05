@@ -20,10 +20,11 @@ import {
   Mail,
   Calendar,
 } from "lucide-react";
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://mukoko-nhimbe-api.nyuchi.workers.dev";
+import {
+  fetchAdminSupport,
+  updateSupportTicketStatus,
+  replyToSupportTicket,
+} from "@/app/actions/admin";
 
 export interface TicketMessage {
   id: string;
@@ -53,14 +54,12 @@ export interface SupportTicketRow {
 export interface AdminSupportClientProps {
   initialTickets: SupportTicketRow[];
   initialTotal: number;
-  accessToken: string;
   pageSize?: number;
 }
 
 export default function AdminSupportClient({
   initialTickets,
   initialTotal,
-  accessToken,
   pageSize = 20,
 }: AdminSupportClientProps) {
   const limit = pageSize;
@@ -81,32 +80,21 @@ export default function AdminSupportClient({
   const fetchTickets = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        limit: limit.toString(),
-        offset: ((page - 1) * limit).toString(),
+      const data = await fetchAdminSupport({
+        limit,
+        offset: (page - 1) * limit,
+        search: search || undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
       });
-      if (search) {
-        params.set("search", search);
-      }
-      if (statusFilter !== "all") {
-        params.set("status", statusFilter);
-      }
-
-      const response = await fetch(`${API_URL}/api/admin/support?${params}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTickets(data.tickets || []);
-        setTotalPages(Math.max(1, Math.ceil((data.total || 0) / limit)));
-      }
+      // Support tickets aren't modelled in v3.1 yet — always an empty page.
+      setTickets(data.items);
+      setTotalPages(Math.max(1, Math.ceil(data.total / limit)));
     } catch (error) {
       console.error("Failed to fetch tickets:", error);
     } finally {
       setLoading(false);
     }
-  }, [accessToken, limit, page, search, statusFilter]);
+  }, [limit, page, search, statusFilter]);
 
   // Initial render uses props; only re-fetch on user-driven changes.
   const [hasMounted, setHasMounted] = useState(false);
@@ -123,14 +111,7 @@ export default function AdminSupportClient({
     newStatus: "open" | "pending" | "resolved"
   ) {
     try {
-      await fetch(`${API_URL}/api/admin/support/${ticketId}/status`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
+      await updateSupportTicketStatus(ticketId, newStatus);
       fetchTickets();
       if (selectedTicket?.id === ticketId) {
         setSelectedTicket({ ...selectedTicket, status: newStatus });
@@ -145,14 +126,7 @@ export default function AdminSupportClient({
 
     setSending(true);
     try {
-      await fetch(`${API_URL}/api/admin/support/${selectedTicket.id}/reply`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ content: replyText }),
-      });
+      await replyToSupportTicket(selectedTicket.id, replyText);
 
       // Add message locally
       const newMessage: TicketMessage = {
