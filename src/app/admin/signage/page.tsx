@@ -16,8 +16,6 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
-  getEvents,
-  getCommunityStats,
   requestKioskPairing,
   getKioskPairingStatus,
   getKioskSession,
@@ -25,6 +23,7 @@ import {
   type CommunityStats,
   type KioskSession,
 } from "@/lib/api";
+import { getEventsAction, getCommunityStatsAction } from "@/app/actions/discovery";
 
 type Orientation = "horizontal" | "vertical";
 
@@ -183,8 +182,8 @@ function AdminDashboard() {
   const loadData = useCallback(async () => {
     try {
       const [eventsData, statsData] = await Promise.all([
-        getEvents({ limit: 20 }),
-        getCommunityStats().catch(() => null),
+        getEventsAction({ limit: 20 }),
+        getCommunityStatsAction().catch(() => null),
       ]);
       setEvents(eventsData.events);
       if (statsData) setStats(statsData);

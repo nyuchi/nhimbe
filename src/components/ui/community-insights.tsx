@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { TrendingUp, Users, MapPin, Clock, Flame, Loader2 } from "lucide-react";
 import { StatsCard } from "@/components/ui/stats-card";
 import { Badge } from "@/components/ui/badge";
-import { getCommunityStats, type CommunityStats } from "@/lib/api";
+import { type CommunityStats } from "@/lib/api";
+import { getCommunityStatsAction } from "@/app/actions/discovery";
 
 interface TrendingCategory {
   name: string;
@@ -39,7 +40,7 @@ export function CommunityInsights({
   useEffect(() => {
     async function fetchStats() {
       try {
-        const data = await getCommunityStats(city);
+        const data = await getCommunityStatsAction(city);
         setStats(data);
       } catch (error) {
         console.error("Failed to fetch community stats:", error);
@@ -209,7 +210,7 @@ export function CommunityInsightsCompact({ city, className = "" }: { city?: stri
   useEffect(() => {
     async function fetchStats() {
       try {
-        const data = await getCommunityStats(city);
+        const data = await getCommunityStatsAction(city);
         setStats(data);
       } catch (error) {
         console.error("Failed to fetch community stats:", error);
