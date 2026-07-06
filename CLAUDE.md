@@ -4,244 +4,158 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**nhimbe** (pronounced /ˈnhimbɛ/) — community events discovery and management platform, part of the Mukoko ecosystem. Full-stack monorepo: Next.js 16 frontend (Vercel) + Cloudflare Workers backend (Hono, Vectorize, Workers AI, R2, KV) backed by Supabase Postgres (via PostgREST) and the api.mukoko.com FastAPI gateway. Auth is WorkOS AuthKit end-to-end.
+**nhimbe** (pronounced /ˈnhimbɛ/) — community events discovery and management platform, part of the Mukoko ecosystem. It is a single full-stack **Next.js 16** app (App Router, React 19, TypeScript strict, Tailwind v4) deployed on **Vercel** — there is no separate application backend. Data lives in **MongoDB** (the Mukoko v3.1 cluster) and is read/written **server-side only** via the official `mongodb` driver. Auth is **WorkOS AuthKit** end-to-end. AI ("Shamwari") runs through the **Cloudflare AI Gateway**; media is stored in **Cloudflare R2**.
+
+Legacy note: the repo still contains a `worker/` directory (the retired Cloudflare Worker REST backend). It is **not** part of the running app — see "Cloudflare Worker (future MCP)" below. Ignore it for feature work unless explicitly building the MCP server.
 
 ## Build & Dev Commands
 
 ```bash
-# Frontend (root directory)
-npm install && npm run dev          # Dev server at http://localhost:3000
-npm run build                       # Production build (Next.js)
-npm run lint                        # ESLint
+# From the repo root
+npm install
+npm run dev          # Dev server at http://localhost:11825
+npm run build        # Production build (Next.js)
+npm run lint         # ESLint
 
-# Backend (worker/ directory)
-cd worker && npm install && npm run dev   # Dev server at http://localhost:8787
-cd worker && npm run deploy               # Deploy to Cloudflare
-cd worker && npx tsc --noEmit             # Type check worker (production code only)
-
-# Tests (Vitest for both)
-npx vitest run                      # Frontend tests (from root)
-npx vitest run src/lib/api.test.ts  # Single frontend test file
-cd worker && npx vitest run         # Backend tests
-cd worker && npx vitest run src/__tests__/auth.test.ts  # Single backend test file
-
-# Database migrations
-# Owned by the nyuchi_platform_db Supabase project, not nhimbe — apply via
-# the Supabase MCP (`apply_migration`) or `supabase db push` from that repo.
-# This repo only reads/writes via PostgREST in `worker/src/db/supabase.ts`.
+# Tests (Vitest)
+npm run test         # Watch mode
+npm run test:run     # Run once (~212 tests)
+npm run test:coverage
+npx vitest run src/lib/api.test.ts   # Single test file
 ```
+
+Database: MongoDB collections/validators are owned by the Mukoko platform, not this repo. nhimbe only reads/writes documents via the `mongodb` driver (`src/lib/mongo/`). There are no migrations in this repo.
 
 ## CI Pipeline
 
-GitHub Actions (`.github/workflows/ci.yml`) runs 4 parallel jobs on every push to any branch:
+GitHub Actions:
 
-1. **Lint & Build** — `npm run lint` + `npm run build` (placeholder env vars)
-2. **Frontend Tests** — `npm run test:run`
-3. **Worker Tests** — `cd worker && npx vitest run`
-4. **Worker Type Check** — `cd worker && npx tsc --noEmit`
+- **`lint.yml`** — org reusable lint workflow (actionlint, JSON validity, prettier, markdownlint, yamllint).
+- **`ci.yml`** — Lint & Build (`npm run lint` + `npm run build` with placeholder env vars) and Frontend Tests (`npm run test:run`). Worker jobs remain only while the legacy `worker/` directory exists.
+- **CodeQL** — security scanning.
 
-All 4 must pass. The build uses placeholder env vars so `NEXT_PUBLIC_*` values don't need real secrets. (The migration-validation job was retired when D1 migrations moved out of this repo to nyuchi_platform_db.)
+Vercel builds and deploys every commit (preview per branch, production on `main`).
 
 ## Architecture
 
-### Frontend → Backend Communication
+### SSR-first, MongoDB server-side
 
-All frontend API calls go through `src/lib/api.ts` (centralized client) → Cloudflare Worker at `NEXT_PUBLIC_API_URL`. Write operations pass session JWT as `Authorization: Bearer` header.
+The default data path is **server-side rendering**: React Server Components read MongoDB directly through the driver. Examples: `src/app/page.tsx` (home), `src/app/events/page.tsx` (listing), `src/app/events/[id]/page.tsx` (detail). Writes go through **Server Actions** (`src/app/actions/`). The browser **never** connects to MongoDB — `import "server-only"` guards the Mongo layer.
 
-### Backend Routing (Hono)
+The internal API at **`nhimbe.com/api`** (route handlers in `src/app/api/`) is a same-origin **fallback** for client-triggered needs, not the primary path. `NEXT_PUBLIC_API_URL` is intentionally **unset** so `src/lib/api.ts` calls the same origin.
 
-`worker/src/index.ts` (~186 lines) is the entry point using the **Hono** framework with modular route mounting:
+**Realtime** read/sync (live engagement, kiosk pairing, QR check-in, live online-event counts) is a **future** addition — it is not viable on Vercel serverless yet, so those surfaces currently use SSR plus polling.
 
-```ts
-app.route("/api/events", events);
-app.route("/api/users", users);
-app.route("/api/payments", payments);
-```
+### MongoDB layer (`src/lib/mongo/`)
 
-Global middleware applied in `index.ts`: CORS (restricted to trusted origins), environment validation (logs missing bindings on first request), security headers (HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy), observability (request IDs + structured logging), rate limiting (all API endpoints), error handling (generic messages — no error details leaked), 404 handler, and queue consumer.
+Connection lives in `client.ts` — a cached `MongoClient` (no caching of rejected connection promises). Documents follow the Mukoko v3.1 conventions: string-UUID `_id`, `_schemaVersion`, camelCase fields, BSON dates, and JSON-Schema validators enforced by the cluster.
 
-**18 route modules** in `worker/src/routes/`:
+| File                    | Purpose                                                                 |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `client.ts`             | Cached `MongoClient` connection (`server-only`)                         |
+| `databases.ts`          | `DB` database-name map + typed collection accessors                     |
+| `events.ts`             | Event reads/writes                                                      |
+| `lookups.ts`            | Categories, cities, community stats                                     |
+| `engagement.ts`         | Reviews, ratings, referrals, tracked links (global engagement)          |
+| `stats.ts`              | Aggregated analytics                                                    |
+| `kiosk.ts`              | Kiosk/device pairing                                                    |
+| `host-registrations.ts` | Host-side registration reads                                            |
+| `admin.ts`              | Admin dashboard queries                                                 |
+| `entities.ts`           | Host entities and memberships                                           |
+| `users.ts`              | `identity.persons` (WorkOS user mirror)                                 |
+| `mappers.ts`            | Mongo doc → schema.org-aligned API shape (with `mappers.test.ts`)       |
+| `search.ts`             | Atlas `$vectorSearch` retrieval over `events.eventEmbeddings`           |
+| `types.ts`, `ids.ts`    | Doc types; ID/short-code/slug generation                               |
 
-| Route Module       | Endpoints                                                                                                                 |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| `events.ts`        | Event CRUD, list, filtering, cancel, CSV export                                                                           |
-| `admin.ts`         | Admin dashboard, user suspend/activate, growth metrics                                                                    |
-| `health.ts`        | Health checks, system probes for Supabase/Vectorize/R2/KV                                                                 |
-| `users.ts`         | User sync (WorkOS → identity.person), profile management, onboarding, account deletion (soft delete via `role='deleted'`) |
-| `links.ts`         | Short-link resolver (`/api/links/:shortCode` → event/series target)                                                       |
-| `registrations.ts` | Event registrations (atomic capacity checks, race condition prevention)                                                   |
-| `stats.ts`         | Community stats, peak time calculation, event analytics                                                                   |
-| `media.ts`         | Image upload to R2 (10MB limit)                                                                                           |
-| `search.ts`        | RAG search via Vectorize                                                                                                  |
-| `categories.ts`    | Category listing (DB-only), cities (derived from published events)                                                        |
-| `ai.ts`            | AI routes (assistant, description generator) with prompt injection detection                                              |
-| `referrals.ts`     | Referral tracking (writeAuth protected)                                                                                   |
-| `reviews.ts`       | Event reviews (writeAuth protected)                                                                                       |
-| `series.ts`        | Recurring event series CRUD (RRULE support)                                                                               |
-| `waitlist.ts`      | Waitlist join/leave/list (auth-protected)                                                                                 |
-| `checkin.ts`       | QR-based check-in and attendance stats                                                                                    |
-| `kiosk.ts`         | TV-style kiosk pairing (6-char codes), session management for on-site check-in and digital signage                        |
-| `payments.ts`      | Payment intents, Paynow webhooks (HMAC-SHA512 verified), status checks                                                    |
+Databases (`DB` map): `events`, `identity`, `entity`, `engagement`, `places`, `circles`, `device`, `wallet`, `system`.
 
-### Middleware (`worker/src/middleware/`)
+### Data model (entity-centric hosting)
 
-- `auth.ts` — JWT extraction, validation, timing-safe API key comparison
-- `observability.ts` — Request ID generation and structured logging
-- `rate-limit.ts` — Rate limiting for all API endpoints (100 req/min)
-- `ai-safety.ts` — Prompt injection detection, input sanitization, max length enforcement
-- `index.ts` — Barrel export for auth middleware (`writeAuth`, `apiKeyRequired`, `getAdminUser`, `isAllowedOrigin`, `validateApiKey`)
+Hosting is **entity-centric**: `events.events.primaryHostEntityId` → `entity.entities` → `identity.persons` (via memberships / `founderPersonId`). Places live in `places.places`; Kraal community circles in `circles.*`.
 
-### Utils (`worker/src/utils/`)
+### Engagement (global cross-platform substrate)
 
-- `ids.ts` — ID generation (short codes, slugs)
-- `response.ts` — Consistent JSON response formatting
-- `validation.ts` — Input validation schemas
-- `timeout.ts` — Request timeout handling
-- `circuit-breaker.ts` — Netflix Hystrix-inspired circuit breaker (CLOSED→OPEN→HALF_OPEN). Wraps `ai/search.ts` (Vectorize + Workers AI) and `supabaseFetch()` (via `withCircuitBreakerThrow`, opens at 5 transient failures, 30s cooldown). `CircuitOpenError` surfaces as HTTP 503 in the global error handler instead of a generic 500.
-- `retry.ts` — Exponential backoff with jitter. Wired into `supabaseFetch()` for the GET path only (writes are not retried to avoid duplicate POST/PATCH/DELETE side effects). Retries 502/503/504 and network failures up to 2 attempts.
-- `observability.ts` — Backend structured logging with `[mukoko]` prefix
-- `audit.ts` — Audit logging to the `system.activity_logs` table on Supabase
-- `export.ts` — CSV export with proper escaping
-- `index.ts` — Barrel export for common utilities
+`engagement.*` collections (reviews, ratings, referrals, comments, reactions, trackedLinks, …) are **shared across all Mukoko products**, not owned by nhimbe. Event-scoped queries filter by `targetReferenceType: "event"` and `targetProductId: <eventId>`. Engagement primitives (reviews, likes/reactions, saves, comments) are universal across content types; **events additionally add RSVPs and check-ins**. **End-to-end encryption is disabled** — reviews/ratings carry plaintext bodies.
 
-### Database adapter (`worker/src/db/`)
+### Server Actions (`src/app/actions/`)
 
-- `supabase.ts` — Thin `supabaseFetch()` helper that wraps PostgREST calls with the secret key, request ID propagation, and consistent error handling. All route modules use this instead of a raw fetch.
-- `event_mapper.ts` — Maps Postgres row shapes (snake_case) to the schema.org-aligned API shapes (`Event`, etc.) consumed by the frontend.
+Mutations and client-invoked reads: `auth`, `events`, `discovery`, `my-events`, `registrations`, `host-registrations`, `host-entities`, `host-card`, `kiosk`, `admin`, `engagement`, `saves`, `waitlist`, `search`, `profile`, `circles`, `circle-detail`, `campfire`, `places`, `map-places`, `polls`, `programme`, `badges`, `ai`.
 
-### Queues (`worker/src/queues/`)
+### Route Handlers (`src/app/api/`)
 
-- `handlers.ts` — Queue message processors for analytics and email background jobs (consumed in `index.ts`)
+Same-origin fallback endpoints: `events`, `events/[id]`, `categories`, `cities`, `community/stats`, `og` (OG image), `auth/*`.
 
-### Email (`worker/src/email/`)
+### Authentication Flow (WorkOS AuthKit)
 
-- `resend.ts` — Fetch-based Resend API client (no SDK, Workers-compatible)
-- `templates.ts` — 5 email templates: registration confirmed, event reminder, event cancelled, host new registration, registration cancelled
-- `triggers.ts` — Queue message producers for each email type
+- `src/proxy.ts` — Next.js 16 proxy (was middleware in <=15); manages AuthKit session cookies.
+- `withAuth()` from `@workos-inc/authkit-nextjs` gives server components/actions the current user.
+- Server actions sync the WorkOS user into `identity.persons` (upsert on WorkOS user id).
+- `src/lib/auth/dev.ts` — local dev auth bypass.
+- `/callback` is the canonical post-auth landing; `/authenticate` is a legacy redirect → `/`.
 
-### Payments (`worker/src/payments/`)
+### AI — Shamwari (`src/lib/ai/`)
 
-- `types.ts` — PaymentProvider interface abstraction
-- `paynow.ts` — Paynow provider for Zimbabwean mobile money (EcoCash, OneMoney, Telecash) with HMAC-SHA512 webhook signature validation (timing-safe comparison)
+AI runs through the **Cloudflare AI Gateway** (server-side only, `src/lib/ai/gateway.ts`):
 
-### Authentication Flow
+- **Generation**: Qwen (`@cf/qwen/qwen3-30b-a3b-fp8`) — powers the description wizard (`src/app/actions/ai.ts`) and the Shamwari assistant.
+- **Embeddings**: BGE (`@cf/baai/bge-base-en-v1.5`, 768-dim).
+- **Retrieval**: MongoDB **Atlas Vector Search** — `$vectorSearch` over `events.eventEmbeddings` (`src/lib/mongo/search.ts`, index `event_vector_index`). Event embedding maintenance in `src/lib/ai/event-index.ts`.
 
-1. Frontend uses **WorkOS AuthKit** (`@workos-inc/authkit-nextjs`). Session cookies are managed by the AuthKit proxy at `proxy.ts` (Next.js 16+ proxy, was middleware in <=15). The provider component lives at `src/components/auth/workos-provider.tsx`.
-2. After sign-in, AuthKit returns the user to `/callback`, which exchanges the auth code for a session. `AuthProvider` (`src/components/auth/auth-context.tsx`) then calls the worker's `/api/users/me/sync` endpoint with the WorkOS access token.
-3. Backend validates the access token locally using WorkOS's public JWKS at `https://api.workos.com/sso/jwks/{WORKOS_CLIENT_ID}` (`worker/src/auth/workos.ts`). The issuer must be `https://api.workos.com` and the audience must contain `WORKOS_CLIENT_ID`. No WorkOS API secret is needed for the per-request path; the JWKS is cached for 1 hour.
-4. `getAuthenticatedUser()` returns `AuthResult` with structured `failureReason` (e.g., `token_expired`, `issuer_mismatch`, `audience_mismatch`, `jwks_fetch_failed`, `invalid_signature`).
-5. If user-sync fails, the user stays logged out (no fallback user creation).
-6. **Suspended user enforcement**: user-sync checks `identity.person.role` — suspended/deleted users get 403 with `reason: "account_suspended"`.
+Env: `SHAMWARI_AI_GATEWAY_URL`, `SHAMWARI_AI_GATEWAY_TOKEN`, and optional `SHAMWARI_AI_GATEWAY_AUTH_TOKEN` (only for the authenticated gateway).
 
-`src/app/authenticate/page.tsx` is a compatibility redirect for old magic-link emails that pointed at the Stytch flow — it now sends users to `/`. The canonical post-auth landing is `/callback`.
+### Storage — Cloudflare R2
 
-### Write Operation Authorization
+Media lives in the **shared** Mukoko bucket `mukoko-storage`, served at `assets-s001.mukoko.com` (`getMediaUrl` in `src/lib/api.ts`, overridable via `NEXT_PUBLIC_ASSETS_URL`) — **not** a per-app silo. Reads need no credentials. Uploads require an R2 S3 token (pending).
 
-Protected endpoints use either:
+### Cloudflare Worker (future MCP)
 
-- **JWT auth** via `getAuthenticatedUser()` for user-specific operations (onboarding, profile)
-- **writeAuth middleware** — Origin check via `isAllowedOrigin()` OR API key via `X-API-Key` header (timing-safe comparison)
-
-Trusted domains are hardcoded in the worker: `nyuchi.com`, `mukoko.com`, `nhimbe.com` and all subdomains are always allowed.
-
-### AI Features (`worker/src/ai/`)
-
-- **RAG Search** (`search.ts`): BGE-base-en-v1.5 embeddings → Cloudflare Vectorize → Llama 3.1 8B summaries
-- **AI Assistant** (`assistant.ts`): "Shamwari" chat interface
-- **Description Wizard** (`description-generator.ts`): Qwen 3 30B generation
-- **Embeddings** (`embeddings.ts`): Shared embedding utilities
-- **AI Safety** (`middleware/ai-safety.ts`): Prompt injection detection on all AI routes
-
-### Resilience Patterns (Mukoko Registry — Nyuchi architecture L5 / L8)
-
-- **Circuit Breaker** (`worker/src/utils/circuit-breaker.ts`) — Per-provider configs for vectorize, ai, r2. **Note**: Supabase REST calls are not yet wrapped.
-- **Retry with Backoff** (`worker/src/utils/retry.ts`) — Exponential backoff with jitter. Wraps `supabaseFetch()` GET calls; retries `SupabaseTransientError` (502/503/504 + network failures) up to 2 attempts. Writes deliberately skip retry to avoid duplicate side effects.
-- **Structured Logging** — `[mukoko]` prefix on all log output (frontend: `src/lib/observability.ts`, backend: `worker/src/utils/observability.ts`)
-- **Section Error Boundary** (`src/components/error/section-error-boundary.tsx`) — 3-layer error boundary with retry
+The retired Worker's only **future** role is a **task-based MCP server** exposing tasks such as "events near me" and "events matching my interests", plus event create/manage functions, and returning **inline HTML** (a carousel for multiple events, a single card for one). **No MCP/agent tools are built yet.** Cloudflare is otherwise used only for R2 storage and the Shamwari AI Gateway. Supabase, PostgREST, and any dependency on `api.mukoko.com` have been removed from the app (the mukoko gateway integration is still in progress).
 
 ## Frontend Structure
 
 ### Pages (`src/app/`)
 
-- Home, events (create/detail/manage), my-events, profile, admin (events/users/settings/signage/support)
-- Auth: `/auth/signin`, `/auth/error`, `/callback` (WorkOS post-auth landing), `/authenticate` (legacy Stytch redirect → `/`)
-- Info: search, calendar, about, help, privacy, terms
-- Short links: `/e/[shortCode]` (events), `/r/[code]` (referral tracking)
-- Kraal (community circles linked to events): `/kraal`, `/kraal/[id]`
-- Signage: `/signage` (TV/kiosk display mode)
-- Event sub-pages: `/events/[id]/kiosk` (on-site check-in), `/events/[id]/signage` (digital signage display)
-- SEO: `robots.ts`, `sitemap.ts` for search engine optimization
+- Home (`page.tsx` + `home-client.tsx`), events (create/detail/manage), my-events, profile, map, admin.
+- Auth: `/auth/*`, `/callback` (WorkOS post-auth landing), `/authenticate` (legacy redirect → `/`).
+- Info: search, calendar, about, help, privacy, terms.
+- Short links: `/e/[shortCode]` (events), `/r/[code]` (referral tracking).
+- Kraal (community circles): `/kraal`, `/kraal/[id]`.
+- Signage/kiosk: `/signage`, plus event sub-pages `/events/[id]/kiosk` and `/events/[id]/signage`.
+- SEO: `robots.ts`, `sitemap.ts`; error boundaries `error.tsx`, `global-error.tsx`, `not-found.tsx`, `loading.tsx`.
 
-### UI Component Architecture (Mukoko Registry)
+### UI Components (Mukoko Registry)
 
-**34 shadcn/Radix primitives** installed from the Mukoko registry (`registry.mukoko.com`). All components use `data-slot` attributes, CVA variants, and Radix primitives for accessibility.
-
-**Core primitives** (`src/components/ui/`): button, card, badge, input, dialog, drawer, tabs, select, dropdown-menu, separator, sheet, label, textarea, switch, toggle, scroll-area, skeleton, avatar, popover, tooltip, form, checkbox, radio-group, progress, calendar, sonner, spinner, collapsible, hover-card, navigation-menu, breadcrumb, pagination, table, toggle-group
-
-**Mukoko-exclusive components** (`src/components/ui/`): rating (interactive star rating with mineral gold accent), stats-card (metric display with trend indicators), filter-bar (horizontal chip filter with single/multi mode), status-indicator (status dot with pulse animation), timeline (composable vertical timeline with mineral dot colors), copy-button (clipboard with copied state), file-upload (drag-and-drop with validation), share-dialog (WhatsApp/X/Email sharing modal), lazy-section (TikTok-style FIFO mount queue with IntersectionObserver), detail-layout (shared detail page layout with hero/sidebar/back nav)
-
-**Composite components**: responsive-modal (Drawer on mobile / Dialog on desktop), share-button, invite-friends, event-ratings, host-reputation, referral-leaderboard, AI description wizard, address-autocomplete, QR code, popularity-badge, community-insights, city-dropdown, animated-background, gradient-background, live-region (ARIA live announcements), theme-toggle
-
-**Total**: 63 component files in `src/components/ui/` (including barrel `index.ts`)
-
-**Config**: `components.json` at root — shadcn new-york style, RSC, Tailwind v4, Lucide icons
+shadcn/Radix primitives installed from the Mukoko registry (`registry.mukoko.com`), configured in `components.json` (new-york style, RSC, Tailwind v4, Lucide icons). All primitives use `data-slot` attributes, CVA variants, and Radix for accessibility. In `src/components/ui/`: core primitives (button, card, dialog, drawer, tabs, select, form, table, …) plus Mukoko-exclusive composites (rating, stats-card, filter-bar, status-indicator, timeline, copy-button, file-upload, share-dialog, lazy-section, detail-layout, responsive-modal, share-button, QR code, community-insights, city-dropdown, theme-toggle, …).
 
 ### Components (`src/components/`)
 
-- `ui/` — 34 shadcn primitives + domain-specific composites (ratings, reputation, referrals, AI wizard)
-- `auth/` — `auth-context.tsx`, `workos-provider.tsx`, `auth-guard.tsx` + tests
-- `modals/` — ResponsiveModal-based sheets for category, date, location, capacity, description, ticketing
-- `prompts/` — Onboarding: name, location, interests
-- `layout/` — Header, footer
-- `error/` — `section-error-boundary.tsx` (Mukoko 3-layer pattern)
-- `pwa/` — Service worker registration
-- `theme-provider.tsx` (top-level) — Dark/light mode context provider
-
-### Event Form Decomposition (`src/app/events/create/`)
-
-- `create-event-form.tsx` — Main form (~377 lines)
-- `cover-image-upload.tsx` — Cover image upload with preview
-- `theme-selector.tsx` — Mineral theme picker with carousel
-- `event-options-card.tsx` — Ticketing, approval, capacity settings
-- `form-field-row.tsx` — Reusable field row component
-
-### Event Detail Decomposition (`src/app/events/[id]/`)
-
-- `event-detail-content.tsx` — Main layout (~208 lines)
-- `event-cover.tsx` — Cover image with badges, stats overlay
-- `event-sidebar.tsx` — Ticket card, insights, QR code, friends, host reputation
-- `event-actions.tsx` — Event action buttons
-- `event-map.tsx` — Map integration
-- `event-qr-code.tsx` — QR code display
-- `event-theme-wrapper.tsx` — Theme-aware wrapper
-- `event-weather.tsx` — Weather display for event location
-- `rsvp-button.tsx` — RSVP/registration button
-- `kiosk/` — On-site kiosk check-in sub-page (host pairing flow)
-- `signage/` — Digital signage display sub-page
-- `manage/` — Event management page
+- `ui/` — primitives + domain composites.
+- `auth/` — `auth-context.tsx`, `workos-provider.tsx`, `auth-guard.tsx` (+ tests).
+- `modals/` — ResponsiveModal sheets (category, date, location, capacity, description, ticketing).
+- `prompts/` — onboarding (name, location, interests).
+- `layout/` — header, footer.
+- `error/` — `section-error-boundary.tsx` (Mukoko 3-layer error boundary with retry).
+- `pwa/` — service worker registration.
+- `theme-provider.tsx` — dark/light mode context.
 
 ### Frontend Libraries (`src/lib/`)
 
-- `api.ts` — Centralized worker REST client (calls `NEXT_PUBLIC_API_URL` with the WorkOS access token as a Bearer header for writes)
-- `supabase/` — Direct Supabase access for read paths the worker doesn't proxy. `client.ts` (browser anon-key client), `server.ts` (RSC client), `api.ts` (typed read helpers — Kraal, person, etc.), `types.ts` (generated row types).
-- `calendar.ts` — Calendar/date utilities (with `calendar.test.ts`)
-- `timezone.ts` — Timezone handling utilities (with `timezone.test.ts`)
-- `fallback-chain.ts` — Fallback chain pattern for resilient data loading
-- `use-focus-trap.ts` — Focus trap hook for modal accessibility
-- `use-tracked-link.ts` — Hook to wrap `<a>` with analytics-event tracking
-- `themes.ts` — Mineral theme definitions
-- `observability.ts` — Frontend structured logging (`[mukoko]` prefix)
-- `utils.ts` — Shared utilities including `cn()` class merger (with `utils.test.ts`)
+- `api.ts` — same-origin REST client (fallback path) + `getMediaUrl`.
+- `mongo/` — server-side MongoDB layer (see above).
+- `ai/` — Shamwari gateway client + event embedding index.
+- `auth/dev.ts` — dev auth bypass.
+- `shamwari.ts` — Shamwari assistant helpers.
+- `calendar.ts`, `timezone.ts` — date/time utilities (+ tests).
+- `fallback-chain.ts` — resilient data-loading fallback pattern.
+- `use-focus-trap.ts`, `use-tracked-link.ts`, `use-save-event.ts` — hooks.
+- `themes.ts` — mineral theme definitions.
+- `observability.ts` — frontend structured logging (`[mukoko]` prefix).
+- `i18n/` — lightweight custom i18n (`t()`, `setLocale()`, `getLocale()`); English (default) + Shona.
+- `utils.ts` — shared helpers incl. `cn()` (+ tests).
 
 ### Hooks (`src/hooks/`)
 
-- `use-mobile.ts` — Viewport-based mobile detection
-- `use-toast.ts` — Toast notification dispatcher (wraps sonner)
-- `use-memory-pressure.ts` — Hint memory pressure to drop heavy renders (Lazy-section, etc.)
-
-### i18n (`src/lib/i18n/`)
-
-Lightweight custom i18n with `t()`, `setLocale()`, `getLocale()`. Languages: English (default) + Shona.
+- `use-mobile.ts`, `use-toast.ts` (wraps sonner), `use-memory-pressure.ts`.
 
 ### PWA
 
@@ -249,145 +163,67 @@ Service worker at `public/sw.js` — cache-first for static assets, network-firs
 
 ### State Management
 
-- **React Context** only — `AuthProvider` (JWT + user state), `ThemeProvider` (dark/light mode)
-- No Redux/Zustand
+React Context only — `AuthProvider` (user state) and `ThemeProvider` (dark/light). No Redux/Zustand.
 
 ## Testing
 
-### Frontend Tests (8 files, 160 tests)
-
-Tests colocate with modules (e.g., `src/lib/api.test.ts`) or live in `src/__tests__/`. Config: `vitest.config.ts` with jsdom and React plugin. Test setup: `src/__tests__/setup.ts`.
-
-- `src/lib/api.test.ts` — API client tests
-- `src/lib/utils.test.ts` — Utility function tests
-- `src/lib/calendar.test.ts` — Calendar utility tests (32 tests)
-- `src/lib/timezone.test.ts` — Timezone handling tests
-- `src/components/auth/auth-context.test.tsx` — Auth context tests (9 tests)
-- `src/components/auth/auth-guard.test.tsx` — Auth guard tests (4 tests)
-- `src/__tests__/seo.test.ts` — SEO metadata tests (25 tests)
-- `src/__tests__/accessibility.test.ts` — Accessibility compliance tests (18 tests)
-
-### Backend Tests (5 files, 124 tests)
-
-All backend tests live in `worker/src/__tests__/`. Config: `worker/vitest.config.ts` with `globals: true`.
-
-- `auth.test.ts` — Bearer extraction, WorkOS JWT structure validation, JWKS cache logic, issuer/audience checks
-- `mukoko-api.test.ts` — `mukokoApiFetch` client: machine API-key forwarding, optional user-token forwarding, error propagation
-- `validation.test.ts` — Input validation, security checks
-- `security.test.ts` — Authorization, origin checks, API key validation
-- `observability.test.ts` — Logging, request IDs, cache-key namespacing
-
-**Mock architecture** (`worker/src/__tests__/mocks.ts`) — 3 layers:
-
-- **L1: Primitives** — `createMockKV()`, `createMockR2()`, `createMockVectorize()`, `createMockAI()` (D1 mock retired with the migration)
-- **L2: Env Factory** — `createMockEnv()` combines all bindings
-- **L3: Request Builders** — `createRequest()`, `createAuthenticatedRequest()`, `createApiKeyRequest()`
-
-**Coverage debt**: PR #34 deleted `events.test.ts`, `registrations.test.ts`, `users.test.ts`, `auth-profile.test.ts`, `routes-coverage.test.ts`, `ai-layers.test.ts` because they mocked D1 internals. Rebuilding them against `supabaseFetch` (by stubbing global `fetch`) is the highest-priority post-migration testing task — priority order: registrations → users → events → payments → kiosk.
-
-**Note:** Worker test files (`__tests__/**`, `*.test.ts`, `*.spec.ts`) are excluded from `worker/tsconfig.json` so `tsc --noEmit` only checks production code.
-
-## Database
-
-**Primary: Supabase Postgres** (project `nyuchi_platform_db`, hosted at `https://tdcpuzqyoodrdsxldgsh.supabase.co`). All read/write is via PostgREST through `worker/src/db/supabase.ts` (`supabaseFetch()` helper, secret key). The frontend can also read directly via `src/lib/supabase/` clients using the publishable key (RLS-protected paths only).
-
-The schema is owned by the `nyuchi_platform_db` repo — not this one. Apply migrations via the Supabase MCP (`apply_migration`) or `supabase db push` from that repo. This repo only consumes the schema.
-
-### Schemas used by nhimbe
-
-- **identity** — `person` (WorkOS user mirror; primary key includes `workos_user_id`), roles, suspended-user flags
-- **events** — `event`, `event_series`, `category`, `event_view`, `event_circle` (Kraal linkage)
-- **engagement** — `registration`, `review`, `referral`, `waitlist`, `kiosk_pairing`
-- **payments** — `payment`, Paynow transaction state
-- **system** — `system.activity_logs` for audit trail of destructive operations
-- **search** — `search_query` (analytics), AI conversation logs
-
-### Counter-column hot spots
-
-Three counters are read-then-written through PostgREST and are race-prone under concurrency. When traffic warrants it, migrate each to a Postgres function called via `/rest/v1/rpc/`:
-
-- `events.event.attendee_count` (in `routes/registrations.ts`)
-- `events.event.view_count` (in `queues/handlers.ts`)
-- `engagement.review.helpful_count` (in `routes/reviews.ts`)
+Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/setup.ts`). Tests colocate with modules or live in `src/__tests__/`. Run with `npm run test:run` (~212 tests). Covered areas include the API client, utils, calendar/timezone, auth context/guard, SEO metadata, accessibility, and the Mongo mappers (`src/lib/mongo/mappers.test.ts`).
 
 ## Key Files
 
-| File                                              | Purpose                                                             |
-| ------------------------------------------------- | ------------------------------------------------------------------- |
-| `worker/src/index.ts`                             | Hono app entry, routing, middleware setup, env validator            |
-| `worker/src/types.ts`                             | Backend type definitions (Cloudflare bindings, Env, queue messages) |
-| `worker/src/auth/workos.ts`                       | WorkOS JWT validation with JWKS caching, `AuthResult` type          |
-| `worker/src/middleware/auth.ts`                   | Auth middleware, timing-safe API key validation                     |
-| `worker/src/middleware/ai-safety.ts`              | Prompt injection detection                                          |
-| `worker/src/utils/circuit-breaker.ts`             | Circuit breaker for external services                               |
-| `worker/src/email/`                               | Resend email client, templates, triggers                            |
-| `worker/src/payments/`                            | Payment provider abstraction (Paynow) + Mukoko API gateway client   |
-| `worker/src/db/supabase.ts`                       | PostgREST helper (`supabaseFetch()`) used by every route            |
-| `worker/src/db/event_mapper.ts`                   | Postgres row → API shape (schema.org) mapper                        |
-| `src/lib/api.ts`                                  | Worker REST client (events, registrations, etc.)                    |
-| `src/lib/supabase/api.ts`                         | Direct Supabase reads (Kraal, person profile lookups)               |
-| `src/lib/observability.ts`                        | Frontend structured logging (`[mukoko]` prefix)                     |
-| `src/lib/i18n/index.ts`                           | i18n translations (English + Shona)                                 |
-| `src/lib/themes.ts`                               | Mineral theme definitions                                           |
-| `src/components/auth/auth-context.tsx`            | Auth state management, WorkOS sync via `/api/users/me/sync`         |
-| `src/components/auth/workos-provider.tsx`         | AuthKit provider wrapping the app                                   |
-| `src/components/error/section-error-boundary.tsx` | Mukoko 3-layer error boundary                                       |
-| `src/components/ui/share-button.tsx`              | WhatsApp-first social sharing                                       |
-| `proxy.ts`                                        | Next.js 16 AuthKit proxy (session cookie management)                |
-| `worker/src/routes/kiosk.ts`                      | Kiosk pairing, session management                                   |
-| `worker/src/queues/handlers.ts`                   | Queue message processors (analytics, email)                         |
-| `worker/wrangler.toml`                            | Cloudflare bindings and env config                                  |
-| `src/lib/calendar.ts`                             | Calendar/date utilities                                             |
-| `src/lib/timezone.ts`                             | Timezone handling                                                   |
-| `src/lib/fallback-chain.ts`                       | Fallback chain pattern for resilient loading                        |
-| `CONTRIBUTING.md`                                 | Contribution guidelines                                             |
-| `SECURITY.md`                                     | Security policy and reporting                                       |
-| `RELEASES.md`                                     | Release notes                                                       |
+| File                                              | Purpose                                                        |
+| ------------------------------------------------- | -------------------------------------------------------------- |
+| `src/app/page.tsx`                                | Home — SSR reads MongoDB directly                              |
+| `src/app/events/[id]/page.tsx`                    | Event detail — SSR                                             |
+| `src/proxy.ts`                                    | Next.js 16 AuthKit proxy (session cookies)                     |
+| `src/lib/mongo/client.ts`                         | Cached MongoDB client (`server-only`)                          |
+| `src/lib/mongo/databases.ts`                      | `DB` names + typed collection accessors                        |
+| `src/lib/mongo/mappers.ts`                        | Mongo doc → schema.org API shape                               |
+| `src/lib/mongo/search.ts`                         | Atlas `$vectorSearch` over `events.eventEmbeddings`            |
+| `src/lib/ai/gateway.ts`                           | Shamwari Cloudflare AI Gateway client (Qwen + BGE)             |
+| `src/app/actions/ai.ts`                           | AI description wizard server action                            |
+| `src/lib/auth/dev.ts`                             | Local dev auth bypass                                          |
+| `src/lib/api.ts`                                  | Same-origin REST client + `getMediaUrl`                        |
+| `src/lib/observability.ts`                        | Frontend structured logging (`[mukoko]`)                       |
+| `src/lib/i18n/index.ts`                           | i18n translations (English + Shona)                            |
+| `src/lib/themes.ts`                               | Mineral theme definitions                                      |
+| `src/components/auth/auth-context.tsx`            | Auth state management                                          |
+| `src/components/auth/workos-provider.tsx`         | AuthKit provider wrapping the app                              |
+| `src/components/error/section-error-boundary.tsx` | Mukoko 3-layer error boundary                                  |
+| `CONTRIBUTING.md`, `SECURITY.md`, `RELEASES.md`   | Contribution guidelines, security policy, release notes        |
 
 ## Workflow Conventions
 
-- **Big PR, multiple commits** — the Nyuchi house style. Related work lands in one pull request as a sequence of focused commits, not as separate PRs. Each commit is independently readable; the PR groups them by intent. Don't open a second PR for "just one more cleanup" — append a commit to the active branch.
+- **Big PR, multiple commits** — the Nyuchi house style. Related work lands in one pull request as a sequence of focused, independently readable commits. Don't open a second PR for "just one more cleanup" — append a commit to the active branch.
 - **Branches** — work on `claude/<topic>-<slug>` branches; push with `-u origin <branch>` and open the PR as a draft until ready for review.
 
 ## Code Conventions
 
-- **Brand**: Always lowercase "nhimbe" — even at sentence start
-- **TypeScript strict mode** in both frontend and backend
-- **Tailwind CSS v4** with `cn()` helper from `src/lib/utils.ts` for conditional classes
-- **React Context** for global state (AuthProvider, ThemeProvider) — no Redux/Zustand
-- **`"use client"`** directive required for interactive components
-- **WCAG AAA** compliance — 7:1+ contrast ratios for primary/secondary text, 44px touch targets
-- **Dark/light modes** via `.dark` and `.light` CSS classes, design tokens in `globals.css`
-- **Schema.org alignment** — Events and users modeled after schema.org specs
-- **Structured logging** — `[mukoko]` prefix on all log output, structured JSON in backend
-- **Request ID tracking** — Every backend request gets a unique ID for observability
-- **Audit logging** — All destructive operations logged to `system.activity_logs` table
-- **Path alias** — `@/*` maps to `./src/*` in frontend
+- **Brand**: always lowercase "nhimbe" — even at sentence start.
+- **TypeScript strict mode**.
+- **Server-side data only** — MongoDB access is guarded by `import "server-only"`; never touch the driver from client components.
+- **Tailwind CSS v4** with the `cn()` helper from `src/lib/utils.ts`.
+- **React Context** for global state (AuthProvider, ThemeProvider) — no Redux/Zustand.
+- **`"use client"`** directive required for interactive components.
+- **WCAG AAA** — 7:1+ contrast for primary/secondary text, 44px touch targets.
+- **Dark/light modes** via `.dark`/`.light` classes, design tokens in `globals.css`.
+- **Schema.org alignment** — events and users modeled after schema.org specs.
+- **Structured logging** — `[mukoko]` prefix on all log output.
+- **Path alias** — `@/*` maps to `./src/*`.
 
 ## Environment Variables
 
-Frontend (`.env.local`):
+Set in Vercel (prod + preview) and locally in `.env.local`:
 
-- `WORKOS_CLIENT_ID` — WorkOS Client ID. AuthKit reads it from `process.env` server-side; no `NEXT_PUBLIC_` prefix needed (and shouldn't have one — the Client ID is server-only in our flow)
-- `WORKOS_API_KEY` — server-only, used by the AuthKit proxy
-- `WORKOS_COOKIE_PASSWORD` — server-only, session-cookie encryption key (≥32 chars)
-- `NEXT_PUBLIC_WORKOS_REDIRECT_URI` — usually `${NEXT_PUBLIC_SITE_URL}/callback`. The `NEXT_PUBLIC_` prefix is **required** — `@workos-inc/authkit-nextjs` reads this from the client bundle to form the OAuth start URL. Stripping the prefix breaks sign-in.
-- `WORKOS_API_HOSTNAME` *(optional)* — defaults to `api.workos.com`. Set to `authenticate.nyuchi.com` to route all WorkOS API calls through the Nyuchi custom domain. When set, the hosted AuthKit UI automatically lives at `identity.nyuchi.com` and Admin Portal at `setup.identity.nyuchi.com`.
-- `NEXT_PUBLIC_API_URL` — worker base URL (e.g. `http://localhost:8787`)
-- `NEXT_PUBLIC_SITE_URL` — public site URL
-- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
-- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — for direct browser/RSC reads via `src/lib/supabase/`
+- `MONGODB_URI` — MongoDB connection string (required; prod + preview).
+- `WORKOS_CLIENT_ID` — WorkOS Client ID (server-only; no `NEXT_PUBLIC_` prefix).
+- `WORKOS_API_KEY` — server-only, used by the AuthKit proxy.
+- `WORKOS_COOKIE_PASSWORD` — server-only session-cookie encryption key (≥32 chars).
+- `WORKOS_API_HOSTNAME` *(optional)* — defaults to `api.workos.com`; set to `authenticate.nyuchi.com` to route WorkOS calls through the Nyuchi custom domain.
+- `NEXT_PUBLIC_WORKOS_REDIRECT_URI` — usually `${NEXT_PUBLIC_SITE_URL}/callback`. The `NEXT_PUBLIC_` prefix is **required** — AuthKit reads it from the client bundle to form the OAuth start URL.
+- `SHAMWARI_AI_GATEWAY_URL`, `SHAMWARI_AI_GATEWAY_TOKEN` — Cloudflare AI Gateway base + provider bearer; optional `SHAMWARI_AI_GATEWAY_AUTH_TOKEN` for the authenticated gateway.
+- `NEXT_PUBLIC_SITE_URL` — public site URL.
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — Google Maps.
+- `NEXT_PUBLIC_ASSETS_URL` *(optional)* — override the R2 assets host (defaults to `https://assets-s001.mukoko.com`).
 
-Backend (`worker/.dev.vars`):
-
-- `API_KEY` — internal machine-context key for `writeAuth` middleware
-- `WORKOS_CLIENT_ID` — overrides the wrangler.toml placeholder for local dev
-- `SUPABASE_SECRET_KEY` — bearer for `supabaseFetch()`
-- `MUKOKO_API_KEY` — bearer for `mukokoApiFetch()` (api.mukoko.com gateway)
-- `RESEND_API_KEY` — Resend transactional email
-
-Backend (`worker/wrangler.toml` vars): `ENVIRONMENT`, `ALLOWED_ORIGINS`, `WORKOS_CLIENT_ID` (dev only — production/staging must set via `wrangler secret put`), `SUPABASE_URL`, `MUKOKO_API_URL`
-
-Backend secrets (set via `wrangler secret put --env <env>`): `API_KEY`, `WORKOS_CLIENT_ID` (production/staging), `SUPABASE_SECRET_KEY`, `MUKOKO_API_KEY`, `RESEND_API_KEY`, `PAYNOW_INTEGRATION_ID`, `PAYNOW_INTEGRATION_KEY`
-
-Cloudflare bindings: `AI` (Workers AI), `VECTORIZE`, `CACHE` (KV), `MEDIA` (R2), `IMAGES`, `ANALYTICS`, `ANALYTICS_QUEUE`, `EMAIL_QUEUE`, `RATE_LIMITER` (no D1 binding post-migration)
+**Intentionally unset**: `NEXT_PUBLIC_API_URL` — the API is same-origin. There are **no** Supabase/Postgres environment variables.
