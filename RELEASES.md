@@ -1,6 +1,15 @@
-# Release Process
+# Releases
 
-nhimbe uses **continuous deployment** with manual version tags for milestones.
+nhimbe uses **continuous deployment** with manual version tags for milestones. This document is both the running changelog and the release process.
+
+## Changelog
+
+### Unreleased
+
+- Consolidated nhimbe into a single full-stack app deployed on Vercel — retired the separate REST backend.
+- Moved all data to **MongoDB** as the sole data store, read and written server-side (SSR-first).
+- Standardised authentication on **WorkOS AuthKit** end to end.
+- Routed AI features ("Shamwari") through a Cloudflare AI Gateway with Atlas Vector Search.
 
 ## Deployment
 

@@ -23,10 +23,9 @@
 
 <!-- How was this tested? Check all that apply. -->
 
-- [ ] Existing tests pass (`npx vitest run` + `cd worker && npx vitest run`)
+- [ ] Existing tests pass (`npm run test:run` / `npx vitest run`)
 - [ ] New tests added for this change
 - [ ] Manual testing performed
-- [ ] Type check passes (`cd worker && npx tsc --noEmit`)
 - [ ] Lint passes (`npm run lint`)
 - [ ] Build succeeds (`npm run build`)
 

@@ -33,10 +33,17 @@ The full list of variables, and how the app fits together, lives in **[CLAUDE.md
 
 ## Workflow
 
-1. **Branch from `main`** with a descriptive name — `feat/event-reminders`, `fix/registration-race`, `docs/readme`.
-2. **Make your change** following the conventions below.
-3. **Run the checks locally** (`lint`, `build`, `test:run`) before pushing.
-4. **Open a pull request** against `main`. CI must pass before merge.
+1. **Branch from `main`** with a descriptive name — `claude/<topic>`, or a feature branch like `feat/event-reminders`, `fix/registration-race`, `docs/readme`.
+2. **Make your change** following the conventions below, in focused commits.
+3. **Run the checks locally** before pushing:
+
+   ```bash
+   npm run test:run   # frontend test suite
+   npm run build      # production build
+   npm run lint       # lint
+   ```
+
+4. **Open a pull request** against `main` — keep it in **draft** until it's ready for review. CI must pass before merge.
 
 ### Pull request style — big PR, focused commits
 
@@ -55,9 +62,9 @@ The Nyuchi house style is **one pull request, many focused commits**. Group rela
 
 See **[CLAUDE.md](./CLAUDE.md)** for architecture, data ownership, and the deeper conventions.
 
-## Data & schema changes
+## Data access
 
-The data schema is owned by the platform data project, **not this repository** — this repo consumes it. If your change needs a schema modification, coordinate that change in the platform project first, then update the consumer code here. See **[CLAUDE.md](./CLAUDE.md)** for details.
+nhimbe is a single full-stack app — all data access happens server-side, within this repository. The underlying collections are owned by the Mukoko platform, **not this repo**; if your change needs a data-model modification, coordinate that in the platform project first, then update the consumer code here. See **[CLAUDE.md](./CLAUDE.md)** for details.
 
 ## Reporting security issues
 
