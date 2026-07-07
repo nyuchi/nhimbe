@@ -197,7 +197,7 @@ export function ReferralBadge({
 
   return (
     <div
-      className={`flex items-center gap-1 px-2 py-1 bg-secondary/20 text-secondary rounded-full ${className}`}
+      className={`flex items-center gap-1 px-2 py-1 bg-primary/15 text-primary rounded-full ${className}`}
     >
       <Share2 className="w-3 h-3" />
       <span className="text-xs font-medium">{referrals} referrals</span>

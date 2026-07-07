@@ -43,6 +43,24 @@ export const mineralThemes: Record<string, MineralTheme> = {
     surface: "rgba(139, 90, 0, 0.15)",
     surfaceHover: "rgba(139, 90, 0, 0.25)",
   },
+  cobalt: {
+    name: "Cobalt",
+    gradient: "linear-gradient(135deg, #001F3F 0%, #0047AB 50%, #00B0FF 100%)",
+    primary: "#00B0FF",
+    secondary: "#0047AB",
+    accent: "#001F3F",
+    surface: "rgba(0, 71, 171, 0.15)",
+    surfaceHover: "rgba(0, 71, 171, 0.25)",
+  },
+  sodalite: {
+    name: "Sodalite",
+    gradient: "linear-gradient(135deg, #0D1442 0%, #283593 50%, #3D5AFE 100%)",
+    primary: "#3D5AFE",
+    secondary: "#283593",
+    accent: "#0D1442",
+    surface: "rgba(40, 53, 147, 0.15)",
+    surfaceHover: "rgba(40, 53, 147, 0.25)",
+  },
   "tigers-eye": {
     name: "Tiger's Eye",
     gradient: "linear-gradient(135deg, #4A2C00 0%, #8B4513 50%, #D4A574 100%)",
@@ -68,20 +86,20 @@ export const mineralThemeIds = Object.keys(mineralThemes) as (keyof typeof miner
 
 /** Extract [accent, secondary, primary] color tuple from a theme */
 export function getThemeColors(themeId: string): [string, string, string] {
-  const theme = mineralThemes[themeId] || mineralThemes.malachite;
+  const theme = mineralThemes[themeId] || mineralThemes.tanzanite;
   return [theme.accent, theme.secondary, theme.primary];
 }
 
-/** Brand colors for background animations */
+/** Brand colors for background animations — tanzanite is the nhimbe lead. */
 export const brandColors = {
   light: {
-    primary: "#00574B",
-    secondary: "#004D40",
-    background: "#FAFAF8",
+    primary: "#4B0082",
+    secondary: "#5E35B1",
+    background: "#F3F3F1",
   },
   dark: {
-    primary: "#64FFDA",
-    secondary: "#00BFA5",
-    background: "#0A0A0A",
+    primary: "#B388FF",
+    secondary: "#7C4DFF",
+    background: "#0E0D0C",
   },
 };
