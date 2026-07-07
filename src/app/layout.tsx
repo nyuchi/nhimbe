@@ -67,7 +67,7 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
-    // Mukoko mono-tanzanite Seed-of-Life favicon (legible below 32px).
+    // Mukoko full-colour Seed-of-Life favicon.
     // SVG with a media-query dark variant first, then PNG fallbacks.
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml" },

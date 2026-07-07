@@ -94,8 +94,9 @@ function HoneycombBackdrop({ tint = "var(--nh-lead)" }: { tint?: string }) {
   );
 }
 
-// Seed-of-Life mark, mono in the lead mineral — used as a small brand glyph in
-// the signed-in hero. Stays crisp small (mono per Mukoko brand rules <32px).
+// Seed-of-Life mark — the Mukoko flower is ALWAYS the full-colour mark (no
+// mono/single-mineral variant, per brand). Each of the seven circles wears a
+// mineral; the theme-adaptive mineral tokens keep it legible on light and dark.
 function SeedMark({ className }: { className?: string }) {
   const r = 7;
   const d = Math.sqrt(3) * r;
@@ -106,10 +107,19 @@ function SeedMark({ className }: { className?: string }) {
       return [Math.cos(a) * d, Math.sin(a) * d];
     }),
   ];
+  const petals = [
+    "var(--tanzanite)",
+    "var(--cobalt)",
+    "var(--malachite)",
+    "var(--gold)",
+    "var(--sodalite)",
+    "var(--mineral-copper-raw)",
+    "var(--mineral-terracotta-raw)",
+  ];
   return (
     <svg viewBox="-20 -20 40 40" className={className} aria-hidden role="presentation">
       {centers.map(([cx, cy], i) => (
-        <circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={1.4} />
+        <circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke={petals[i]} strokeWidth={1.4} />
       ))}
     </svg>
   );
