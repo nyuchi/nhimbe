@@ -222,6 +222,7 @@ Set in Vercel (prod + preview) and locally in `.env.local`:
 - `WORKOS_API_HOSTNAME` *(optional)* — defaults to `api.workos.com`; set to `authenticate.nyuchi.com` to route WorkOS calls through the Nyuchi custom domain.
 - `NEXT_PUBLIC_WORKOS_REDIRECT_URI` — usually `${NEXT_PUBLIC_SITE_URL}/callback`. The `NEXT_PUBLIC_` prefix is **required** — AuthKit reads it from the client bundle to form the OAuth start URL.
 - `SHAMWARI_AI_GATEWAY_URL`, `SHAMWARI_AI_GATEWAY_TOKEN` — Cloudflare AI Gateway base + provider bearer; optional `SHAMWARI_AI_GATEWAY_AUTH_TOKEN` for the authenticated gateway.
+- `RESEND_API_KEY` — server-only; used for transactional email via Resend (`src/lib/email/`). When unset, email sends are skipped (never throw).
 - `NEXT_PUBLIC_SITE_URL` — public site URL.
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — Google Maps.
 - `NEXT_PUBLIC_ASSETS_URL` *(optional)* — override the R2 assets host (defaults to `https://assets-s001.mukoko.com`).
