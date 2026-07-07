@@ -1,36 +1,28 @@
-# nhimbe API - Cloudflare Workers Configuration
-# Part of the Mukoko ecosystem
+# nhimbe-mcp — task-based MCP server (Cloudflare Worker)
+# Part of the Mukoko ecosystem.
+#
+# This worker hosts ONLY the nhimbe MCP server (see src/mcp/). It owns no data:
+# every tool reads/writes through the nhimbe app API. Deployed behind the
+# nhimbe zone at `nhimbe.com/mcp/*` — the zone is Cloudflare-proxied (orange
+# cloud) in front of Vercel, and this Worker route intercepts `/mcp/*` while
+# everything else passes through to the app.
 name = "nhimbe-mcp"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
-# Environment variables
-# Secrets (set via `wrangler secret put`): API_KEY, WORKOS_CLIENT_ID (prod/staging only),
-# SUPABASE_SECRET_KEY, MUKOKO_API_KEY, RESEND_API_KEY, PAYNOW_INTEGRATION_ID, PAYNOW_INTEGRATION_KEY
 [vars]
 ENVIRONMENT = "development"
-ALLOWED_ORIGINS = "http://localhost:3000,http://localhost:3001"
-# WorkOS Client ID — public value, used as the JWT audience and to build
-# the JWKS URL (https://api.workos.com/sso/jwks/{client_id}). Override
-# locally via `worker/.dev.vars`; the env validator rejects this placeholder.
-WORKOS_CLIENT_ID = "REPLACE_WITH_WORKOS_CLIENT_ID"
-# Supabase nyuchi_platform_db — REST root for identity / events / etc. reads.
-# Service-role key is a secret (set via `wrangler secret put SUPABASE_SECRET_KEY`).
-SUPABASE_URL = "https://tdcpuzqyoodrdsxldgsh.supabase.co"
-# api.mukoko.com — public API gateway (FastAPI on fly.io). Worker calls it
-# with X-Api-Key (machine identity) and optionally a forwarded WorkOS access
-# token for user-context calls. MUKOKO_API_KEY is a wrangler secret.
-MUKOKO_API_URL = "https://api.mukoko.com"
+# Extra CORS origins beyond the built-in *.nhimbe.com / *.mukoko.com allowlist.
+ALLOWED_ORIGINS = "http://localhost:11825"
+# Base origin of the nhimbe app. Tools call `${APP_API_URL}/api/...`.
+APP_API_URL = "http://localhost:11825"
+MCP_SERVER_NAME = "nhimbe"
 
-# Development settings
 [dev]
 port = 8787
 local_protocol = "http"
 
-# Observability — mirrors the JSONC spec exactly. Top-level `enabled = false`
-# is intentional; the per-channel `[observability.logs]` enables the only
-# stream we actually want. Each [env.*] block also carries its own copy
-# because wrangler does not inherit top-level config into named environments.
+# Observability — logs only (mirrors the app's stance).
 [observability]
 enabled = false
 head_sampling_rate = 1
@@ -41,100 +33,17 @@ head_sampling_rate = 1
 persist = true
 invocation_logs = true
 
-[observability.traces]
-enabled = false
-persist = true
-head_sampling_rate = 1
-
-# Workers AI Binding
-[ai]
-binding = "AI"
-
-# Vectorize Index for RAG Search
-[[vectorize]]
-binding = "VECTORIZE"
-index_name = "mukoko-nhimbe-events"
-
-# KV Namespace for caching — dev/staging/production each get their own
-# namespace. The shared id used to be bbe12fb2..., which meant `wrangler dev`
-# and a staging deploy both wrote into the production cache (and could evict
-# legitimate prod entries). Per-env split was applied 2026-05; the same id
-# is reused only inside each environment's named section below.
-[[kv_namespaces]]
-binding = "CACHE"
-id = "d77fe04daba349268f05ca32a88120da"  # mukoko-nhimbe-cache-dev
-
-# R2 Bucket for media storage
-[[r2_buckets]]
-binding = "MEDIA"
-bucket_name = "mukoko-nhimbe-media"
-
-# Cloudflare Images binding for transformations
-[images]
-binding = "IMAGES"
-
 # ============================================
-# ANALYTICS ENGINE - Real-time analytics
-# For tracking views, clicks, conversions
-# ============================================
-[[analytics_engine_datasets]]
-binding = "ANALYTICS"
-dataset = "nhimbe_events"
-
-# ============================================
-# QUEUES - Background job processing
-# For async tasks like email, aggregations
-# ============================================
-[[queues.producers]]
-binding = "ANALYTICS_QUEUE"
-queue = "nhimbe-analytics-queue"
-
-[[queues.producers]]
-binding = "EMAIL_QUEUE"
-queue = "nhimbe-email-queue"
-
-[[queues.consumers]]
-queue = "nhimbe-analytics-queue"
-max_batch_size = 100
-max_batch_timeout = 30
-
-[[queues.consumers]]
-queue = "nhimbe-email-queue"
-max_batch_size = 10
-max_batch_timeout = 60
-
-# ============================================
-# RATE LIMITING
-# Protect API from abuse
-# ============================================
-[[unsafe.bindings]]
-type = "ratelimit"
-name = "RATE_LIMITER"
-namespace_id = "1"
-simple = { limit = 100, period = 60 }  # 100 requests per minute
-
-# ============================================
-# PRODUCTION ENVIRONMENT
-# Secrets needed (set via `wrangler secret put --env production`):
-#   - API_KEY
-#   - WORKOS_CLIENT_ID
-#   - SUPABASE_SECRET_KEY
-#   - MUKOKO_API_KEY
-#   - RESEND_API_KEY
-#   - PAYNOW_INTEGRATION_ID, PAYNOW_INTEGRATION_KEY
+# PRODUCTION
+# Route: nhimbe.com/mcp/* (zone must be Cloudflare-proxied in front of Vercel).
 # ============================================
 [env.production]
 name = "nhimbe-mcp"
-vars = { ENVIRONMENT = "production", ALLOWED_ORIGINS = "https://nhimbe.com,https://www.nhimbe.com,https://mukoko.com,https://www.mukoko.com", SUPABASE_URL = "https://tdcpuzqyoodrdsxldgsh.supabase.co", MUKOKO_API_URL = "https://api.mukoko.com" }
-# WORKOS_CLIENT_ID must be set per environment via `wrangler secret put WORKOS_CLIENT_ID --env production`
-# (or as a non-secret var via the Cloudflare dashboard). Do NOT inline a placeholder here.
+vars = { ENVIRONMENT = "production", ALLOWED_ORIGINS = "https://nhimbe.com,https://www.nhimbe.com,https://mukoko.com,https://www.mukoko.com", APP_API_URL = "https://nhimbe.com", MCP_SERVER_NAME = "nhimbe" }
 routes = [
-  { pattern = "events-api.mukoko.com", custom_domain = true }
+  { pattern = "nhimbe.com/mcp/*", zone_name = "nhimbe.com" }
 ]
 
-# Per-environment observability — top-level [observability] is not inherited
-# into [env.*] blocks by wrangler. Each env needs its own copy. Matches the
-# JSONC spec exactly (top-level `enabled = false`; logs channel is on).
 [env.production.observability]
 enabled = false
 head_sampling_rate = 1
@@ -145,73 +54,16 @@ head_sampling_rate = 1
 persist = true
 invocation_logs = true
 
-[env.production.observability.traces]
-enabled = false
-persist = true
-head_sampling_rate = 1
-
-[env.production.ai]
-binding = "AI"
-
-[[env.production.vectorize]]
-binding = "VECTORIZE"
-index_name = "mukoko-nhimbe-events"
-
-[[env.production.kv_namespaces]]
-binding = "CACHE"
-id = "bbe12fb2c88247b4a498da713416b7d7"  # mukoko-nhimbe-cache (production only)
-
-[[env.production.r2_buckets]]
-binding = "MEDIA"
-bucket_name = "mukoko-nhimbe-media"
-
-[env.production.images]
-binding = "IMAGES"
-
-[[env.production.analytics_engine_datasets]]
-binding = "ANALYTICS"
-dataset = "nhimbe_events"
-
-[[env.production.queues.producers]]
-binding = "ANALYTICS_QUEUE"
-queue = "nhimbe-analytics-queue"
-
-[[env.production.queues.producers]]
-binding = "EMAIL_QUEUE"
-queue = "nhimbe-email-queue"
-
-[[env.production.queues.consumers]]
-queue = "nhimbe-analytics-queue"
-max_batch_size = 100
-max_batch_timeout = 30
-
-[[env.production.queues.consumers]]
-queue = "nhimbe-email-queue"
-max_batch_size = 10
-max_batch_timeout = 60
-
-# Rate limiting
-[[env.production.unsafe.bindings]]
-type = "ratelimit"
-name = "RATE_LIMITER"
-namespace_id = "1"
-simple = { limit = 100, period = 60 }
-
 # ============================================
-# STAGING ENVIRONMENT
-# Secrets needed (set via `wrangler secret put --env staging`):
-#   - API_KEY
-#   - WORKOS_CLIENT_ID
-#   - SUPABASE_SECRET_KEY
-#   - MUKOKO_API_KEY
-#   - RESEND_API_KEY
-#   - PAYNOW_INTEGRATION_ID, PAYNOW_INTEGRATION_KEY
+# STAGING
+# Route: staging.nhimbe.com/mcp/*
 # ============================================
 [env.staging]
 name = "nhimbe-mcp-staging"
-vars = { ENVIRONMENT = "staging", ALLOWED_ORIGINS = "https://staging.nhimbe.com", SUPABASE_URL = "https://tdcpuzqyoodrdsxldgsh.supabase.co", MUKOKO_API_URL = "https://api.mukoko.com" }
-# WORKOS_CLIENT_ID must be set per environment via `wrangler secret put WORKOS_CLIENT_ID --env staging`
-# (or as a non-secret var via the Cloudflare dashboard). Do NOT inline a placeholder here.
+vars = { ENVIRONMENT = "staging", ALLOWED_ORIGINS = "https://staging.nhimbe.com", APP_API_URL = "https://staging.nhimbe.com", MCP_SERVER_NAME = "nhimbe (staging)" }
+routes = [
+  { pattern = "staging.nhimbe.com/mcp/*", zone_name = "nhimbe.com" }
+]
 
 [env.staging.observability]
 enabled = false
@@ -222,55 +74,3 @@ enabled = true
 head_sampling_rate = 1
 persist = true
 invocation_logs = true
-
-[env.staging.observability.traces]
-enabled = false
-persist = true
-head_sampling_rate = 1
-
-[env.staging.ai]
-binding = "AI"
-
-[[env.staging.vectorize]]
-binding = "VECTORIZE"
-index_name = "mukoko-nhimbe-events"
-
-[[env.staging.kv_namespaces]]
-binding = "CACHE"
-id = "12716ecd4fbc4821a121d6a724fa46e6"  # mukoko-nhimbe-cache-staging
-
-[[env.staging.r2_buckets]]
-binding = "MEDIA"
-bucket_name = "mukoko-nhimbe-media"
-
-[env.staging.images]
-binding = "IMAGES"
-
-[[env.staging.analytics_engine_datasets]]
-binding = "ANALYTICS"
-dataset = "nhimbe_events_staging"
-
-[[env.staging.queues.producers]]
-binding = "ANALYTICS_QUEUE"
-queue = "nhimbe-analytics-queue"
-
-[[env.staging.queues.producers]]
-binding = "EMAIL_QUEUE"
-queue = "nhimbe-email-queue"
-
-[[env.staging.queues.consumers]]
-queue = "nhimbe-analytics-queue"
-max_batch_size = 100
-max_batch_timeout = 30
-
-[[env.staging.queues.consumers]]
-queue = "nhimbe-email-queue"
-max_batch_size = 10
-max_batch_timeout = 60
-
-# Rate limiting
-[[env.staging.unsafe.bindings]]
-type = "ratelimit"
-name = "RATE_LIMITER"
-namespace_id = "1"
-simple = { limit = 100, period = 60 }

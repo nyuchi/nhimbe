@@ -1,261 +1,62 @@
 /**
- * nhimbe API - Cloudflare Workers (Hono)
- * Events platform with AI-powered search and recommendations
- * Part of the Mukoko ecosystem
+ * nhimbe-mcp — Cloudflare Worker hosting the nhimbe task-based MCP server.
+ *
+ * This worker is deployed behind the nhimbe zone at `nhimbe.com/mcp/*` (the
+ * zone is Cloudflare-proxied in front of Vercel; the Worker route intercepts
+ * `/mcp/*` and everything else passes through to the app). It is the ONLY thing
+ * that runs on the worker now — the legacy REST API, Supabase reads, Paynow,
+ * Resend email and queues were all retired to the Vercel app.
+ *
+ * Endpoints:
+ *   POST /mcp   — MCP JSON-RPC (Streamable HTTP, stateless)
+ *   GET  /mcp   — 405 (no SSE stream; the server is stateless POST-only)
+ *   GET  /      — human/status JSON
  */
+
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import type { Env, AnalyticsQueueMessage, EmailQueueMessage, AppVariables } from "./types";
-import { requestId as requestIdMiddleware, requestLogger } from "./middleware/observability";
-import { rateLimit } from "./middleware/rate-limit";
-import { processAnalyticsMessage, processEmailMessage } from "./queues/handlers";
-import { CircuitOpenError } from "./utils/circuit-breaker";
-import { SupabaseClientError } from "./db/supabase";
+import type { Env } from "./types";
+import { handleMcpRequest } from "./mcp/server";
 
-// Route modules
-import { health } from "./routes/health";
-import { categories } from "./routes/categories";
-import { events } from "./routes/events";
-import { search } from "./routes/search";
-import { ai } from "./routes/ai";
-import { users } from "./routes/users";
-import { registrations } from "./routes/registrations";
-import { media } from "./routes/media";
-import { referrals } from "./routes/referrals";
-import { reviews } from "./routes/reviews";
-import { stats } from "./routes/stats";
-import { admin } from "./routes/admin";
-import { series } from "./routes/series";
-import { waitlist } from "./routes/waitlist";
-import { checkin } from "./routes/checkin";
-import { kiosk } from "./routes/kiosk";
-import { payments } from "./routes/payments";
-import { links } from "./routes/links";
+const app = new Hono<{ Bindings: Env }>();
 
-const app = new Hono<{ Bindings: Env; Variables: AppVariables }>();
+// CORS: the MCP endpoint is a public, credential-less API (auth is a bearer
+// token, not a cookie), so reflect any origin and allow the Authorization
+// header. Browser-based MCP clients need this; native clients ignore it.
+app.use(
+  "/mcp",
+  cors({
+    origin: (origin) => origin ?? "*",
+    allowMethods: ["POST", "GET", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization", "MCP-Protocol-Version"],
+    maxAge: 86400,
+  }),
+);
 
-// Global CORS middleware — restrict to trusted origins
-app.use("*", cors({
-  origin: (origin, c) => {
-    if (!origin) return origin;
-    // Allow localhost in development
-    if (origin.startsWith("http://localhost:")) return origin;
-    try {
-      const url = new URL(origin);
-      const hostname = url.hostname;
-      const trustedDomains = ["nyuchi.com", "mukoko.com", "nhimbe.com"];
-      if (trustedDomains.some(d => hostname === d || hostname.endsWith(`.${d}`))) {
-        return origin;
-      }
-    } catch { /* invalid origin */ }
-    // Check ALLOWED_ORIGINS env var
-    const env = c.env as Env;
-    const extraOrigins = (env.ALLOWED_ORIGINS || "").split(",").filter(Boolean);
-    if (extraOrigins.some(allowed => origin === allowed.trim())) {
-      return origin;
-    }
-    return null; // Deny unknown origins
-  },
-  allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "X-API-Key"],
-}));
+// Status / discovery landing.
+app.get("/", (c) =>
+  c.json({
+    name: c.env.MCP_SERVER_NAME || "nhimbe",
+    description: "nhimbe events — task-based MCP server",
+    transport: "streamable-http",
+    endpoint: "/mcp",
+    environment: c.env.ENVIRONMENT ?? "development",
+  }),
+);
 
-// Environment validation — log warnings for missing required config
-let envValidated = false;
-app.use("*", async (c, next) => {
-  if (!envValidated) {
-    envValidated = true;
-    const missing: string[] = [];
-    // A var is "missing" if it's unset, empty, or still holds a REPLACE_WITH_*
-    // placeholder from wrangler.toml — the latter would otherwise silently
-    // route every JWT validation to a 404 JWKS endpoint.
-    const isPlaceholder = (v: string | undefined): boolean =>
-      !v || v.startsWith("REPLACE_WITH_") || v === "CHANGE_ME";
-    if (!c.env.API_KEY) missing.push("API_KEY");
-    if (isPlaceholder(c.env.WORKOS_CLIENT_ID)) missing.push("WORKOS_CLIENT_ID");
-    if (isPlaceholder(c.env.SUPABASE_URL)) missing.push("SUPABASE_URL");
-    if (!c.env.SUPABASE_SECRET_KEY) missing.push("SUPABASE_SECRET_KEY");
-    if (!c.env.CACHE) missing.push("CACHE (KV binding)");
-    if (!c.env.RATE_LIMITER) missing.push("RATE_LIMITER binding");
-    if (missing.length > 0) {
-      console.error(JSON.stringify({
-        level: "error",
-        module: "startup",
-        message: `Missing required environment bindings: ${missing.join(", ")}`,
-      }));
-    }
-    if (!c.env.RESEND_API_KEY) {
-      console.warn(JSON.stringify({
-        level: "warn",
-        module: "startup",
-        message: "RESEND_API_KEY not set — emails will not be sent",
-      }));
-    }
-  }
-  await next();
-});
+// MCP JSON-RPC endpoint.
+app.post("/mcp", (c) => handleMcpRequest(c.req.raw, c.env));
+app.get("/mcp", (c) =>
+  c.json({ error: "Use POST for MCP JSON-RPC; this server is stateless (no SSE stream)." }, 405, {
+    Allow: "POST",
+  }),
+);
 
-// Security headers
-app.use("*", async (c, next) => {
-  await next();
-  c.res.headers.set("X-Content-Type-Options", "nosniff");
-  c.res.headers.set("X-Frame-Options", "DENY");
-  c.res.headers.set("X-XSS-Protection", "1; mode=block");
-  c.res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
-  c.res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  c.res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  // Strict CSP for JSON/API responses — the worker is JSON-only with one
-  // exception (the HTML status page at `/` in health.ts, which uses inline
-  // styles + Google Fonts and would break under this policy). Skip CSP for
-  // HTML so the status page keeps rendering; everything else gets locked down.
-  const responseContentType = c.res.headers.get("Content-Type") || "";
-  if (!responseContentType.includes("text/html")) {
-    c.res.headers.set(
-      "Content-Security-Policy",
-      "default-src 'self'; frame-ancestors 'none'; base-uri 'self'",
-    );
-  }
-});
+app.notFound((c) => c.json({ error: "Not found" }, 404));
 
-// Observability
-app.use("*", requestIdMiddleware);
-app.use("*", requestLogger);
-
-// Rate limit sensitive endpoints
-app.use("/api/assistant/*", rateLimit);
-app.use("/api/ai/*", rateLimit);
-app.use("/api/search", rateLimit);
-app.use("/api/users/*", rateLimit);
-app.use("/api/reviews/*", rateLimit);
-app.use("/api/referrals/*", rateLimit);
-app.use("/api/media/*", rateLimit);
-app.use("/api/payments/*", rateLimit);
-app.use("/api/events/*", rateLimit);
-app.use("/api/registrations/*", rateLimit);
-app.use("/api/admin/*", rateLimit);
-app.use("/api/series/*", rateLimit);
-app.use("/api/kiosk/*", rateLimit);
-// Categories listings are cheap (cached), but the propose/vouch/flag write
-// paths can be spammed to fill events.event_category with garbage. Rate-limit
-// the whole /api/event-categories tree to share the 100 req/min bucket.
-app.use("/api/event-categories", rateLimit);
-app.use("/api/event-categories/*", rateLimit);
-
-// Mount route modules
-app.route("/", health);
-app.route("/api", categories);
-app.route("/api/events", events);
-app.route("/api", search);
-app.route("/api", ai);
-app.route("/api/users", users);
-app.route("/api/registrations", registrations);
-app.route("/api/media", media);
-app.route("/api/referrals", referrals);
-app.route("/api/reviews", reviews);
-app.route("/api/community", stats);
-app.route("/api/admin", admin);
-app.route("/api/series", series);
-app.route("/api", waitlist);
-app.route("/api", checkin);
-app.route("/api/kiosk", kiosk);
-app.route("/api/payments", payments);
-app.route("/api/links", links);
-
-// Global error handler
 app.onError((err, c) => {
-  const reqId = c.get("requestId");
-  console.error(JSON.stringify({
-    level: "error",
-    requestId: reqId,
-    error: err instanceof Error ? err.message : "Unknown error",
-    stack: err instanceof Error ? err.stack : undefined,
-  }));
-  // CircuitOpenError → 503 so the client knows to retry, not surface as
-  // a generic Internal Server Error.
-  if (err instanceof CircuitOpenError) {
-    return c.json(
-      {
-        error: "Service temporarily unavailable",
-        provider: err.provider,
-        requestId: reqId,
-      },
-      503,
-    );
-  }
-  // SupabaseClientError — distinguish caller-bug 4xx from upstream 5xx.
-  //   - 23505 / 409 → uniqueness violation, surface as 409 so the client
-  //     can show "already exists" without re-trying.
-  //   - other 4xx → surface a clean shape with a STRIPPED body (cap at
-  //     200 chars, no raw row data) so the caller can act on it.
-  //   - 5xx (malformed query, broken trigger) → generic 500. The PostgREST
-  //     body would leak query shape / column names, so we don't echo it.
-  if (err instanceof SupabaseClientError) {
-    if (err.status === 409 || err.body.includes("23505")) {
-      return c.json(
-        {
-          error: "Conflict",
-          detail: err.body.slice(0, 200),
-          requestId: reqId,
-        },
-        409,
-      );
-    }
-    if (err.status >= 400 && err.status < 500) {
-      return c.json(
-        {
-          error: "Bad request",
-          detail: err.body.slice(0, 200),
-          requestId: reqId,
-        },
-        // Hono's c.json accepts any number, but its type wants a
-        // ContentfulStatusCode union — cast through the narrow set we
-        // actually return here (400/401/403/404/405/422 etc.).
-        err.status as 400,
-      );
-    }
-    // 5xx — stay generic. Don't leak PostgREST body.
-    return c.json(
-      {
-        error: "Internal Server Error",
-        requestId: reqId,
-      },
-      500,
-    );
-  }
-  return c.json(
-    {
-      error: "Internal Server Error",
-      requestId: reqId,
-    },
-    500
-  );
+  console.error(JSON.stringify({ level: "error", module: "nhimbe-mcp", message: err.message }));
+  return c.json({ error: "Internal Server Error" }, 500);
 });
 
-// 404 handler
-app.notFound((c) => {
-  return c.json({ error: "Not Found" }, 404);
-});
-
-// Queue handler (not part of Hono — exported alongside)
-async function handleQueue(batch: MessageBatch, env: Env): Promise<void> {
-  for (const message of batch.messages) {
-    try {
-      if (batch.queue === "nhimbe-analytics-queue") {
-        await processAnalyticsMessage(message.body as AnalyticsQueueMessage, env);
-      } else if (batch.queue === "nhimbe-email-queue") {
-        await processEmailMessage(message.body as EmailQueueMessage, env);
-      }
-      message.ack();
-    } catch (error) {
-      console.error(`Failed to process message ${message.id}:`, error);
-      message.retry();
-    }
-  }
-}
-
-const worker = {
-  fetch: app.fetch,
-  queue: handleQueue,
-};
-
-export default worker;
+export default app;
