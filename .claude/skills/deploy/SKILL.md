@@ -1,61 +1,49 @@
 ---
 name: deploy
-description: Deploy nhimbe frontend (Vercel) and/or backend (Cloudflare Worker) with pre-flight checks
+description: Ship nhimbe — Vercel deploys automatically on push; run the pre-flight checks before merging
 disable-model-invocation: true
 allowed-tools: Read, Bash, Grep, Glob
 ---
 
-Deploy nhimbe: $ARGUMENTS
+Ship nhimbe: $ARGUMENTS
 
-## Current State
+## How deploys work
+
+nhimbe is a single full-stack Next.js app on **Vercel**. There is **no manual
+deploy step** — Vercel builds and deploys **every push**:
+
+- **Preview** deployment per branch/PR
+- **Production** on merge to `main`
+
+So "deploying" is really: get the branch green, open/merge the PR, and let
+Vercel ship it. The legacy `worker/` (now `nhimbe-mcp`) is being retired to a
+future MCP-only role and is not part of an app deploy.
+
+## Current state
 
 - Branch: !`git branch --show-current`
 - Uncommitted changes: !`git status --short`
 - Last commit: !`git log --oneline -1`
 
-## Pre-flight Checks
+## Pre-flight checks (run before merging)
 
-Run ALL checks before deploying. If any fail, stop and report the issue.
+Run ALL of these. If any fail, stop and fix before merging.
 
 1. **Lint**: `npm run lint`
-2. **Frontend tests**: `npx vitest run`
-3. **Worker tests**: `cd worker && npx vitest run`
-4. **Worker type check**: `cd worker && npx tsc --noEmit`
-5. **Frontend build**: `npm run build`
-6. **Clean git state**: Ensure no uncommitted changes (warn if there are)
+2. **Tests**: `npm run test:run` (or `npx vitest run`)
+3. **Build**: `npm run build`
+4. **Clean git state**: no uncommitted changes (warn if there are)
 
-## Deployment Targets
+## Ship
 
-Based on $ARGUMENTS, deploy one or both:
+1. Push the branch and open a PR (draft until ready).
+2. Confirm CI is green (lint + CI + CodeQL) and the Vercel preview is Ready.
+3. Merge to `main` → Vercel deploys production automatically.
+4. Verify production at https://nhimbe.com.
 
-### Backend (Cloudflare Worker)
+## Environment
 
-```bash
-cd worker && npm run deploy
-```
-
-- Deploys `worker/src/index.ts` to Cloudflare Workers
-- Verify with: `curl -s https://your-api-url/api/health | jq .`
-
-### Frontend (Vercel)
-
-- Use the Vercel CLI or push to trigger Vercel deployment
-- If Vercel CLI is available: `vercel --prod`
-- Otherwise: push to main branch triggers auto-deploy
-
-## Argument Handling
-
-| Argument               | Action                                    |
-| ---------------------- | ----------------------------------------- |
-| (empty) or `all`       | Deploy both backend and frontend          |
-| `worker` or `backend`  | Deploy only the Cloudflare Worker         |
-| `frontend` or `vercel` | Deploy only the Vercel frontend           |
-| `--skip-checks`        | Skip pre-flight checks (use with caution) |
-
-## Post-deploy
-
-After successful deployment, report:
-
-- What was deployed
-- Which pre-flight checks passed
-- Any warnings encountered
+App config lives in Vercel env vars (prod + preview): `MONGODB_URI`,
+`WORKOS_*`, `SHAMWARI_AI_GATEWAY_*`, `NEXT_PUBLIC_*`. `NEXT_PUBLIC_API_URL` is
+intentionally unset — the internal API is same-origin. There are no
+Supabase/Postgres vars.

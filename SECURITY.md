@@ -34,7 +34,8 @@ We'll acknowledge your report within **48 hours** and aim to provide a detailed 
 
 nhimbe is built with defense-in-depth. Without enumerating implementation that changes over time, our baseline includes:
 
-- **Authentication & authorization** — identity is verified on every request; access is role-based and least-privilege; suspended accounts are denied.
+- **Authentication & authorization** — identity is handled by **WorkOS AuthKit** and verified server-side on every request; access is role-based and least-privilege; suspended accounts are denied.
+- **Data** — application data lives in **MongoDB** and is read and written server-side only; no secrets or personal data are committed to this repository.
 - **Input handling** — user and AI inputs are validated, length-limited, and sanitized; uploads are type- and size-checked.
 - **Transport & headers** — HTTPS is enforced, with hardened response headers and a restrictive cross-origin policy.
 - **Secrets** — credentials live in managed secret storage, never in source or client code.
