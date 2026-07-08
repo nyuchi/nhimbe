@@ -83,17 +83,19 @@ Mutations and client-invoked reads: `auth`, `events`, `discovery`, `my-events`, 
 
 ### Route Handlers (`src/app/api/`)
 
-Same-origin fallback endpoints: `events`, `events/[id]` (both also take bearer-authed `POST`/`PATCH` for the MCP), `categories`, `cities`, `community/stats`, `og` (OG image), and the self-hosted auth routes `auth/magic/{start,verify}`, `auth/oauth`, `auth/sso`.
+Same-origin fallback endpoints: `events`, `events/[id]` (both also take bearer-authed `POST`/`PATCH` for the MCP), `categories`, `cities`, `community/stats`, `og` (OG image), and the self-hosted auth routes `auth/magic/{start,verify}`, `auth/password`, `auth/sso` (dormant).
 
 ### Authentication Flow (WorkOS AuthKit — self-hosted UI)
 
-Auth is **self-hosted**: the sign-in UI lives in our own app (`src/app/auth/signin/`) and talks to WorkOS's **headless User Management API** — users never leave nhimbe.com for a WorkOS-hosted page. Three methods, all on our own UI:
+Auth is **self-hosted**: the sign-in UI lives in our own app (`src/app/auth/signin/`) and talks to WorkOS's **headless User Management API** — users never leave nhimbe.com for a WorkOS-hosted page. Primary methods, all on our own UI:
 
 - **Email code (Magic Auth)** — `POST /api/auth/magic/start` (`createMagicAuth`) → `POST /api/auth/magic/verify` (`authenticateWithMagicAuth` + `saveSession`). Fully in-app.
-- **Social OAuth** — `GET /api/auth/oauth?provider=google|microsoft` → 302 to the WorkOS authorization URL (`getAuthorizationUrl`), back to `/callback`.
-- **Organization SSO** — `POST /api/auth/sso` `{ email }` → domain→org lookup (`organizations.listOrganizations`) → `{ url }` to redirect; back to `/callback`.
+- **Password** — `POST /api/auth/password` (`authenticateWithPassword` + `saveSession`). Fully in-app.
+- **MFA (TOTP)** — step-up: when a primary method returns a `pendingAuthenticationToken`, prompt for the 6-digit code and call `authenticateWithTotp`; enrollment via `createUserAuthFactor` (authenticator-app QR). Requires MFA enabled for the WorkOS environment.
 
-Shared URL builders live in `src/lib/auth/flows.ts`. `/callback` (`handleAuth`) exchanges the returned OAuth/SSO code for a session. `src/lib/auth/workos-token.ts` verifies bearer access tokens (for the MCP write endpoints).
+We deliberately **do not use social login**. **Passkeys are not available self-hosted** — WorkOS exposes no headless passkey authenticate API (only webhook events), so they'd require AuthKit's hosted UI / `authkit-js` WebAuthn; deferred. An **organization SSO** helper (`POST /api/auth/sso` → domain→org lookup → `{ url }`, back to `/callback`) exists in `src/lib/auth/flows.ts` but is dormant (not surfaced in the primary UI).
+
+`/callback` (`handleAuth`) exchanges any returned OAuth/SSO code for a session. `src/lib/auth/workos-token.ts` verifies bearer access tokens (for the MCP write endpoints).
 
 - `src/proxy.ts` — Next.js 16 proxy (was middleware in <=15); manages AuthKit session cookies.
 - `withAuth()` from `@workos-inc/authkit-nextjs` gives server components/actions the current user.
