@@ -83,15 +83,25 @@ Mutations and client-invoked reads: `auth`, `events`, `discovery`, `my-events`, 
 
 ### Route Handlers (`src/app/api/`)
 
-Same-origin fallback endpoints: `events`, `events/[id]`, `categories`, `cities`, `community/stats`, `og` (OG image), `auth/*`.
+Same-origin fallback endpoints: `events`, `events/[id]` (both also take bearer-authed `POST`/`PATCH` for the MCP), `categories`, `cities`, `community/stats`, `og` (OG image), and the self-hosted auth routes `auth/magic/{start,verify}`, `auth/oauth`, `auth/sso`.
 
-### Authentication Flow (WorkOS AuthKit)
+### Authentication Flow (WorkOS AuthKit — self-hosted UI)
+
+Auth is **self-hosted**: the sign-in UI lives in our own app (`src/app/auth/signin/`) and talks to WorkOS's **headless User Management API** — users never leave nhimbe.com for a WorkOS-hosted page. Three methods, all on our own UI:
+
+- **Email code (Magic Auth)** — `POST /api/auth/magic/start` (`createMagicAuth`) → `POST /api/auth/magic/verify` (`authenticateWithMagicAuth` + `saveSession`). Fully in-app.
+- **Social OAuth** — `GET /api/auth/oauth?provider=google|microsoft` → 302 to the WorkOS authorization URL (`getAuthorizationUrl`), back to `/callback`.
+- **Organization SSO** — `POST /api/auth/sso` `{ email }` → domain→org lookup (`organizations.listOrganizations`) → `{ url }` to redirect; back to `/callback`.
+
+Shared URL builders live in `src/lib/auth/flows.ts`. `/callback` (`handleAuth`) exchanges the returned OAuth/SSO code for a session. `src/lib/auth/workos-token.ts` verifies bearer access tokens (for the MCP write endpoints).
 
 - `src/proxy.ts` — Next.js 16 proxy (was middleware in <=15); manages AuthKit session cookies.
 - `withAuth()` from `@workos-inc/authkit-nextjs` gives server components/actions the current user.
 - Server actions sync the WorkOS user into `identity.persons` (upsert on WorkOS user id).
 - `src/lib/auth/dev.ts` — local dev auth bypass.
 - `/callback` is the canonical post-auth landing; `/authenticate` is a legacy redirect → `/`.
+
+> **WorkOS environment alignment (critical):** `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, the `authenticate.nyuchi.com` custom domain, and Magic Auth **must all belong to the same WorkOS environment**. A key/client-id/domain split across environments makes Magic Auth codes send but fail verification ("code rejected").
 
 ### AI — Shamwari (`src/lib/ai/`)
 
