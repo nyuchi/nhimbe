@@ -44,9 +44,10 @@ app.get("/", (c) =>
   }),
 );
 
-// MCP JSON-RPC endpoint.
-app.post("/mcp", (c) => handleMcpRequest(c.req.raw, c.env));
-app.get("/mcp", (c) =>
+// MCP JSON-RPC endpoint. The Cloudflare route sends `/mcp` and `/mcp/*` here,
+// so match both the bare path and any sub-path (trailing slash included).
+app.on("POST", ["/mcp", "/mcp/*"], (c) => handleMcpRequest(c.req.raw, c.env));
+app.on("GET", ["/mcp", "/mcp/*"], (c) =>
   c.json({ error: "Use POST for MCP JSON-RPC; this server is stateless (no SSE stream)." }, 405, {
     Allow: "POST",
   }),

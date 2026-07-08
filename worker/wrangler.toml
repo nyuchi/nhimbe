@@ -41,6 +41,7 @@ invocation_logs = true
 name = "nhimbe-mcp"
 vars = { ENVIRONMENT = "production", ALLOWED_ORIGINS = "https://nhimbe.com,https://www.nhimbe.com,https://mukoko.com,https://www.mukoko.com", APP_API_URL = "https://nhimbe.com", MCP_SERVER_NAME = "nhimbe" }
 routes = [
+  { pattern = "nhimbe.com/mcp", zone_name = "nhimbe.com" },
   { pattern = "nhimbe.com/mcp/*", zone_name = "nhimbe.com" }
 ]
 
@@ -62,6 +63,7 @@ invocation_logs = true
 name = "nhimbe-mcp-staging"
 vars = { ENVIRONMENT = "staging", ALLOWED_ORIGINS = "https://staging.nhimbe.com", APP_API_URL = "https://staging.nhimbe.com", MCP_SERVER_NAME = "nhimbe (staging)" }
 routes = [
+  { pattern = "staging.nhimbe.com/mcp", zone_name = "nhimbe.com" },
   { pattern = "staging.nhimbe.com/mcp/*", zone_name = "nhimbe.com" }
 ]
 
