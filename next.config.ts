@@ -5,10 +5,6 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "events-api.mukoko.com",
-      },
-      {
-        protocol: "https",
         hostname: "*.mukoko.com",
       },
       {

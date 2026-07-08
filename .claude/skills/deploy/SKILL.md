@@ -16,8 +16,9 @@ deploy step** — Vercel builds and deploys **every push**:
 - **Production** on merge to `main`
 
 So "deploying" is really: get the branch green, open/merge the PR, and let
-Vercel ship it. The legacy `worker/` (now `nhimbe-mcp`) is being retired to a
-future MCP-only role and is not part of an app deploy.
+Vercel ship it. The `worker/` directory is the separate **`nhimbe-mcp`** server
+(the MCP at `nhimbe.com/mcp`) — it is not part of an app deploy and ships on its
+own via `wrangler deploy --env production` from `worker/`.
 
 ## Current state
 
