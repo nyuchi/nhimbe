@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2, Mail, KeyRound, ArrowLeft, AlertCircle } from "lucide-react";
+import { Loader2, Mail, KeyRound, ArrowLeft, AlertCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -10,9 +10,21 @@ import { Input } from "@/components/ui/input";
 // WorkOS-hosted page. Two methods share one card:
 //   1. Email code (WorkOS Magic Auth) → /api/auth/magic/{start,verify}
 //   2. Password → POST /api/auth/password
+// Either can step up to MFA: when the account has TOTP enabled the server
+// returns { mfa: true, pendingAuthenticationToken } instead of a session, and we
+// advance to a 6-digit authenticator step that POSTs /api/auth/mfa/verify.
 // Each server route sets the session cookie, so we hard-navigate on success and
 // the server re-reads the cookie while AuthProvider syncs the user. (Passkey is
 // planned but deliberately not wired up yet.)
+
+// Shape returned by the email-code / password / mfa routes.
+type AuthResponse = {
+  ok?: boolean;
+  error?: string;
+  mfa?: boolean;
+  pendingAuthenticationToken?: string;
+  challengeId?: string;
+};
 function SignInForm() {
   const searchParams = useSearchParams();
   const returnToRaw = searchParams.get("return_to") ?? "/";
@@ -29,6 +41,14 @@ function SignInForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // MFA step-up: set once a primary method reports the account needs a TOTP code.
+  // The pending token is short-lived and single-use — held here only until the
+  // mfa/verify call, never persisted.
+  const [mfaPending, setMfaPending] = useState<{ token: string; challengeId?: string } | null>(
+    null,
+  );
+  const [mfaCode, setMfaCode] = useState("");
+
   // Flip between methods, resetting any transient error/step so neither flow
   // leaks state into the other.
   function switchMethod(next: "code" | "password") {
@@ -36,6 +56,8 @@ function SignInForm() {
     setStep("email");
     setCode("");
     setError(null);
+    setMfaPending(null);
+    setMfaCode("");
   }
 
   async function sendCode(e: React.FormEvent) {
@@ -68,8 +90,14 @@ function SignInForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, code }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as AuthResponse;
       if (!res.ok) throw new Error(data.error || "That code didn't work.");
+      if (data.mfa && data.pendingAuthenticationToken) {
+        // Account has TOTP: advance to the authenticator step instead of navigating.
+        setMfaPending({ token: data.pendingAuthenticationToken, challengeId: data.challengeId });
+        setLoading(false);
+        return;
+      }
       // Full navigation so the server picks up the new session cookie.
       window.location.assign(returnTo);
     } catch (err) {
@@ -88,8 +116,39 @@ function SignInForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const data = (await res.json().catch(() => ({}))) as AuthResponse;
+      if (data.mfa && data.pendingAuthenticationToken) {
+        // Password was correct but the account has TOTP: step up to the code.
+        setMfaPending({ token: data.pendingAuthenticationToken, challengeId: data.challengeId });
+        setLoading(false);
+        return;
+      }
       if (!res.ok || !data.ok) throw new Error(data.error || "That email or password is incorrect.");
+      // Full navigation so the server picks up the new session cookie.
+      window.location.assign(returnTo);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setLoading(false);
+    }
+  }
+
+  async function verifyMfa(e: React.FormEvent) {
+    e.preventDefault();
+    if (!mfaPending) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/mfa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: mfaCode,
+          pendingAuthenticationToken: mfaPending.token,
+          challengeId: mfaPending.challengeId,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as AuthResponse;
+      if (!res.ok || !data.ok) throw new Error(data.error || "That code didn't work. Try again.");
       // Full navigation so the server picks up the new session cookie.
       window.location.assign(returnTo);
     } catch (err) {
@@ -106,9 +165,11 @@ function SignInForm() {
         <span className="text-sm font-bold tracking-tight text-primary">nhimbe</span>
         <h1 className="mt-2 text-2xl font-bold">Welcome to nhimbe</h1>
         <p className="mt-2 text-muted-foreground">
-          {inCodeEntry
-            ? `Enter the code we sent to ${email}.`
-            : "Sign in to discover and host community events."}
+          {mfaPending
+            ? "Enter the code from your authenticator app."
+            : inCodeEntry
+              ? `Enter the code we sent to ${email}.`
+              : "Sign in to discover and host community events."}
         </p>
       </div>
 
@@ -133,7 +194,53 @@ function SignInForm() {
       )}
 
       <div className="rounded-[var(--radius-lg)] border border-border bg-card p-6 shadow-sm">
-        {inCodeEntry ? (
+        {mfaPending ? (
+          // MFA step-up takes over the card — a primary method already succeeded
+          // and we just need the authenticator code to finish.
+          <form onSubmit={verifyMfa} className="space-y-4">
+            <div className="flex justify-center">
+              <ShieldCheck className="h-8 w-8 text-primary" aria-hidden />
+            </div>
+            <Input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              required
+              enterKeyHint="go"
+              value={mfaCode}
+              onChange={(e) => setMfaCode(e.target.value)}
+              placeholder="123456"
+              aria-label="Authenticator code"
+              className="h-[var(--touch-target-lg)] text-center text-lg tracking-widest"
+            />
+            <Button
+              type="submit"
+              size="lg"
+              disabled={loading || !mfaCode}
+              className="h-[var(--touch-target-lg)] w-full rounded-[var(--radius-lg)] bg-primary text-primary-foreground"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> Verifying…
+                </>
+              ) : (
+                "Verify"
+              )}
+            </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setMfaPending(null);
+                setMfaCode("");
+                setError(null);
+              }}
+              className="flex min-h-[var(--touch-target)] w-full items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden /> Start over
+            </button>
+          </form>
+        ) : inCodeEntry ? (
           // Code-entry step takes over the card — the user is mid-flow.
           <form onSubmit={verifyCode} className="space-y-4">
             <Input

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getWorkOS, saveSession } from "@workos-inc/authkit-nextjs";
+import { mfaChallengeFromError } from "@/lib/auth/mfa";
 
 /**
  * Step 2 of the embedded sign-in: verify the Magic Auth code and create the
@@ -46,6 +47,17 @@ export async function POST(request: NextRequest) {
     await saveSession(auth, request);
     return NextResponse.json({ ok: true });
   } catch (err) {
+    // The code was valid but the account has TOTP enabled: WorkOS throws an
+    // "mfa_challenge" signal carrying a one-time pending token. Hand that to the
+    // client so it can collect the 6-digit code — not a rejected-code failure.
+    const mfa = mfaChallengeFromError(err);
+    if (mfa) {
+      return NextResponse.json({
+        mfa: true,
+        pendingAuthenticationToken: mfa.pendingAuthenticationToken,
+        challengeId: mfa.challengeId,
+      });
+    }
     console.error("[mukoko:auth] authenticateWithMagicAuth failed:", err);
     return NextResponse.json(
       { error: "That code didn't work or has expired. Request a new one." },

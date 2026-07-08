@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getWorkOS, saveSession } from "@workos-inc/authkit-nextjs";
+import { mfaChallengeFromError } from "@/lib/auth/mfa";
 
 /**
  * Self-hosted password sign-in: authenticate an email + password against the
@@ -49,6 +50,17 @@ export async function POST(request: NextRequest) {
     await saveSession(auth, request);
     return NextResponse.json({ ok: true });
   } catch (err) {
+    // The password was correct but the account has TOTP enabled: WorkOS throws
+    // an "mfa_challenge" signal carrying a one-time pending token. Hand that to
+    // the client so it can collect the 6-digit code — not a credential failure.
+    const mfa = mfaChallengeFromError(err);
+    if (mfa) {
+      return NextResponse.json({
+        mfa: true,
+        pendingAuthenticationToken: mfa.pendingAuthenticationToken,
+        challengeId: mfa.challengeId,
+      });
+    }
     // Never leak the raw WorkOS error — a generic message avoids revealing
     // whether the email exists.
     console.error("[mukoko:auth] authenticateWithPassword failed:", err);

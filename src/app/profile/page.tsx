@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { AuthGuard } from "@/components/auth/auth-guard";
+import { TwoFactorSetup } from "@/components/auth/two-factor-setup";
 import { useAuth } from "@/components/auth/auth-context";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -269,6 +270,11 @@ function ProfileContent() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Two-factor authentication */}
+      <div className="mt-6">
+        <TwoFactorSetup />
       </div>
 
       {/* Sign Out */}

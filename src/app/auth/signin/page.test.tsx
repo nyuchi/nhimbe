@@ -71,6 +71,52 @@ describe("SignInPage", () => {
     await waitFor(() => expect(assign).toHaveBeenCalledWith("/"));
   });
 
+  it("steps up to the authenticator code when the password path returns mfa", async () => {
+    const assign = stubLocationAssign();
+    // 1st fetch: password route reports MFA required (no session yet).
+    // 2nd fetch: mfa/verify completes and returns { ok: true }.
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          mfa: true,
+          pendingAuthenticationToken: "pat_abc",
+          challengeId: "auth_challenge_1",
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    render(<SignInPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /use a password instead/i }));
+    fireEvent.change(screen.getByLabelText(/email address/i), {
+      target: { value: "person@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^password$/i), {
+      target: { value: "s3cret-passphrase" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+    // The authenticator step takes over the card.
+    const codeInput = await screen.findByLabelText(/authenticator code/i);
+    fireEvent.change(codeInput, { target: { value: "654321" } });
+    fireEvent.click(screen.getByRole("button", { name: /^verify$/i }));
+
+    await waitFor(() =>
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        "/api/auth/mfa/verify",
+        expect.objectContaining({ method: "POST" })
+      )
+    );
+    // The pending token + code are handed to the verify call.
+    const lastBody = JSON.parse(mockFetch.mock.calls[1][1].body as string);
+    expect(lastBody).toMatchObject({
+      code: "654321",
+      pendingAuthenticationToken: "pat_abc",
+      challengeId: "auth_challenge_1",
+    });
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("/"));
+  });
+
   it("surfaces an inline error when the password is rejected", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
