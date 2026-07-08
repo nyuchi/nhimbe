@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 // Mock the WorkOS SDK surface the flows touch. `getAuthorizationUrl` echoes its
-// options so tests can assert on the provider/org mapping; `listOrganizations`
-// is programmable per test.
+// options so tests can assert on the org mapping; `listOrganizations` is
+// programmable per test.
 const getAuthorizationUrl = vi.fn(
   (opts: Record<string, unknown>) => `https://workos.test/authorize?${JSON.stringify(opts)}`,
 );
@@ -19,7 +19,7 @@ vi.mock("@workos-inc/authkit-nextjs", () => ({
   }),
 }));
 
-import { isProvider, safeReturnTo, socialAuthUrl, ssoAuthUrlForEmail } from "./flows";
+import { safeReturnTo, ssoAuthUrlForEmail } from "./flows";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -31,19 +31,6 @@ beforeEach(() => {
 
 afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
-});
-
-describe("isProvider", () => {
-  it("accepts supported providers", () => {
-    expect(isProvider("google")).toBe(true);
-    expect(isProvider("microsoft")).toBe(true);
-  });
-
-  it("rejects anything else", () => {
-    expect(isProvider("apple")).toBe(false);
-    expect(isProvider("")).toBe(false);
-    expect(isProvider("GoogleOAuth")).toBe(false);
-  });
 });
 
 describe("safeReturnTo", () => {
@@ -60,31 +47,6 @@ describe("safeReturnTo", () => {
     expect(safeReturnTo("/\\evil.example")).toBe("/");
     expect(safeReturnTo("https://evil.example")).toBe("/");
     expect(safeReturnTo("relative/path")).toBe("/");
-  });
-});
-
-describe("socialAuthUrl", () => {
-  it("maps google → GoogleOAuth", () => {
-    const url = socialAuthUrl("google", "/events");
-    expect(url).toContain("https://workos.test/authorize");
-    const opts = getAuthorizationUrl.mock.calls[0][0];
-    expect(opts).toMatchObject({
-      clientId: "client_test",
-      redirectUri: "https://nhimbe.com/callback",
-      provider: "GoogleOAuth",
-    });
-    expect(typeof opts.state).toBe("string");
-  });
-
-  it("maps microsoft → MicrosoftOAuth", () => {
-    socialAuthUrl("microsoft", "/");
-    expect(getAuthorizationUrl.mock.calls[0][0]).toMatchObject({ provider: "MicrosoftOAuth" });
-  });
-
-  it("returns null when env is missing", () => {
-    delete process.env.WORKOS_CLIENT_ID;
-    expect(socialAuthUrl("google", "/")).toBeNull();
-    expect(getAuthorizationUrl).not.toHaveBeenCalled();
   });
 });
 

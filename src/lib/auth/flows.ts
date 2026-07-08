@@ -6,23 +6,10 @@ import { getWorkOS } from "@workos-inc/authkit-nextjs";
  *
  * These helpers only *build* the authorization URL the browser is sent to;
  * the authorization code that comes back is exchanged for a session by
- * `/callback` (`handleAuth`). Keeping the URL-building here means the OAuth
- * and SSO route handlers stay thin and share one code path.
+ * `/callback` (`handleAuth`). Keeping the URL-building here means the SSO
+ * route handler stays thin. SSO is a dormant capability — the sign-in UI
+ * exposes email code and password today — but the wiring stays ready.
  */
-
-/** Social providers we expose in the in-app sign-in UI. */
-export type Provider = "google" | "microsoft";
-
-/** nhimbe provider slug → WorkOS provider name. */
-const PROVIDER_MAP: Record<Provider, string> = {
-  google: "GoogleOAuth",
-  microsoft: "MicrosoftOAuth",
-};
-
-/** Narrow an arbitrary string to a supported {@link Provider}. */
-export function isProvider(value: string): value is Provider {
-  return value === "google" || value === "microsoft";
-}
 
 /**
  * Clamp a caller-supplied `return_to` to a safe local path. Anything that
@@ -65,21 +52,6 @@ function authConfig(): { clientId: string; redirectUri: string } | null {
   return { clientId, redirectUri };
 }
 
-/**
- * Build the WorkOS authorization URL for a social OAuth provider. Returns
- * `null` when the deployment is missing WorkOS env so callers can fail soft.
- */
-export function socialAuthUrl(provider: Provider, returnTo: string): string | null {
-  const config = authConfig();
-  if (!config) return null;
-  return getWorkOS().userManagement.getAuthorizationUrl({
-    clientId: config.clientId,
-    redirectUri: config.redirectUri,
-    provider: PROVIDER_MAP[provider],
-    state: encodeState(safeReturnTo(returnTo)),
-  });
-}
-
 /** Discriminated outcome of an SSO lookup, mapped to HTTP statuses by the route. */
 export type SsoResult =
   | { status: "ok"; url: string }
@@ -91,7 +63,7 @@ export type SsoResult =
 /**
  * Resolve a work email's domain to a WorkOS organization and build its SSO
  * authorization URL. A domain with no matching org yields `not-found` so the
- * UI can nudge the user toward email code or a social login instead.
+ * UI can nudge the user toward email code or a password instead.
  */
 export async function ssoAuthUrlForEmail(email: string, returnTo: string): Promise<SsoResult> {
   const config = authConfig();

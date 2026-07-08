@@ -2,18 +2,17 @@
 
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2, Mail, ArrowLeft, AlertCircle, Building2 } from "lucide-react";
+import { Loader2, Mail, KeyRound, ArrowLeft, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SocialButtons } from "@/components/auth/social-buttons";
 
-// Unified self-hosted sign-in: everything happens on our own UI — no redirect
-// to a WorkOS-hosted page. Three methods share one card:
-//   1. Social login (Google / Microsoft) → /api/auth/oauth
-//   2. Email code (WorkOS Magic Auth) → /api/auth/magic/{start,verify}
-//   3. SSO / organization → POST /api/auth/sso → { url } | { error }
+// Self-hosted sign-in: everything happens on our own UI — no redirect to a
+// WorkOS-hosted page. Two methods share one card:
+//   1. Email code (WorkOS Magic Auth) → /api/auth/magic/{start,verify}
+//   2. Password → POST /api/auth/password
 // Each server route sets the session cookie, so we hard-navigate on success and
-// the server re-reads the cookie while AuthProvider syncs the user.
+// the server re-reads the cookie while AuthProvider syncs the user. (Passkey is
+// planned but deliberately not wired up yet.)
 function SignInForm() {
   const searchParams = useSearchParams();
   const returnToRaw = searchParams.get("return_to") ?? "/";
@@ -21,21 +20,23 @@ function SignInForm() {
     returnToRaw.startsWith("/") && !returnToRaw.startsWith("//") ? returnToRaw : "/";
   const configError = searchParams.get("error") === "config";
 
+  // Email code defaults; the user can switch to a password at any time.
+  const [method, setMethod] = useState<"code" | "password">("code");
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // SSO affordance: hidden until requested, then reveals a work-email input.
-  const [ssoOpen, setSsoOpen] = useState(false);
-  const [ssoEmail, setSsoEmail] = useState("");
-  const [ssoLoading, setSsoLoading] = useState(false);
-  const [ssoError, setSsoError] = useState<string | null>(null);
-
-  // Set while the browser is mid-navigation to a social provider so we can
-  // disable the whole card and avoid a double submit.
-  const [redirecting, setRedirecting] = useState(false);
+  // Flip between methods, resetting any transient error/step so neither flow
+  // leaks state into the other.
+  function switchMethod(next: "code" | "password") {
+    setMethod(next);
+    setStep("email");
+    setCode("");
+    setError(null);
+  }
 
   async function sendCode(e: React.FormEvent) {
     e.preventDefault();
@@ -77,29 +78,27 @@ function SignInForm() {
     }
   }
 
-  async function startSso(e: React.FormEvent) {
+  async function signInWithPassword(e: React.FormEvent) {
     e.preventDefault();
-    setSsoLoading(true);
-    setSsoError(null);
+    setLoading(true);
+    setError(null);
     try {
-      const res = await fetch("/api/auth/sso", {
+      const res = await fetch("/api/auth/password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: ssoEmail }),
+        body: JSON.stringify({ email, password }),
       });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "We couldn't find SSO for that email.");
-      }
-      if (!data.url) throw new Error("We couldn't start SSO. Please try again.");
-      window.location.assign(data.url);
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error || "That email or password is incorrect.");
+      // Full navigation so the server picks up the new session cookie.
+      window.location.assign(returnTo);
     } catch (err) {
-      setSsoError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
-      setSsoLoading(false);
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setLoading(false);
     }
   }
 
-  const busy = loading || redirecting;
+  const inCodeEntry = method === "code" && step === "code";
 
   return (
     <div className="mx-auto flex min-h-[70vh] w-full max-w-104 flex-col justify-center px-6 py-12">
@@ -107,9 +106,9 @@ function SignInForm() {
         <span className="text-sm font-bold tracking-tight text-primary">nhimbe</span>
         <h1 className="mt-2 text-2xl font-bold">Welcome to nhimbe</h1>
         <p className="mt-2 text-muted-foreground">
-          {step === "email"
-            ? "Sign in to discover and host community events."
-            : `Enter the code we sent to ${email}.`}
+          {inCodeEntry
+            ? `Enter the code we sent to ${email}.`
+            : "Sign in to discover and host community events."}
         </p>
       </div>
 
@@ -134,7 +133,7 @@ function SignInForm() {
       )}
 
       <div className="rounded-[var(--radius-lg)] border border-border bg-card p-6 shadow-sm">
-        {step === "code" ? (
+        {inCodeEntry ? (
           // Code-entry step takes over the card — the user is mid-flow.
           <form onSubmit={verifyCode} className="space-y-4">
             <Input
@@ -176,22 +175,61 @@ function SignInForm() {
               <ArrowLeft className="h-4 w-4" aria-hidden /> Use a different email
             </button>
           </form>
+        ) : method === "password" ? (
+          <div className="space-y-5">
+            <form onSubmit={signInWithPassword} className="space-y-4">
+              <Input
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                required
+                enterKeyHint="next"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                aria-label="Email address"
+                className="h-[var(--touch-target-lg)] text-base"
+              />
+              <Input
+                type="password"
+                autoComplete="current-password"
+                required
+                enterKeyHint="go"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Your password"
+                aria-label="Password"
+                className="h-[var(--touch-target-lg)] text-base"
+              />
+              <Button
+                type="submit"
+                size="lg"
+                disabled={loading || !email || !password}
+                className="h-[var(--touch-target-lg)] w-full rounded-[var(--radius-lg)] bg-primary text-primary-foreground"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> Signing in…
+                  </>
+                ) : (
+                  "Sign in"
+                )}
+              </Button>
+            </form>
+
+            <div className="border-t border-border pt-5">
+              <button
+                type="button"
+                onClick={() => switchMethod("code")}
+                disabled={loading}
+                className="flex min-h-[var(--touch-target)] w-full items-center justify-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+              >
+                <Mail className="h-4 w-4" aria-hidden /> Email me a code instead
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="space-y-5">
-            <SocialButtons
-              returnTo={returnTo}
-              disabled={busy}
-              onSelect={() => setRedirecting(true)}
-            />
-
-            <div className="flex items-center gap-3" aria-hidden>
-              <span className="h-px flex-1 bg-border" />
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                or
-              </span>
-              <span className="h-px flex-1 bg-border" />
-            </div>
-
             <form onSubmit={sendCode} className="space-y-4">
               <Input
                 type="email"
@@ -208,7 +246,7 @@ function SignInForm() {
               <Button
                 type="submit"
                 size="lg"
-                disabled={busy || !email}
+                disabled={loading || !email}
                 className="h-[var(--touch-target-lg)] w-full rounded-[var(--radius-lg)] bg-primary text-primary-foreground"
               >
                 {loading ? (
@@ -224,78 +262,14 @@ function SignInForm() {
             </form>
 
             <div className="border-t border-border pt-5">
-              {ssoOpen ? (
-                <form onSubmit={startSso} className="space-y-3">
-                  <label htmlFor="sso-email" className="text-sm font-medium text-foreground">
-                    Work email
-                  </label>
-                  <Input
-                    id="sso-email"
-                    type="email"
-                    inputMode="email"
-                    autoComplete="email"
-                    autoFocus
-                    required
-                    enterKeyHint="go"
-                    value={ssoEmail}
-                    onChange={(e) => setSsoEmail(e.target.value)}
-                    placeholder="you@company.com"
-                    aria-label="Work email for SSO"
-                    className="h-[var(--touch-target-lg)] text-base"
-                  />
-                  {ssoError && (
-                    <div
-                      className="flex items-start gap-2 rounded-[var(--radius-lg)] border border-destructive/30 bg-destructive/10 p-3"
-                      role="alert"
-                    >
-                      <AlertCircle
-                        className="mt-0.5 h-4 w-4 shrink-0 text-destructive"
-                        aria-hidden
-                      />
-                      <p className="text-sm text-destructive">{ssoError}</p>
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="lg"
-                      disabled={ssoLoading || !ssoEmail}
-                      className="h-[var(--touch-target-lg)] flex-1 rounded-[var(--radius-lg)]"
-                    >
-                      {ssoLoading ? (
-                        <>
-                          <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> Redirecting…
-                        </>
-                      ) : (
-                        "Continue with SSO"
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="lg"
-                      disabled={ssoLoading}
-                      onClick={() => {
-                        setSsoOpen(false);
-                        setSsoError(null);
-                      }}
-                      className="h-[var(--touch-target-lg)] rounded-[var(--radius-lg)]"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setSsoOpen(true)}
-                  disabled={busy}
-                  className="flex min-h-[var(--touch-target)] w-full items-center justify-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                >
-                  <Building2 className="h-4 w-4" aria-hidden /> Sign in with SSO
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => switchMethod("password")}
+                disabled={loading}
+                className="flex min-h-[var(--touch-target)] w-full items-center justify-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+              >
+                <KeyRound className="h-4 w-4" aria-hidden /> Use a password instead
+              </button>
             </div>
           </div>
         )}
