@@ -18,8 +18,10 @@
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { eventsCollection, personsCollection, rsvpsCollection } from "@/lib/mongo/databases";
 import { stampNew } from "@/lib/mongo/ids";
-import { ensureHostEntityForPerson } from "@/lib/mongo/entities";
+import { ensureHostEntityForPerson, getHostContactForEntity } from "@/lib/mongo/entities";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
+import { sendEmail } from "@/lib/email/resend";
+import { hostNewRegistration, registrationConfirmed } from "@/lib/email/templates";
 import { isDevBypass, DEV_WORKOS_ID, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
 import type { PersonDoc, RsvpDoc } from "@/lib/mongo/types";
 
@@ -156,6 +158,60 @@ export async function rsvpToEvent(input: RsvpActionInput): Promise<RsvpActionRes
     const racedExisting = await rsvps.findOne({ eventId, attendeePersonId: person._id });
     if (racedExisting) return { registered: false, alreadyRegistered: true };
     throw err;
+  }
+
+  // Best-effort transactional emails: attendee confirmation + host notification.
+  // Email must never fail or change the RSVP result, so the whole block is
+  // wrapped and any failure is only logged. We `await` inside the try/catch
+  // because Vercel serverless may freeze the function once the response is
+  // returned — fire-and-forget sends could be dropped mid-flight.
+  try {
+    const eventUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://nhimbe.com"}/events/${eventId}`;
+    const eventDate = event.startDate.toLocaleString("en-US", {
+      dateStyle: "full",
+      timeStyle: "short",
+    });
+    const eventLocation =
+      event.location && typeof event.location.name === "string"
+        ? event.location.name
+        : "See event page";
+    const attendeeName = person.name?.trim() || "there";
+    const attendeeEmail = person.email?.trim() || null;
+    // Best-effort headcount for the host note (post-insert, incl. this RSVP).
+    const attendeeCount = event.totalAttendeeCount + seats;
+
+    // Attendee confirmation.
+    if (attendeeEmail) {
+      const tpl = registrationConfirmed({
+        userName: attendeeName,
+        eventName: event.name,
+        eventDate,
+        eventLocation,
+        eventUrl,
+      });
+      await sendEmail({ to: attendeeEmail, subject: tpl.subject, html: tpl.html, text: tpl.text });
+    }
+
+    // Host notification — skip when the host email is unresolved or when the
+    // host RSVP'd to their own event (don't notify them about themselves).
+    const host = await getHostContactForEntity(event.primaryHostEntityId);
+    if (!host) {
+      console.debug(`[mukoko:email] No host email resolved for event ${eventId}; skipping host notification`);
+    } else if (attendeeEmail && host.email.toLowerCase() === attendeeEmail.toLowerCase()) {
+      console.debug(`[mukoko:email] Host RSVP'd to their own event ${eventId}; skipping self-notification`);
+    } else {
+      const tpl = hostNewRegistration({
+        hostName: host.name?.trim() || "there",
+        attendeeName,
+        eventName: event.name,
+        attendeeCount,
+        eventUrl,
+      });
+      await sendEmail({ to: host.email, subject: tpl.subject, html: tpl.html, text: tpl.text });
+    }
+  } catch (emailErr) {
+    const message = emailErr instanceof Error ? emailErr.message : "Unknown error";
+    console.error(`[mukoko:email] Failed to send RSVP notification emails: ${message}`);
   }
 
   return { registered: true, alreadyRegistered: false };

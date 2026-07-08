@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **nhimbe** (pronounced /ˈnhimbɛ/) — community events discovery and management platform, part of the Mukoko ecosystem. It is a single full-stack **Next.js 16** app (App Router, React 19, TypeScript strict, Tailwind v4) deployed on **Vercel** — there is no separate application backend. Data lives in **MongoDB** (the Mukoko v3.1 cluster) and is read/written **server-side only** via the official `mongodb` driver. Auth is **WorkOS AuthKit** end-to-end. AI ("Shamwari") runs through the **Cloudflare AI Gateway**; media is stored in **Cloudflare R2**.
 
-Legacy note: the repo still contains a `worker/` directory (the retired Cloudflare Worker REST backend). It is **not** part of the running app — see "Cloudflare Worker (future MCP)" below. Ignore it for feature work unless explicitly building the MCP server.
+Worker note: the `worker/` directory is now the **`nhimbe-mcp`** server — a task-based MCP at `nhimbe.com/mcp` and the only thing that runs on Cloudflare Workers. It is **not** part of the app request path (feature work lives in `src/`); see "nhimbe MCP" below.
 
 ## Build & Dev Commands
 
@@ -31,7 +31,7 @@ Database: MongoDB collections/validators are owned by the Mukoko platform, not t
 GitHub Actions:
 
 - **`lint.yml`** — org reusable lint workflow (actionlint, JSON validity, prettier, markdownlint, yamllint).
-- **`ci.yml`** — Lint & Build (`npm run lint` + `npm run build` with placeholder env vars) and Frontend Tests (`npm run test:run`). Worker jobs remain only while the legacy `worker/` directory exists.
+- **`ci.yml`** — Lint & Build (`npm run lint` + `npm run build` with placeholder env vars) and Frontend Tests (`npm run test:run`). Worker jobs cover the `nhimbe-mcp` server in `worker/` (its own vitest suite).
 - **CodeQL** — security scanning.
 
 Vercel builds and deploys every commit (preview per branch, production on `main`).
@@ -107,9 +107,14 @@ Env: `SHAMWARI_AI_GATEWAY_URL`, `SHAMWARI_AI_GATEWAY_TOKEN`, and optional `SHAMW
 
 Media lives in the **shared** Mukoko bucket `mukoko-storage`, served at `assets-s001.mukoko.com` (`getMediaUrl` in `src/lib/api.ts`, overridable via `NEXT_PUBLIC_ASSETS_URL`) — **not** a per-app silo. Reads need no credentials. Uploads require an R2 S3 token (pending).
 
-### Cloudflare Worker (future MCP)
+### nhimbe MCP (`worker/` → `nhimbe-mcp`)
 
-The retired Worker's only **future** role is a **task-based MCP server** exposing tasks such as "events near me" and "events matching my interests", plus event create/manage functions, and returning **inline HTML** (a carousel for multiple events, a single card for one). **No MCP/agent tools are built yet.** Cloudflare is otherwise used only for R2 storage and the Shamwari AI Gateway. Supabase, PostgREST, and any dependency on `api.mukoko.com` have been removed from the app (the mukoko gateway integration is still in progress).
+The `worker/` directory is now a single-purpose **task-based MCP server** (`nhimbe-mcp`) — the legacy REST backend, Supabase reads, Paynow, Resend email and queues were all stripped out. It is a stateless Streamable-HTTP MCP server (JSON-RPC 2.0, fetch-native, `hono`; no data of its own) deployed behind the nhimbe zone at **`nhimbe.com/mcp/*`** — the zone is Cloudflare-proxied (orange cloud) in front of Vercel, and the Worker route intercepts `/mcp/*` while everything else passes through to the app.
+
+- **Tools** (`worker/src/mcp/`): `events_near_me`, `events_matching_interests`, `get_event` (anonymous reads) and `create_event`, `update_event` (WorkOS-gated). Each returns **inline HTML** — a carousel for multiple events, a single card for one — plus a text fallback.
+- **No data ownership.** Every tool calls the nhimbe app API (`APP_API_URL`, `https://nhimbe.com`). Reads hit the public `/api/events*` endpoints; writes hit `POST /api/events` / `PATCH /api/events/:id`, which the worker reaches by forwarding the caller's WorkOS **bearer** token. The app verifies the token (`src/lib/auth/workos-token.ts` → JWKS) and is the single trust boundary. **No autonomous/agent tools yet** — deliberately future work.
+
+Cloudflare is otherwise used only for R2 storage and the Shamwari AI Gateway. Transactional email now runs **on the app** (`src/lib/email/`, Resend) — the worker no longer sends mail. Supabase, PostgREST, and any dependency on `api.mukoko.com` have been removed from the app.
 
 ## Frontend Structure
 
@@ -222,6 +227,7 @@ Set in Vercel (prod + preview) and locally in `.env.local`:
 - `WORKOS_API_HOSTNAME` *(optional)* — defaults to `api.workos.com`; set to `authenticate.nyuchi.com` to route WorkOS calls through the Nyuchi custom domain.
 - `NEXT_PUBLIC_WORKOS_REDIRECT_URI` — usually `${NEXT_PUBLIC_SITE_URL}/callback`. The `NEXT_PUBLIC_` prefix is **required** — AuthKit reads it from the client bundle to form the OAuth start URL.
 - `SHAMWARI_AI_GATEWAY_URL`, `SHAMWARI_AI_GATEWAY_TOKEN` — Cloudflare AI Gateway base + provider bearer; optional `SHAMWARI_AI_GATEWAY_AUTH_TOKEN` for the authenticated gateway.
+- `RESEND_API_KEY` — server-only; used for transactional email via Resend (`src/lib/email/`). When unset, email sends are skipped (never throw).
 - `NEXT_PUBLIC_SITE_URL` — public site URL.
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — Google Maps.
 - `NEXT_PUBLIC_ASSETS_URL` *(optional)* — override the R2 assets host (defaults to `https://assets-s001.mukoko.com`).

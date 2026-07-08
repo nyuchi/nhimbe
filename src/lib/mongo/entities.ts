@@ -24,6 +24,40 @@ export async function getEntityById(id: string): Promise<EntityDoc | null> {
   return col.findOne({ _id: id });
 }
 
+/** A contactable email + display name for an entity's host — for notifications. */
+export interface HostContact {
+  email: string;
+  name: string | null;
+}
+
+/**
+ * Resolve a contact (email + display name) for the human hosting through an
+ * entity — the person to notify about activity on the entity's events. Prefers
+ * the founder person's identity email, falling back to the entity's own contact
+ * email. Returns null when nothing usable is on file (caller should skip
+ * silently, never throw).
+ */
+export async function getHostContactForEntity(entityId: string): Promise<HostContact | null> {
+  const entity = await getEntityById(entityId);
+  if (!entity) return null;
+
+  // Prefer the founder person's identity email/name.
+  if (entity.founderPersonId) {
+    const persons = await personsCollection();
+    const founder = await persons.findOne({ _id: entity.founderPersonId });
+    if (founder?.email) {
+      return { email: founder.email, name: founder.name ?? entity.name ?? null };
+    }
+  }
+
+  // Fall back to the entity's own contact email.
+  if (entity.email) {
+    return { email: entity.email, name: entity.name ?? null };
+  }
+
+  return null;
+}
+
 /** Membership roles that let a person host events on an entity's behalf. */
 const HOSTABLE_ROLES: EntityMembershipRole[] = ["founder", "admin", "manager", "representative"];
 

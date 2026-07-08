@@ -1,7 +1,8 @@
 {
-  "name": "nhimbe-api",
-  "version": "0.1.0",
+  "name": "nhimbe-mcp",
+  "version": "1.0.0",
   "private": true,
+  "description": "nhimbe task-based MCP server (Cloudflare Worker)",
   "scripts": {
     "dev": "wrangler dev",
     "build": "echo 'Build handled by wrangler deploy'",

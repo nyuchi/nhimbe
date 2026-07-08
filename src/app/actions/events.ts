@@ -7,17 +7,23 @@
  * a worker fallback). It resolves the signed-in person via AuthKit, ensures
  * they have a host entity to act through (Rule 10), and inserts a single
  * v3.1 `events.events` document.
+ *
+ * The core write logic is factored into `createEventForPerson` /
+ * `updateEventForPerson`, which take an already-resolved person. The cookie
+ * session actions resolve identity via AuthKit; the MCP write endpoints
+ * (`POST/PATCH /api/events`) resolve it from a WorkOS bearer token. Both then
+ * share one authorization + persistence path.
  */
 
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { eventsCollection, personsCollection } from "@/lib/mongo/databases";
 import { newId, slugify, stampNew } from "@/lib/mongo/ids";
-import { ensureHostEntityForPerson, getEntityById } from "@/lib/mongo/entities";
+import { ensureHostEntityForPerson, getEntityById, listHostEntitiesForPerson } from "@/lib/mongo/entities";
 import { indexEventEmbedding } from "@/lib/ai/event-index";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { mapEventDocToApi } from "@/lib/mongo/mappers";
 import { isDevBypass, DEV_WORKOS_ID, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
-import type { EventDoc } from "@/lib/mongo/types";
+import type { EventDoc, PersonDoc } from "@/lib/mongo/types";
 import type { Event } from "@/lib/api";
 
 const MAX_NAME_LENGTH = 200;
@@ -67,6 +73,18 @@ export interface CreateEventResult {
   event: Event;
 }
 
+/** Resolve (and lazily sync) the person doc for a WorkOS identity. */
+async function resolvePerson(syncInput: SyncPersonInput): Promise<PersonDoc> {
+  const persons = await personsCollection();
+  let person = await persons.findOne({ workosUserId: syncInput.workosUserId });
+  if (!person) {
+    await syncPersonFromWorkos(syncInput);
+    person = await persons.findOne({ workosUserId: syncInput.workosUserId });
+  }
+  if (!person) throw new Error("Could not resolve your account. Please try again.");
+  return person;
+}
+
 export async function createEvent(input: CreateEventActionInput): Promise<CreateEventResult> {
   // Resolve the acting identity: WorkOS session, or the local dev bypass.
   let syncInput: SyncPersonInput;
@@ -86,8 +104,22 @@ export async function createEvent(input: CreateEventActionInput): Promise<Create
     };
   }
 
-  // Server-side validation. The form validates too, but server actions are
-  // network-callable — never trust the client's checks alone.
+  const person = await resolvePerson(syncInput);
+  return createEventForPerson(person, input);
+}
+
+/**
+ * Core create logic, given an already-resolved person. Shared by the
+ * `createEvent` server action (cookie session) and the MCP write endpoint
+ * `POST /api/events` (bearer token). Validates, resolves the host entity
+ * (Rule 10), inserts the v3.1 event, and indexes it for semantic search.
+ */
+export async function createEventForPerson(
+  person: PersonDoc,
+  input: CreateEventActionInput,
+): Promise<CreateEventResult> {
+  // Server-side validation. The form validates too, but this path is
+  // network-callable (server action + MCP endpoint) — never trust the client.
   const name = input.name?.trim() ?? "";
   if (!name) throw new Error("Event name is required.");
   if (name.length > MAX_NAME_LENGTH) {
@@ -109,15 +141,6 @@ export async function createEvent(input: CreateEventActionInput): Promise<Create
   if ((input.hostMode === "organization" || input.hostMode === "family") && !input.hostEntityId) {
     throw new Error(`Pick which ${input.hostMode} is hosting, or switch back to a personal host.`);
   }
-
-  // Resolve the person doc (ensure it exists; sync is idempotent).
-  const persons = await personsCollection();
-  let person = await persons.findOne({ workosUserId: syncInput.workosUserId });
-  if (!person) {
-    await syncPersonFromWorkos(syncInput);
-    person = await persons.findOne({ workosUserId: syncInput.workosUserId });
-  }
-  if (!person) throw new Error("Could not resolve your account. Please try again.");
 
   // Resolve the host entity: an explicitly picked org/family, else the
   // person's (lazily created) default host entity.
@@ -211,4 +234,79 @@ export async function createEvent(input: CreateEventActionInput): Promise<Create
   // what list/detail reads will show (entity name, not the person's name).
   const hostEntity = await getEntityById(primaryHostEntityId);
   return { id, event: mapEventDocToApi(doc, { hostEntity, hostPerson: person }) };
+}
+
+export interface UpdateEventInput {
+  name?: string;
+  description?: string | null;
+  /** ISO 8601 start instant. */
+  startDate?: string;
+  /** ISO 8601 end instant. */
+  endDate?: string;
+  /** Lifecycle change — e.g. "cancelled" to cancel the event. */
+  status?: "published" | "cancelled" | "draft";
+}
+
+/**
+ * Update/manage an existing event, given an already-resolved person. HOST-GATED
+ * (Rule 10): `person` must host through the entity that owns the event. Shared
+ * by the MCP write endpoint `PATCH /api/events/:id`.
+ */
+export async function updateEventForPerson(
+  person: PersonDoc,
+  eventId: string,
+  patch: UpdateEventInput,
+): Promise<CreateEventResult> {
+  const events = await eventsCollection();
+  const event = await events.findOne({ _id: eventId });
+  if (!event) throw new Error("That event could not be found.");
+
+  const hostEntities = await listHostEntitiesForPerson(person._id);
+  const canHost = hostEntities.some((e) => e._id === event.primaryHostEntityId);
+  if (!canHost) throw new Error("You are not a host of this event.");
+
+  const set: Record<string, unknown> = { updatedAt: new Date() };
+  let contentChanged = false;
+
+  if (patch.name !== undefined) {
+    const name = patch.name.trim();
+    if (!name) throw new Error("Event name cannot be empty.");
+    if (name.length > MAX_NAME_LENGTH) {
+      throw new Error(`Event name must be ${MAX_NAME_LENGTH} characters or fewer.`);
+    }
+    set.name = name;
+    set.slug = slugify(name);
+    contentChanged = true;
+  }
+  if (patch.description !== undefined) {
+    if ((patch.description?.length ?? 0) > MAX_DESCRIPTION_LENGTH) {
+      throw new Error(`Description must be ${MAX_DESCRIPTION_LENGTH} characters or fewer.`);
+    }
+    set.description = patch.description?.trim() || null;
+    contentChanged = true;
+  }
+  if (patch.startDate !== undefined) {
+    const start = new Date(patch.startDate);
+    if (Number.isNaN(start.getTime())) throw new Error("The start date is invalid.");
+    set.startDate = start;
+  }
+  if (patch.endDate !== undefined) {
+    const end = new Date(patch.endDate);
+    if (Number.isNaN(end.getTime())) throw new Error("The end date is invalid.");
+    set.endDate = end;
+  }
+  if (patch.status !== undefined) {
+    set.status = patch.status;
+    set.eventStatus = patch.status === "cancelled" ? "EventCancelled" : "EventScheduled";
+  }
+
+  await events.updateOne({ _id: eventId }, { $set: set });
+  const updated = await events.findOne({ _id: eventId });
+  if (!updated) throw new Error("The event could not be reloaded after updating.");
+
+  // Re-index for search only when searchable content changed (best-effort).
+  if (contentChanged) await indexEventEmbedding(updated);
+
+  const hostEntity = await getEntityById(updated.primaryHostEntityId);
+  return { id: updated._id, event: mapEventDocToApi(updated, { hostEntity, hostPerson: person }) };
 }

@@ -1,6 +1,9 @@
 /**
  * Email templates for nhimbe transactional emails.
  * Each template returns HTML + plain text versions.
+ *
+ * Migrated from the retired Cloudflare Worker. The shared wrapper now uses the
+ * tanzanite palette (primary moved from malachite `#64FFDA` to `#B388FF`).
  */
 
 interface TemplateResult {
@@ -9,7 +12,7 @@ interface TemplateResult {
   text: string;
 }
 
-// Shared email wrapper with nhimbe branding
+// Shared email wrapper with nhimbe branding (tanzanite palette)
 function wrapHtml(content: string): string {
   return `<!DOCTYPE html>
 <html>
@@ -20,11 +23,11 @@ function wrapHtml(content: string): string {
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #0a0a0a; color: #e4e4e7; }
     .container { max-width: 560px; margin: 0 auto; padding: 32px 24px; }
     .header { text-align: center; margin-bottom: 32px; }
-    .header h1 { font-size: 18px; color: #64FFDA; margin: 0; letter-spacing: 0.5px; }
+    .header h1 { font-size: 18px; color: #B388FF; margin: 0; letter-spacing: 0.5px; }
     .content { background: #18181b; border-radius: 12px; padding: 24px; margin-bottom: 24px; }
     .event-name { font-size: 20px; font-weight: 600; color: #fafafa; margin: 0 0 12px; }
     .detail { font-size: 14px; color: #a1a1aa; margin: 4px 0; }
-    .cta { display: inline-block; background: #64FFDA; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 16px; }
+    .cta { display: inline-block; background: #B388FF; color: #1A0033; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 16px; }
     .footer { text-align: center; font-size: 12px; color: #71717a; }
   </style>
 </head>
