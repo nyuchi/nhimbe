@@ -42,9 +42,16 @@ export function slugify(input: string, withSuffix = true): string {
  */
 export function shortLinkSlug(length = 8): string {
   const alphabet = "23456789abcdefghjkmnpqrstuvwxyz";
-  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  // Rejection sampling: only accept bytes from the largest whole multiple of the
+  // alphabet size so `% alphabet.length` stays uniform (plain modulo over 0–255
+  // would over-represent the first 256 % 31 chars — a CodeQL-flagged bias).
+  const max = Math.floor(256 / alphabet.length) * alphabet.length;
   let out = "";
-  for (let i = 0; i < length; i++) out += alphabet[bytes[i] % alphabet.length];
+  while (out.length < length) {
+    const byte = crypto.getRandomValues(new Uint8Array(1))[0];
+    if (byte >= max) continue;
+    out += alphabet[byte % alphabet.length];
+  }
   return out;
 }
 
