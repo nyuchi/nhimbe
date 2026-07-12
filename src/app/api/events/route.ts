@@ -17,7 +17,7 @@ import { NextResponse } from "next/server";
 import { listEvents } from "@/lib/mongo/events";
 import { createEventForPerson, type CreateEventActionInput } from "@/app/actions/events";
 import { resolveActorFromBearer, ActorError } from "@/lib/auth/mcp-actor";
-import { parseBoundedInt, clampString } from "@/lib/security/request";
+import { parseBoundedInt, clampString, clampStringArray, readJsonBody } from "@/lib/security/request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,21 +62,23 @@ export async function POST(request: Request) {
     throw err;
   }
 
-  let body: Partial<CreateEventActionInput>;
-  try {
-    body = (await request.json()) as Partial<CreateEventActionInput>;
-  } catch {
-    return NextResponse.json({ error: "Request body must be JSON." }, { status: 400 });
+  const parsed = await readJsonBody<Partial<CreateEventActionInput>>(request);
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: parsed.status });
   }
+  const body = parsed.data;
 
-  // Normalize into the action input shape, defaulting the safe fields.
+  // Normalize into the action input shape, defaulting the safe fields and
+  // capping the free-text/array fields so an oversized payload can't slip
+  // past into persistence (the action + Mongo validators enforce the finer
+  // business rules on top of these bounds).
   const input: CreateEventActionInput = {
-    name: String(body.name ?? ""),
-    description: String(body.description ?? ""),
-    startDate: String(body.startDate ?? ""),
+    name: clampString(body.name, 300),
+    description: clampString(body.description, 20_000),
+    startDate: clampString(body.startDate, 40),
     endDate: body.endDate ?? null,
     category: body.category ?? null,
-    keywords: Array.isArray(body.keywords) ? body.keywords : [],
+    keywords: clampStringArray(body.keywords, { maxItems: 30, maxItemLength: 80 }),
     image: body.image ?? null,
     coverGradient: body.coverGradient ?? null,
     isOnline: Boolean(body.isOnline),
