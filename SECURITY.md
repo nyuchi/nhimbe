@@ -43,6 +43,41 @@ nhimbe is built with defense-in-depth. Without enumerating implementation that c
 - **Accountability** — destructive actions are audit-logged, and error responses never leak internal detail.
 - **Dependencies** — kept current and monitored for known vulnerabilities; security patches are prioritized.
 
+### Hardening reference
+
+Concrete detail behind the baseline above, for reviewers and future contributors:
+
+- **Response headers** (`next.config.ts` `headers()`, applied to every path):
+  - A **Content-Security-Policy** with `default-src 'self'`, `object-src 'none'`,
+    `base-uri 'self'`, `frame-ancestors 'none'` and `form-action 'self'`. The
+    `script-`/`style-`/`img-`/`font-`/`connect-`/`frame-src` directives allow-list
+    only Google Maps, Cloudflare R2 assets (`*.mukoko.com`) and WorkOS
+    (`api.workos.com`, `authenticate.nyuchi.com`). `script-src` still permits
+    `'unsafe-inline'`/`'unsafe-eval'` for Next.js's inline hydration bootstrap and
+    the Maps SDK — tightening this to a per-request nonce / `strict-dynamic`
+    policy is the main outstanding CSP hardening item.
+  - `Strict-Transport-Security` (2-year `max-age`, `includeSubDomains`, `preload`),
+    `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+    `Referrer-Policy: strict-origin-when-cross-origin`,
+    `Cross-Origin-Opener-Policy: same-origin-allow-popups`,
+    `Cross-Origin-Resource-Policy: same-origin`,
+    `X-Permitted-Cross-Domain-Policies: none`, and a `Permissions-Policy` that
+    denies camera, microphone, geolocation, payment, USB, sensors and the Topics
+    API. `X-Powered-By` is disabled.
+- **Session cookie** — issued by WorkOS AuthKit (`saveSession`) as `HttpOnly`,
+  `SameSite=Lax`, AES-encrypted with `WORKOS_COOKIE_PASSWORD`. The `Secure`
+  flag is derived from the redirect URI's scheme, so
+  `NEXT_PUBLIC_WORKOS_REDIRECT_URI` **must be `https://…`** in every deployed
+  environment for the cookie to be marked `Secure`. `WORKOS_COOKIE_SAMESITE`
+  and `WORKOS_COOKIE_DOMAIN` can override the defaults if ever needed.
+- **API input validation** — the same-origin route handlers (`src/app/api/**`)
+  run untrusted input through `src/lib/security/request.ts`: query integers are
+  NaN-guarded and range-clamped, JSON bodies are read behind a 64 KiB cap, and
+  string/array fields are length- and count-capped before reaching MongoDB.
+  Cover-image uploads are additionally checked by **magic bytes**
+  (`src/lib/security/image.ts`) so a spoofed `Content-Type` can't smuggle
+  SVG/HTML/polyglot content past the type gate.
+
 ## Scope
 
 In scope:

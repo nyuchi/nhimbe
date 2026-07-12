@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import { getEventByIdOrSlug } from "@/lib/mongo/events";
 import { updateEventForPerson, type UpdateEventInput } from "@/app/actions/events";
 import { resolveActorFromBearer, ActorError } from "@/lib/auth/mcp-actor";
+import { readJsonBody } from "@/lib/security/request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,15 +50,13 @@ export async function PATCH(
     throw err;
   }
 
-  let body: UpdateEventInput;
-  try {
-    body = (await request.json()) as UpdateEventInput;
-  } catch {
-    return NextResponse.json({ error: "Request body must be JSON." }, { status: 400 });
+  const parsed = await readJsonBody<UpdateEventInput>(request);
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: parsed.status });
   }
 
   try {
-    const { event } = await updateEventForPerson(person, id, body);
+    const { event } = await updateEventForPerson(person, id, parsed.data);
     return NextResponse.json({ event });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to update event.";
