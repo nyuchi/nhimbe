@@ -16,6 +16,7 @@ import {
   isHttpUrl,
   buildTrackedLinkDoc,
   createTrackedLink,
+  getOrCreateTrackedLink,
   getActiveTrackedLinkBySlug,
   recordTrackedLinkClick,
 } from "./tracked-links";
@@ -111,6 +112,54 @@ describe("createTrackedLink", () => {
   it("propagates a non-collision write error", async () => {
     trackedLinks.insertOne.mockRejectedValueOnce(Object.assign(new Error("boom"), { code: 121 }));
     await expect(createTrackedLink(base)).rejects.toThrow("boom");
+  });
+});
+
+describe("getOrCreateTrackedLink", () => {
+  const base = {
+    destinationUrl: "https://meet.example.com/abc",
+    ownerPersonId: "p1",
+    ownerEntityId: "e1",
+    eventId: "event-1",
+    linkType: "meeting_url" as const,
+  };
+
+  it("returns the existing active link without inserting", async () => {
+    trackedLinks.findOne.mockResolvedValueOnce({ _id: "l1", linkSlug: "keepme12", isActive: true });
+
+    const link = await getOrCreateTrackedLink(base);
+
+    expect(link.linkSlug).toBe("keepme12");
+    expect(trackedLinks.insertOne).not.toHaveBeenCalled();
+    // Match query pins owner + destination + event context.
+    expect(trackedLinks.findOne).toHaveBeenCalledWith({
+      ownerPersonId: "p1",
+      destinationUrl: "https://meet.example.com/abc",
+      isActive: true,
+      "utm.eventId": "event-1",
+    });
+  });
+
+  it("inserts a new link when none matches", async () => {
+    trackedLinks.findOne.mockResolvedValueOnce(null);
+    const link = await getOrCreateTrackedLink(base);
+    expect(trackedLinks.insertOne).toHaveBeenCalledTimes(1);
+    expect(link.linkSlug).toHaveLength(8);
+  });
+
+  it("omits the event filter when no eventId is supplied", async () => {
+    trackedLinks.findOne.mockResolvedValueOnce(null);
+    await getOrCreateTrackedLink({ ...base, eventId: null });
+    expect(trackedLinks.findOne).toHaveBeenCalledWith({
+      ownerPersonId: "p1",
+      destinationUrl: "https://meet.example.com/abc",
+      isActive: true,
+    });
+  });
+
+  it("rejects a non-http(s) destination up front", async () => {
+    await expect(getOrCreateTrackedLink({ ...base, destinationUrl: "ftp://x" })).rejects.toThrow();
+    expect(trackedLinks.findOne).not.toHaveBeenCalled();
   });
 });
 
