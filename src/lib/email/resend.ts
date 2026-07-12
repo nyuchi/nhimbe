@@ -9,6 +9,9 @@
  */
 
 import "server-only";
+import { createLogger } from "@/lib/observability";
+
+const emailLog = createLogger("email");
 
 /**
  * Every nhimbe transactional email is sent from this verified sender.
@@ -40,7 +43,7 @@ export async function sendEmail(
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn("[mukoko:email] RESEND_API_KEY not set — skipping email send");
+    emailLog.warn("RESEND_API_KEY not set — skipping email send");
     return { success: false, error: "RESEND_API_KEY not set" };
   }
 
@@ -69,16 +72,18 @@ export async function sendEmail(
 
     if (!response.ok) {
       const error = (await response.json()) as ResendError;
-      console.error(`[mukoko:email] Resend API error: ${error.message}`);
+      emailLog.error("Resend API error", { data: { message: error.message } });
       return { success: false, error: error.message };
     }
 
     const data = (await response.json()) as ResendResponse;
-    console.log(`[mukoko:email] Email sent successfully: ${data.id}`);
+    emailLog.info("Email sent", { data: { id: data.id } });
     return { success: true, id: data.id };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.error(`[mukoko:email] Failed to send email: ${message}`);
+    emailLog.error("Failed to send email", {
+      error: error instanceof Error ? error : new Error(message),
+    });
     return { success: false, error: message };
   }
 }
