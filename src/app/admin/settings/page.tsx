@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,46 +14,71 @@ import {
   Globe,
   Database,
   AlertTriangle,
+  Check,
 } from "lucide-react";
+import {
+  getPlatformSettingsAction,
+  savePlatformSettingsAction,
+  type PlatformSettings as Settings,
+} from "@/app/actions/admin-settings";
 
-interface Settings {
-  siteName: string;
-  supportEmail: string;
-  maxEventsPerUser: number;
-  maxAttendeesDefault: number;
-  requireEmailVerification: boolean;
-  enableRegistrations: boolean;
-  enableReviews: boolean;
-  enableReferrals: boolean;
-  maintenanceMode: boolean;
-  allowedDomains: string;
-}
+const DEFAULT_SETTINGS: Settings = {
+  siteName: "nhimbe",
+  supportEmail: "support@nhimbe.com",
+  maxEventsPerUser: 50,
+  maxAttendeesDefault: 100,
+  requireEmailVerification: true,
+  enableRegistrations: true,
+  enableReviews: true,
+  enableReferrals: true,
+  maintenanceMode: false,
+  allowedDomains: "",
+};
 
 export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<{ kind: "idle" | "saved" | "error"; message: string }>({
+    kind: "idle",
+    message: "",
+  });
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearConfirmText, setClearConfirmText] = useState("");
-  const [settings, setSettings] = useState<Settings>({
-    siteName: "nhimbe",
-    supportEmail: "support@nhimbe.com",
-    maxEventsPerUser: 50,
-    maxAttendeesDefault: 100,
-    requireEmailVerification: true,
-    enableRegistrations: true,
-    enableReviews: true,
-    enableReferrals: true,
-    maintenanceMode: false,
-    allowedDomains: "",
-  });
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+
+  // Load the persisted platform settings on mount (admin-gated server action).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const loaded = await getPlatformSettingsAction();
+        if (!cancelled) setSettings(loaded);
+      } catch {
+        if (!cancelled) {
+          setStatus({ kind: "error", message: "Couldn't load saved settings — showing defaults." });
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSave() {
     setSaving(true);
+    setStatus({ kind: "idle", message: "" });
     try {
-      // In a real implementation, this would call the API
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      // Show success message
+      const saved = await savePlatformSettingsAction(settings);
+      setSettings(saved);
+      setStatus({ kind: "saved", message: "Settings saved." });
     } catch (error) {
-      console.error("Failed to save settings:", error);
+      console.error("[mukoko] admin/settings: save failed", error);
+      setStatus({
+        kind: "error",
+        message: "Couldn't save settings. Please try again.",
+      });
     } finally {
       setSaving(false);
     }
@@ -69,14 +94,30 @@ export default function SettingsPage() {
             Configure platform settings and preferences
           </p>
         </div>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4" />
-          )}
-          Save Changes
-        </Button>
+        <div className="flex items-center gap-3">
+          <p
+            role="status"
+            aria-live="polite"
+            className={
+              status.kind === "error"
+                ? "text-sm text-red-400"
+                : status.kind === "saved"
+                  ? "text-sm text-green-400 flex items-center gap-1"
+                  : "sr-only"
+            }
+          >
+            {status.kind === "saved" && <Check className="w-4 h-4" aria-hidden="true" />}
+            {status.message}
+          </p>
+          <Button onClick={handleSave} disabled={saving || loading}>
+            {saving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            Save Changes
+          </Button>
+        </div>
       </div>
 
       {/* General Settings */}
