@@ -105,10 +105,11 @@ export function OtpInput({
     e.preventDefault();
     const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, length);
     if (!pasted) return;
-    // Route through commit so onComplete fires on the same transition rule as
-    // typing (only when filling an incomplete field), keeping the two consistent.
-    commit(pasted);
+    // Paste replaces the field; unlike an edit keystroke, a full-code paste is an
+    // explicit "here's my whole code" so it always auto-submits when complete.
+    onChange(pasted);
     focusBox(Math.min(pasted.length, length - 1));
+    if (pasted.length === length) onComplete?.(pasted);
   }
 
   return (

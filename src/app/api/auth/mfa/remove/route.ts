@@ -29,7 +29,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await getWorkOS().multiFactorAuth.deleteFactor(factorId);
+    const workos = getWorkOS();
+    // Ownership check: only delete a factor that belongs to THIS user. deleteFactor
+    // is environment-scoped, so without this a signed-in user could delete anyone's
+    // factor (disable their MFA) by id.
+    const factors = await workos.multiFactorAuth.listUserAuthFactors({ userId: user.id });
+    if (!factors.data.some((f) => f.id === factorId)) {
+      return NextResponse.json({ error: "Factor not found." }, { status: 404 });
+    }
+    await workos.multiFactorAuth.deleteFactor(factorId);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[mukoko:auth] MFA remove failed:", err instanceof Error ? err.message : err);
