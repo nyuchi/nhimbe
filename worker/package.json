@@ -13,10 +13,10 @@
     "test:run": "vitest run"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260613.1",
+    "@cloudflare/workers-types": "^4.20260702.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8",
-    "wrangler": "4.100.0"
+    "wrangler": "4.107.1"
   },
   "dependencies": {
     "hono": "4.12.25"
