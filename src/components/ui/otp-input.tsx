@@ -3,6 +3,9 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+/** Digits in a one-time code — shared so callers' length guards stay in lockstep. */
+export const OTP_LENGTH = 6;
+
 interface OtpInputProps {
   /** Current value — a compact string of up to `length` digits, no gaps. */
   value: string;
@@ -21,18 +24,18 @@ interface OtpInputProps {
 /**
  * Segmented one-time-code input — `length` square boxes, one digit each.
  *
- * The value is a compact digit string with no interior gaps. Entry is kept
- * sequential: focusing a box past the filled region redirects to the next empty
- * box, typing over a filled box overwrites in place, and backspace removes the
- * trailing digit — so digits never shift or collapse into the wrong slot.
- * Handles paste of a full code and digit-only input. `autoComplete="one-time-code"`
- * on the first box lets iOS/Android offer the SMS/email code.
+ * The value is a compact digit string with no interior gaps. Typing appends or
+ * overwrites the focused box in place; backspace deletes one digit and compacts
+ * the rest left (a gapless field can't leave a hole). Auto-advance keeps entry
+ * moving without a focus-redirect (an earlier redirect read stale state and
+ * dropped digits). Handles paste of a full code and digit-only input.
+ * `autoComplete="one-time-code"` on the first box lets iOS/Android offer the code.
  */
 export function OtpInput({
   value,
   onChange,
   onComplete,
-  length = 6,
+  length = OTP_LENGTH,
   disabled,
   autoFocus,
   ariaLabel = "Verification code",
@@ -81,8 +84,8 @@ export function OtpInput({
     if (e.key === "Backspace") {
       e.preventDefault();
       if (index < value.length) {
-        // Clear this box (and any trailing) by trimming back to it — no gaps.
-        commit(value.slice(0, index));
+        // Delete just this digit and compact the rest left (no gaps, no wipe).
+        commit(value.slice(0, index) + value.slice(index + 1));
         focusBox(index);
       } else if (value.length > 0) {
         // On the trailing empty box, delete the previous digit.
@@ -102,9 +105,10 @@ export function OtpInput({
     e.preventDefault();
     const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, length);
     if (!pasted) return;
-    onChange(pasted);
+    // Route through commit so onComplete fires on the same transition rule as
+    // typing (only when filling an incomplete field), keeping the two consistent.
+    commit(pasted);
     focusBox(Math.min(pasted.length, length - 1));
-    if (pasted.length === length) onComplete?.(pasted);
   }
 
   return (

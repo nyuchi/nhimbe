@@ -27,12 +27,20 @@ describe("OtpInput", () => {
     expect(join(b)).toBe("123");
   });
 
-  it("clears only the last filled box on backspace (no left shift)", () => {
+  it("removes the last digit on backspace at the end", () => {
     render(<Harness />);
     const b = boxes();
     "1234".split("").forEach((d, i) => type(b[i], d));
     fireEvent.keyDown(b[3], { key: "Backspace" });
     expect(join(b)).toBe("123");
+  });
+
+  it("deletes one digit and compacts on backspace in a middle box (no trailing wipe)", () => {
+    render(<Harness />);
+    const b = boxes();
+    "12345".split("").forEach((d, i) => type(b[i], d));
+    fireEvent.keyDown(b[1], { key: "Backspace" }); // delete the "2"
+    expect(join(b)).toBe("1345");
   });
 
   it("overwrites a middle box in place without collapsing", () => {

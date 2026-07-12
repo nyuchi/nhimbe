@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { ShieldCheck, Loader2, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { OtpInput } from "@/components/ui/otp-input";
+import { OtpInput, OTP_LENGTH } from "@/components/ui/otp-input";
 
 // Self-hosted authenticator-app (TOTP) enrollment for the signed-in user.
 //   1. Enroll  → POST /api/auth/mfa/enroll  → QR data URI + manual secret
@@ -48,12 +48,23 @@ export function TwoFactorSetup() {
     }
   }
 
-  // Cancel an in-progress enrolment and return to the "not set up" state — the
-  // unconfirmed factor is simply abandoned (never activated).
+  // Cancel an in-progress enrolment and return to the "not set up" state. Delete
+  // the unconfirmed factor server-side (best-effort) so it can't linger as an
+  // orphaned factor that later forces a phantom MFA challenge.
   function skipEnroll() {
+    const factorId = enroll?.factorId;
     setEnroll(null);
     setCode("");
     setError(null);
+    if (factorId) {
+      void fetch("/api/auth/mfa/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ factorId }),
+      }).catch(() => {
+        /* best-effort — clearing the UI must not depend on the delete */
+      });
+    }
   }
 
   async function activate(e?: React.FormEvent, codeOverride?: string) {
@@ -140,7 +151,7 @@ export function TwoFactorSetup() {
               <Button
                 type="submit"
                 size="lg"
-                disabled={loading || code.length < 6}
+                disabled={loading || code.length < OTP_LENGTH}
                 className="h-[var(--touch-target-lg)] w-full rounded-[var(--radius-lg)] bg-primary text-primary-foreground"
               >
                 {loading ? (
