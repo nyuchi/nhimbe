@@ -17,7 +17,7 @@
 
 import { resolveActingPerson } from "@/lib/auth/current-person";
 import { ensureHostEntityForPerson } from "@/lib/mongo/entities";
-import { createTrackedLink, isHttpUrl } from "@/lib/mongo/tracked-links";
+import { getOrCreateTrackedLink, isHttpUrl } from "@/lib/mongo/tracked-links";
 import { trackError } from "@/lib/observability";
 
 export type TrackedLinkType = "meeting_url" | "directions" | "ticket" | "website";
@@ -50,7 +50,7 @@ export async function createTrackedLinkAction(
 
   try {
     const ownerEntityId = await ensureHostEntityForPerson(person);
-    const link = await createTrackedLink({
+    const link = await getOrCreateTrackedLink({
       destinationUrl: targetUrl,
       ownerPersonId: person._id,
       ownerEntityId,

@@ -98,6 +98,30 @@ export async function createTrackedLink(input: CreateTrackedLinkInput): Promise<
   throw lastErr ?? new Error("Could not allocate a unique tracked-link slug.");
 }
 
+/**
+ * Return an existing active tracked link for the same owner + destination (+
+ * event), or create one. Idempotent: the share hook runs on every event-detail
+ * mount, so without this each page view would insert a duplicate link row for
+ * the same outbound URL. Matches on the owning person, the exact destination,
+ * and (when given) the event context stashed in `utm.eventId`.
+ */
+export async function getOrCreateTrackedLink(input: CreateTrackedLinkInput): Promise<TrackedLinkDoc> {
+  if (!isHttpUrl(input.destinationUrl)) {
+    throw new Error("A tracked link needs a valid http(s) destination.");
+  }
+  const col = await trackedLinksCollection();
+  const query: Record<string, unknown> = {
+    ownerPersonId: input.ownerPersonId,
+    destinationUrl: input.destinationUrl,
+    isActive: true,
+  };
+  if (input.eventId) query["utm.eventId"] = input.eventId;
+
+  const existing = await col.findOne(query);
+  if (existing) return existing;
+  return createTrackedLink(input);
+}
+
 /** Resolve an active tracked link by its public slug (used by `/r/[code]`). */
 export async function getActiveTrackedLinkBySlug(slug: string): Promise<TrackedLinkDoc | null> {
   const col = await trackedLinksCollection();
