@@ -1,53 +1,57 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createTrackedLink, getTrackedUrl } from "@/lib/api";
+import { createTrackedLinkAction, type TrackedLinkType } from "@/app/actions/tracked-links";
 import { useAuth } from "@/components/auth/auth-context";
 
 /**
  * Hook to create and cache a tracked link for an external URL.
  * Returns the nhimbe redirect URL (/r/[code]) that tracks clicks.
- * Falls back to the raw URL if link creation fails (including when the
- * user isn't signed in — `createTrackedLink` requires a WorkOS JWT now,
- * and unauthenticated visitors should still get a working link).
+ *
+ * Identity is resolved server-side by the action (AuthKit / dev bypass), so the
+ * client no longer forwards a WorkOS token. Falls back to the raw URL whenever a
+ * tracked link can't be created — signed-out visitors, a non-http(s) target, or
+ * a write failure — so the link always works.
  */
 export function useTrackedLink(
   targetUrl: string | undefined,
   eventId: string,
-  linkType: "meeting_url" | "directions" | "ticket" | "website",
+  linkType: TrackedLinkType,
 ): string | undefined {
   const [trackedUrl, setTrackedUrl] = useState<string | undefined>(undefined);
-  const { accessToken, getAccessToken, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     if (!targetUrl) return;
 
     let cancelled = false;
 
-    (async () => {
-      if (!isAuthenticated) {
-        if (!cancelled) setTrackedUrl(targetUrl);
-        return;
-      }
-      const token = accessToken ?? (await getAccessToken());
-      if (!token) {
-        if (!cancelled) setTrackedUrl(targetUrl);
-        return;
-      }
+    // Anonymous visitors can't own a tracked link — use the raw URL directly and
+    // skip the server round-trip entirely.
+    if (!isAuthenticated) {
+      setTrackedUrl(targetUrl);
+      return;
+    }
 
+    (async () => {
       try {
-        const result = await createTrackedLink(
-          { targetUrl, eventId, linkType },
-          token,
-        );
-        if (!cancelled) setTrackedUrl(getTrackedUrl(result.code));
+        const result = await createTrackedLinkAction({ targetUrl, eventId, linkType });
+        if (cancelled) return;
+        if (result) {
+          const origin = typeof window !== "undefined" ? window.location.origin : "";
+          setTrackedUrl(`${origin}/r/${result.slug}`);
+        } else {
+          setTrackedUrl(targetUrl);
+        }
       } catch {
         if (!cancelled) setTrackedUrl(targetUrl);
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [targetUrl, eventId, linkType, isAuthenticated, accessToken, getAccessToken]);
+    return () => {
+      cancelled = true;
+    };
+  }, [targetUrl, eventId, linkType, isAuthenticated]);
 
   return trackedUrl;
 }
