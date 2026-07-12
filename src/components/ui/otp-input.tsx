@@ -72,7 +72,9 @@ export function OtpInput({
         ? value.slice(0, index) + char + value.slice(index + 1)
         : (value + char).slice(0, length);
     commit(next);
-    focusBox(index + 1);
+    // Advance to the box after the one edited; a clicked-ahead index is clamped
+    // to the next empty box so focus never runs past the filled region.
+    focusBox(Math.min(index, value.length) + 1);
   }
 
   function handleKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
@@ -93,15 +95,6 @@ export function OtpInput({
     } else if (e.key === "ArrowRight") {
       e.preventDefault();
       focusBox(Math.min(index + 1, value.length));
-    }
-  }
-
-  // Keep entry sequential: never let focus land past the next empty box.
-  function handleFocus(index: number, el: HTMLInputElement) {
-    if (index > value.length) {
-      focusBox(value.length);
-    } else {
-      el.select();
     }
   }
 
@@ -136,7 +129,7 @@ export function OtpInput({
           aria-label={`Digit ${i + 1} of ${length}`}
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
-          onFocus={(e) => handleFocus(i, e.target)}
+          onFocus={(e) => e.target.select()}
           onPaste={handlePaste}
           className={cn(
             "h-13 w-11 rounded-[var(--radius-lg)] border border-input bg-transparent text-center text-xl font-semibold text-foreground shadow-xs outline-none transition-[color,box-shadow] dark:bg-input/30",
