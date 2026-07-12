@@ -39,9 +39,9 @@ const STEPS: { id: WizardStep; label: string }[] = [
   { id: 3, label: "Hosting" },
 ];
 
-// Broad pan-African event categories. The live data source is
-// `engagement.interest_category` in the platform DB (40 canonical rows
-// seeded). This list is the offline fallback if Supabase is unreachable.
+// Broad pan-African event categories. The live data source is the
+// `engagement.interestCategories` MongoDB collection (40 canonical rows
+// seeded). This list is the offline fallback if that lookup is unreachable.
 const DEFAULT_CATEGORIES: Category[] = [
   // Technology & Innovation
   { id: "technology", name: "Technology", group: "Technology & Innovation" },
