@@ -17,7 +17,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
-  getCheckinStats,
   type CheckinStats,
   type KioskSession,
 } from "@/lib/api";
@@ -27,6 +26,9 @@ import {
   getKioskPairingStatusAction,
   getKioskSessionAction,
 } from "@/app/actions/kiosk";
+// Aggregate check-in stats come from the public server action (MongoDB), not the
+// retired /api/events/:id/checkin/stats worker route.
+import { getCheckinStatsAction } from "@/app/actions/host-registrations";
 
 type CheckinResult = {
   status: "success" | "error" | "already";
@@ -259,13 +261,13 @@ function CheckinScreen({ session, token }: { session: KioskSession; token: strin
 
   // Load stats
   useEffect(() => {
-    getCheckinStats(session.eventId).then(setStats).catch(() => {});
+    getCheckinStatsAction(session.eventId).then(setStats).catch(() => {});
   }, [session.eventId]);
 
   // Auto-refresh stats every 15s
   useEffect(() => {
     const interval = setInterval(() => {
-      getCheckinStats(session.eventId).then(setStats).catch(() => {});
+      getCheckinStatsAction(session.eventId).then(setStats).catch(() => {});
     }, 15000);
     return () => clearInterval(interval);
   }, [session.eventId]);
@@ -324,7 +326,7 @@ function CheckinScreen({ session, token }: { session: KioskSession; token: strin
           message: "Welcome! You're checked in.",
         });
         // Refresh stats
-        getCheckinStats(session.eventId).then(setStats).catch(() => {});
+        getCheckinStatsAction(session.eventId).then(setStats).catch(() => {});
       } catch (err) {
         const message =
           err instanceof Error && err.message.includes("Already")

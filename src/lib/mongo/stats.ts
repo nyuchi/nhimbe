@@ -47,3 +47,23 @@ export async function getEventStats(eventId: string): Promise<EventStats> {
     trend: 0,
   };
 }
+
+/**
+ * Increment the best-effort view counter for an event. Writes to the same
+ * free-form `mukoko.viewCount` field that {@link getEventStats} reads, so a
+ * view registered here shows up in the stats read. Best-effort: any failure
+ * (missing event, validator rejection) is swallowed — analytics must never
+ * break the UI. Returns whether a document was actually updated.
+ */
+export async function recordEventView(eventId: string): Promise<boolean> {
+  try {
+    const events = await eventsCollection();
+    const res = await events.updateOne(
+      { _id: eventId },
+      { $inc: { "mukoko.viewCount": 1 }, $set: { updatedAt: new Date() } },
+    );
+    return res.matchedCount > 0;
+  } catch {
+    return false;
+  }
+}

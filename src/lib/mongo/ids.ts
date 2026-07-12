@@ -33,6 +33,29 @@ export function slugify(input: string, withSuffix = true): string {
 }
 
 /**
+ * Generate a short, URL-safe, unambiguous slug for a shareable link
+ * (`engagement.trackedLinks.linkSlug`, resolved at `/r/<slug>`). Uses a
+ * Crockford-style alphabet that drops the easily confused `0/O/1/I/L`, so a
+ * code read aloud or off a screen resolves cleanly. Default length 8 gives
+ * ~28 bits of entropy — collisions are astronomically unlikely at our scale,
+ * and the writer treats the slug as unique on insert regardless.
+ */
+export function shortLinkSlug(length = 8): string {
+  const alphabet = "23456789abcdefghjkmnpqrstuvwxyz";
+  // Rejection sampling: only accept bytes from the largest whole multiple of the
+  // alphabet size so `% alphabet.length` stays uniform (plain modulo over 0–255
+  // would over-represent the first 256 % 31 chars — a CodeQL-flagged bias).
+  const max = Math.floor(256 / alphabet.length) * alphabet.length;
+  let out = "";
+  while (out.length < length) {
+    const byte = crypto.getRandomValues(new Uint8Array(1))[0];
+    if (byte >= max) continue;
+    out += alphabet[byte % alphabet.length];
+  }
+  return out;
+}
+
+/**
  * Stamp the common audit/version fields onto a new document body. Spread the
  * result into an insert: `await col.insertOne({ ...stampNew(), name, ... })`.
  */

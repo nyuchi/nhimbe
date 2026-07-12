@@ -9,7 +9,7 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { newId, slugify, stampNew, WRITE_SCHEMA_VERSION } from "./ids";
+import { newId, slugify, shortLinkSlug, stampNew, WRITE_SCHEMA_VERSION } from "./ids";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -59,6 +59,28 @@ describe("slugify", () => {
 
   it("uses 'item' as the base when appending a suffix to empty input", () => {
     expect(slugify("###")).toMatch(/^item-[0-9a-f]{6}$/);
+  });
+});
+
+describe("shortLinkSlug", () => {
+  it("defaults to length 8 within the unambiguous alphabet", () => {
+    const slug = shortLinkSlug();
+    expect(slug).toHaveLength(8);
+    expect(slug).toMatch(/^[23456789abcdefghjkmnpqrstuvwxyz]{8}$/);
+  });
+
+  it("honours a custom length", () => {
+    expect(shortLinkSlug(12)).toHaveLength(12);
+  });
+
+  it("never emits the confusable characters 0 O 1 I l", () => {
+    const joined = Array.from({ length: 100 }, () => shortLinkSlug(16)).join("");
+    expect(joined).not.toMatch(/[01oil]/);
+  });
+
+  it("is effectively unique across many calls", () => {
+    const slugs = new Set(Array.from({ length: 500 }, () => shortLinkSlug()));
+    expect(slugs.size).toBe(500);
   });
 });
 

@@ -15,11 +15,9 @@
  * creating a duplicate. `unsaveEvent` is a plain delete on the same key.
  */
 
-import { withAuth } from "@workos-inc/authkit-nextjs";
-import { getCollection, DB, personsCollection } from "@/lib/mongo/databases";
+import { getCollection, DB } from "@/lib/mongo/databases";
 import { WRITE_SCHEMA_VERSION } from "@/lib/mongo/ids";
-import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
-import { isDevBypass, DEV_WORKOS_ID, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
+import { resolveActingPerson } from "@/lib/auth/current-person";
 import type { BaseDoc } from "@/lib/mongo/types";
 
 /**
@@ -42,38 +40,11 @@ function savedEventId(personId: string, eventId: string): string {
 
 /**
  * Resolve the acting person's id (`identity.persons._id`) from the WorkOS
- * session or the dev bypass. Ensures the person doc exists (sync is idempotent).
+ * session or the dev bypass, via the shared {@link resolveActingPerson} helper.
  * Returns null when there is no session — callers treat that as "can't save".
  */
 async function resolveActingPersonId(): Promise<string | null> {
-  let syncInput: SyncPersonInput;
-  if (isDevBypass()) {
-    syncInput = {
-      workosUserId: DEV_WORKOS_ID,
-      email: DEV_EMAIL,
-      name: DEV_NAME,
-      emailVerified: true,
-    };
-  } else {
-    const { user } = await withAuth();
-    if (!user) return null;
-    syncInput = {
-      workosUserId: user.id,
-      email: user.email ?? null,
-      name: [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || null,
-      givenName: user.firstName ?? null,
-      familyName: user.lastName ?? null,
-      picture: user.profilePictureUrl ?? null,
-      emailVerified: user.emailVerified ?? undefined,
-    };
-  }
-
-  const persons = await personsCollection();
-  let person = await persons.findOne({ workosUserId: syncInput.workosUserId });
-  if (!person) {
-    await syncPersonFromWorkos(syncInput);
-    person = await persons.findOne({ workosUserId: syncInput.workosUserId });
-  }
+  const person = await resolveActingPerson();
   return person?._id ?? null;
 }
 

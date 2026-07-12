@@ -15,6 +15,7 @@
 
 import { listEvents, getEventByIdOrSlug, getTrendingEvents } from "@/lib/mongo/events";
 import { listCategories, listCities, getCommunityStats } from "@/lib/mongo/lookups";
+import { recordEventView } from "@/lib/mongo/stats";
 import type { Category, CommunityStats, Event, EventsResponse } from "@/lib/api";
 
 export async function getEventsAction(params?: {
@@ -34,6 +35,16 @@ export async function getEventsAction(params?: {
 
 export async function findEventAction(idOrSlug: string): Promise<Event | null> {
   return getEventByIdOrSlug(idOrSlug);
+}
+
+/**
+ * Record a page view for an event (best-effort, server-side write). Replaces
+ * the retired `POST /api/events/:id/view` worker fetch in `@/lib/api` — that
+ * route handler no longer exists, so the client counted views into the void.
+ * The counter lands on `mukoko.viewCount`, which `getEventStats` reads back.
+ */
+export async function trackEventViewAction(eventId: string): Promise<void> {
+  await recordEventView(eventId);
 }
 
 export async function getTrendingEventsAction(params?: { limit?: number }): Promise<Event[]> {
