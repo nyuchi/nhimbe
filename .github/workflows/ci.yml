@@ -44,8 +44,6 @@ jobs:
           WORKOS_REDIRECT_URI: https://example.com/callback
           NEXT_PUBLIC_API_URL: https://api.example.com
           NEXT_PUBLIC_SITE_URL: https://example.com
-          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder
 
   frontend-tests:
     name: Frontend Tests
@@ -153,5 +151,6 @@ jobs:
             Be concise. Only flag real issues, not style preferences.
 
   # NOTE: The "Run D1 Migrations" job was removed when the database moved to
-  # Supabase. Schema migrations now live in the nyuchi_platform_db repo and
-  # are applied via the Supabase MCP / `supabase db push` from that repo.
+  # MongoDB (the Mukoko v3.1 cluster). Collections, validators, and indexes are
+  # owned by the nyuchi_platform_db project — this repo is a read/write consumer
+  # only and has no migrations to run.
