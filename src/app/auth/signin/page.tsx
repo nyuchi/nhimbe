@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Loader2, Mail, KeyRound, ArrowLeft, AlertCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OtpInput } from "@/components/ui/otp-input";
 
 // Self-hosted sign-in: everything happens on our own UI — no redirect to a
 // WorkOS-hosted page. Two methods share one card:
@@ -80,15 +81,18 @@ function SignInForm() {
     }
   }
 
-  async function verifyCode(e: React.FormEvent) {
-    e.preventDefault();
+  async function verifyCode(e?: React.FormEvent, codeOverride?: string) {
+    e?.preventDefault();
+    // On auto-submit the completed value arrives via `codeOverride` because the
+    // `code` state hasn't flushed yet in the same tick.
+    const submitCode = codeOverride ?? code;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/auth/magic/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code }),
+        body: JSON.stringify({ email, code: submitCode }),
       });
       const data = (await res.json().catch(() => ({}))) as AuthResponse;
       if (!res.ok) throw new Error(data.error || "That code didn't work.");
@@ -132,9 +136,10 @@ function SignInForm() {
     }
   }
 
-  async function verifyMfa(e: React.FormEvent) {
-    e.preventDefault();
+  async function verifyMfa(e?: React.FormEvent, codeOverride?: string) {
+    e?.preventDefault();
     if (!mfaPending) return;
+    const submitCode = codeOverride ?? mfaCode;
     setLoading(true);
     setError(null);
     try {
@@ -142,7 +147,7 @@ function SignInForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          code: mfaCode,
+          code: submitCode,
           pendingAuthenticationToken: mfaPending.token,
           challengeId: mfaPending.challengeId,
         }),
@@ -201,18 +206,13 @@ function SignInForm() {
             <div className="flex justify-center">
               <ShieldCheck className="h-8 w-8 text-primary" aria-hidden />
             </div>
-            <Input
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              autoFocus
-              required
-              enterKeyHint="go"
+            <OtpInput
               value={mfaCode}
-              onChange={(e) => setMfaCode(e.target.value)}
-              placeholder="123456"
-              aria-label="Authenticator code"
-              className="h-[var(--touch-target-lg)] text-center text-lg tracking-widest"
+              onChange={setMfaCode}
+              onComplete={(v) => verifyMfa(undefined, v)}
+              autoFocus
+              disabled={loading}
+              ariaLabel="Authenticator code"
             />
             <Button
               type="submit"
@@ -243,18 +243,13 @@ function SignInForm() {
         ) : inCodeEntry ? (
           // Code-entry step takes over the card — the user is mid-flow.
           <form onSubmit={verifyCode} className="space-y-4">
-            <Input
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              autoFocus
-              required
-              enterKeyHint="go"
+            <OtpInput
               value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="123456"
-              aria-label="One-time code"
-              className="h-[var(--touch-target-lg)] text-center text-lg tracking-widest"
+              onChange={setCode}
+              onComplete={(v) => verifyCode(undefined, v)}
+              autoFocus
+              disabled={loading}
+              ariaLabel="One-time code"
             />
             <Button
               type="submit"
@@ -295,7 +290,7 @@ function SignInForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 aria-label="Email address"
-                className="h-[var(--touch-target-lg)] text-base"
+                className="h-[var(--touch-target-lg)] text-base text-foreground"
               />
               <Input
                 type="password"
@@ -306,7 +301,7 @@ function SignInForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Your password"
                 aria-label="Password"
-                className="h-[var(--touch-target-lg)] text-base"
+                className="h-[var(--touch-target-lg)] text-base text-foreground"
               />
               <Button
                 type="submit"
@@ -348,7 +343,7 @@ function SignInForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 aria-label="Email address"
-                className="h-[var(--touch-target-lg)] text-base"
+                className="h-[var(--touch-target-lg)] text-base text-foreground"
               />
               <Button
                 type="submit"

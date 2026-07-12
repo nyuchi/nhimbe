@@ -96,10 +96,10 @@ describe("SignInPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
 
-    // The authenticator step takes over the card.
-    const codeInput = await screen.findByLabelText(/authenticator code/i);
-    fireEvent.change(codeInput, { target: { value: "654321" } });
-    fireEvent.click(screen.getByRole("button", { name: /^verify$/i }));
+    // The authenticator step takes over the card — a 6-box OTP field. Pasting a
+    // full code fills it and auto-submits via onComplete.
+    const firstBox = await screen.findByLabelText(/digit 1 of 6/i);
+    fireEvent.paste(firstBox, { clipboardData: { getData: () => "654321" } });
 
     await waitFor(() =>
       expect(mockFetch).toHaveBeenLastCalledWith(
