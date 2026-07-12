@@ -41,6 +41,8 @@ function SignInForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Transient confirmation after re-requesting an email code.
+  const [resent, setResent] = useState(false);
 
   // MFA step-up: set once a primary method reports the account needs a TOTP code.
   // The pending token is short-lived and single-use — held here only until the
@@ -59,6 +61,7 @@ function SignInForm() {
     setError(null);
     setMfaPending(null);
     setMfaCode("");
+    setResent(false);
   }
 
   async function sendCode(e: React.FormEvent) {
@@ -74,6 +77,29 @@ function SignInForm() {
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Couldn't send a sign-in code.");
       setStep("code");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Re-request an email code from the code-entry step (email didn't arrive /
+  // expired). Stays on the code step and shows a transient confirmation.
+  async function resendCode() {
+    setLoading(true);
+    setError(null);
+    setResent(false);
+    try {
+      const res = await fetch("/api/auth/magic/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Couldn't send a new code.");
+      setCode("");
+      setResent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
@@ -268,17 +294,34 @@ function SignInForm() {
                 "Sign in"
               )}
             </Button>
-            <button
-              type="button"
-              onClick={() => {
-                setStep("email");
-                setCode("");
-                setError(null);
-              }}
-              className="flex min-h-[var(--touch-target)] w-full items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" aria-hidden /> Use a different email
-            </button>
+            {resent && (
+              <p className="text-center text-sm text-primary" role="status">
+                A new code is on its way.
+              </p>
+            )}
+            <div className="flex items-center justify-center gap-4 text-sm">
+              <button
+                type="button"
+                onClick={resendCode}
+                disabled={loading}
+                className="min-h-[var(--touch-target)] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+              >
+                Resend code
+              </button>
+              <span aria-hidden className="text-border">·</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep("email");
+                  setCode("");
+                  setError(null);
+                  setResent(false);
+                }}
+                className="flex min-h-[var(--touch-target)] items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden /> Different email
+              </button>
+            </div>
           </form>
         ) : method === "password" ? (
           <div className="space-y-5">
