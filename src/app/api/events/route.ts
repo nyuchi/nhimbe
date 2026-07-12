@@ -17,6 +17,7 @@ import { NextResponse } from "next/server";
 import { listEvents } from "@/lib/mongo/events";
 import { createEventForPerson, type CreateEventActionInput } from "@/app/actions/events";
 import { resolveActorFromBearer, ActorError } from "@/lib/auth/mcp-actor";
+import { parseBoundedInt, clampString } from "@/lib/security/request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,18 +25,27 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
-  const limitRaw = searchParams.get("limit");
-  const offsetRaw = searchParams.get("offset");
+  // Validate/clamp untrusted query input before it reaches the driver:
+  // `limit`/`offset` must be sane integers (a NaN would become `.limit(NaN)`,
+  // an unbounded value a full-collection scan), and the string filters are
+  // length-capped so they can't be abused as oversized query payloads.
+  const limit = parseBoundedInt(searchParams.get("limit"), { min: 1, max: 100, fallback: 20 });
+  const offset = parseBoundedInt(searchParams.get("offset"), { min: 0, max: 100_000, fallback: 0 });
+  const cityFilter = clampString(searchParams.get("city") ?? "", 120) || undefined;
+  const categoryFilter = clampString(searchParams.get("category") ?? "", 120) || undefined;
 
   try {
-    const { events, total, limit, offset } = await listEvents({
-      city: searchParams.get("city") ?? undefined,
-      category: searchParams.get("category") ?? undefined,
-      limit: limitRaw ? Number.parseInt(limitRaw, 10) : undefined,
-      offset: offsetRaw ? Number.parseInt(offsetRaw, 10) : undefined,
+    const { events, total, limit: appliedLimit, offset: appliedOffset } = await listEvents({
+      city: cityFilter,
+      category: categoryFilter,
+      limit,
+      offset,
     });
 
-    return NextResponse.json({ events, pagination: { limit, offset, total } });
+    return NextResponse.json({
+      events,
+      pagination: { limit: appliedLimit, offset: appliedOffset, total },
+    });
   } catch (err) {
     console.error("[mukoko] GET /api/events failed", err);
     return NextResponse.json({ error: "Failed to load events" }, { status: 500 });
