@@ -86,6 +86,8 @@ function SignInForm() {
     // On auto-submit the completed value arrives via `codeOverride` because the
     // `code` state hasn't flushed yet in the same tick.
     const submitCode = codeOverride ?? code;
+    // Guard against a partial submit (e.g. Enter with fewer than 6 digits).
+    if (submitCode.length < 6) return;
     setLoading(true);
     setError(null);
     try {
@@ -140,6 +142,7 @@ function SignInForm() {
     e?.preventDefault();
     if (!mfaPending) return;
     const submitCode = codeOverride ?? mfaCode;
+    if (submitCode.length < 6) return;
     setLoading(true);
     setError(null);
     try {
@@ -217,7 +220,7 @@ function SignInForm() {
             <Button
               type="submit"
               size="lg"
-              disabled={loading || !mfaCode}
+              disabled={loading || mfaCode.length < 6}
               className="h-[var(--touch-target-lg)] w-full rounded-[var(--radius-lg)] bg-primary text-primary-foreground"
             >
               {loading ? (
@@ -254,7 +257,7 @@ function SignInForm() {
             <Button
               type="submit"
               size="lg"
-              disabled={loading || !code}
+              disabled={loading || code.length < 6}
               className="h-[var(--touch-target-lg)] w-full rounded-[var(--radius-lg)] bg-primary text-primary-foreground"
             >
               {loading ? (
