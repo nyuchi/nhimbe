@@ -83,7 +83,7 @@ Mutations and client-invoked reads: `auth`, `events`, `discovery`, `my-events`, 
 
 ### Route Handlers (`src/app/api/`)
 
-Same-origin fallback endpoints: `events`, `events/[id]` (both also take bearer-authed `POST`/`PATCH` for the MCP), `categories`, `cities`, `community/stats`, `og` (OG image), and the self-hosted auth routes `auth/magic/{start,verify}`, `auth/password`, `auth/sso` (dormant).
+Same-origin fallback endpoints: `events`, `events/[id]` (both also take bearer-authed `POST`/`PATCH` for the MCP), `categories`, `cities`, `community/stats`, `og` (OG image), `media/upload` (WorkOS-gated cover-image upload to R2), and the self-hosted auth routes `auth/magic/{start,verify}`, `auth/password`, `auth/mfa/{verify,enroll,activate,remove}`, `auth/sso` (dormant).
 
 ### Authentication Flow (WorkOS AuthKit — self-hosted UI)
 
@@ -91,7 +91,7 @@ Auth is **self-hosted**: the sign-in UI lives in our own app (`src/app/auth/sign
 
 - **Email code (Magic Auth)** — `POST /api/auth/magic/start` (`createMagicAuth`) → `POST /api/auth/magic/verify` (`authenticateWithMagicAuth` + `saveSession`). Fully in-app.
 - **Password** — `POST /api/auth/password` (`authenticateWithPassword` + `saveSession`). Fully in-app.
-- **MFA (TOTP)** — step-up: when a primary method returns a `pendingAuthenticationToken`, prompt for the 6-digit code and call `authenticateWithTotp`; enrollment via `createUserAuthFactor` (authenticator-app QR). Requires MFA enabled for the WorkOS environment.
+- **MFA (TOTP)** — **optional** step-up. When a primary method returns a `pendingAuthenticationToken` (account has a factor), prompt for the 6-digit code → `POST /api/auth/mfa/verify` (`authenticateWithTotp`). Enrollment is user-initiated in profile settings (`src/components/auth/two-factor-setup.tsx`): `POST /api/auth/mfa/enroll` (`createUserAuthFactor`, authenticator-app QR) → `POST /api/auth/mfa/activate` (`challengeFactor` + `verifyChallenge`). A **"Skip for now"** deletes the unconfirmed factor via `POST /api/auth/mfa/remove` (ownership-checked `deleteFactor`) so it can't linger as an orphan that forces a phantom challenge. All 6-digit entry uses the shared segmented OTP input (`src/components/ui/otp-input.tsx`). Requires MFA enabled for the WorkOS environment.
 
 We deliberately **do not use social login**. **Passkeys are not available self-hosted** — WorkOS exposes no headless passkey authenticate API (only webhook events), so they'd require AuthKit's hosted UI / `authkit-js` WebAuthn; deferred. An **organization SSO** helper (`POST /api/auth/sso` → domain→org lookup → `{ url }`, back to `/callback`) exists in `src/lib/auth/flows.ts` but is dormant (not surfaced in the primary UI).
 
@@ -117,7 +117,7 @@ Env: `SHAMWARI_AI_GATEWAY_URL`, `SHAMWARI_AI_GATEWAY_TOKEN`, and optional `SHAMW
 
 ### Storage — Cloudflare R2
 
-Media lives in the **shared** Mukoko bucket `mukoko-storage`, served at `assets-s001.mukoko.com` (`getMediaUrl` in `src/lib/api.ts`, overridable via `NEXT_PUBLIC_ASSETS_URL`) — **not** a per-app silo. Reads need no credentials. Uploads require an R2 S3 token (pending).
+Media lives in the **shared** Mukoko bucket `mukoko-storage`, served at `assets-s001.mukoko.com` (`getMediaUrl` in `src/lib/api.ts`, overridable via `NEXT_PUBLIC_ASSETS_URL`) — **not** a per-app silo. Reads need no credentials. **Uploads** (event cover images) go through `POST /api/media/upload` (WorkOS session-gated; validates image type + 4 MB) which writes to `mukoko-storage` via `src/lib/r2.ts` (the AWS S3 SDK pointed at the R2 endpoint). Uploads need an R2 S3 API token — `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (defaults to `mukoko-storage`); when unset the route returns 503 and the create-event form falls back to a gradient cover.
 
 ### nhimbe MCP (`worker/` → `nhimbe-mcp`)
 
@@ -157,9 +157,11 @@ shadcn/Radix primitives installed from the Mukoko registry (`registry.mukoko.com
 
 ### Frontend Libraries (`src/lib/`)
 
-- `api.ts` — same-origin REST client (fallback path) + `getMediaUrl`.
+- `api.ts` — same-origin REST client (fallback path) + `getMediaUrl` + `uploadMedia`.
 - `mongo/` — server-side MongoDB layer (see above).
 - `ai/` — Shamwari gateway client + event embedding index.
+- `r2.ts` — server-only Cloudflare R2 uploader (S3 SDK) for cover images.
+- `email/` — Resend transactional email client + templates (`server-only`).
 - `auth/dev.ts` — dev auth bypass.
 - `shamwari.ts` — Shamwari assistant helpers.
 - `calendar.ts`, `timezone.ts` — date/time utilities (+ tests).
@@ -239,7 +241,8 @@ Set in Vercel (prod + preview) and locally in `.env.local`:
 - `WORKOS_API_HOSTNAME` *(optional)* — defaults to `api.workos.com`; set to `authenticate.nyuchi.com` to route WorkOS calls through the Nyuchi custom domain.
 - `NEXT_PUBLIC_WORKOS_REDIRECT_URI` — usually `${NEXT_PUBLIC_SITE_URL}/callback`. The `NEXT_PUBLIC_` prefix is **required** — AuthKit reads it from the client bundle to form the OAuth start URL.
 - `SHAMWARI_AI_GATEWAY_URL`, `SHAMWARI_AI_GATEWAY_TOKEN` — Cloudflare AI Gateway base + provider bearer; optional `SHAMWARI_AI_GATEWAY_AUTH_TOKEN` for the authenticated gateway.
-- `RESEND_API_KEY` — server-only; used for transactional email via Resend (`src/lib/email/`). When unset, email sends are skipped (never throw).
+- `RESEND_API_KEY` — server-only; used for transactional email via Resend (`src/lib/email/`). Sends from the verified `notify.mukoko.com` domain (`events@notify.mukoko.com`). When unset, email sends are skipped (never throw).
+- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — server-only R2 S3 API credentials for cover-image uploads (`src/lib/r2.ts`). `R2_BUCKET` *(optional)* defaults to `mukoko-storage`. When unset, `/api/media/upload` returns 503 and uploads fall back to a gradient cover.
 - `NEXT_PUBLIC_SITE_URL` — public site URL.
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — Google Maps.
 - `NEXT_PUBLIC_ASSETS_URL` *(optional)* — override the R2 assets host (defaults to `https://assets-s001.mukoko.com`).

@@ -87,8 +87,9 @@ export function OtpInput({
         // Delete just this digit and compact the rest left (no gaps, no wipe).
         commit(value.slice(0, index) + value.slice(index + 1));
         focusBox(index);
-      } else if (value.length > 0) {
-        // On the trailing empty box, delete the previous digit.
+      } else if (index === value.length && value.length > 0) {
+        // On the immediate trailing empty box, delete the previous digit. A box
+        // farther past the filled region (reached by clicking ahead) does nothing.
         commit(value.slice(0, -1));
         focusBox(value.length - 1);
       }

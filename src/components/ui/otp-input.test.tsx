@@ -43,6 +43,14 @@ describe("OtpInput", () => {
     expect(join(b)).toBe("1345");
   });
 
+  it("does nothing on backspace in an empty box past the filled region", () => {
+    render(<Harness />);
+    const b = boxes();
+    "12".split("").forEach((d, i) => type(b[i], d));
+    fireEvent.keyDown(b[4], { key: "Backspace" }); // far-ahead empty box
+    expect(join(b)).toBe("12");
+  });
+
   it("overwrites a middle box in place without collapsing", () => {
     render(<Harness />);
     const b = boxes();
