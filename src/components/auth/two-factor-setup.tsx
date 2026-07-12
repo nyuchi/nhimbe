@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { ShieldCheck, Loader2, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { OtpInput, OTP_LENGTH } from "@/components/ui/otp-input";
 
 // Self-hosted authenticator-app (TOTP) enrollment for the signed-in user.
 //   1. Enroll  → POST /api/auth/mfa/enroll  → QR data URI + manual secret
@@ -48,16 +48,36 @@ export function TwoFactorSetup() {
     }
   }
 
-  async function activate(e: React.FormEvent) {
-    e.preventDefault();
+  // Cancel an in-progress enrolment and return to the "not set up" state. Delete
+  // the unconfirmed factor server-side (best-effort) so it can't linger as an
+  // orphaned factor that later forces a phantom MFA challenge.
+  function skipEnroll() {
+    const factorId = enroll?.factorId;
+    setEnroll(null);
+    setCode("");
+    setError(null);
+    if (factorId) {
+      void fetch("/api/auth/mfa/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ factorId }),
+      }).catch(() => {
+        /* best-effort — clearing the UI must not depend on the delete */
+      });
+    }
+  }
+
+  async function activate(e?: React.FormEvent, codeOverride?: string) {
+    e?.preventDefault();
     if (!enroll) return;
+    const submitCode = codeOverride ?? code;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/auth/mfa/activate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, factorId: enroll.factorId }),
+        body: JSON.stringify({ code: submitCode, factorId: enroll.factorId }),
       });
       const data = (await res.json().catch(() => ({}))) as ActivateResponse;
       if (!res.ok || !data.ok) throw new Error(data.error || "That code didn't work. Try again.");
@@ -121,22 +141,17 @@ export function TwoFactorSetup() {
               </code>
             </div>
             <form onSubmit={activate} className="space-y-3">
-              <Input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                required
-                enterKeyHint="go"
+              <OtpInput
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="123456"
-                aria-label="Authenticator code"
-                className="h-[var(--touch-target-lg)] text-center text-lg tracking-widest"
+                onChange={setCode}
+                onComplete={(v) => activate(undefined, v)}
+                disabled={loading}
+                ariaLabel="Authenticator code"
               />
               <Button
                 type="submit"
                 size="lg"
-                disabled={loading || !code}
+                disabled={loading || code.length < OTP_LENGTH}
                 className="h-[var(--touch-target-lg)] w-full rounded-[var(--radius-lg)] bg-primary text-primary-foreground"
               >
                 {loading ? (
@@ -147,6 +162,14 @@ export function TwoFactorSetup() {
                   "Turn on two-factor"
                 )}
               </Button>
+              <button
+                type="button"
+                onClick={skipEnroll}
+                disabled={loading}
+                className="flex min-h-[var(--touch-target)] w-full items-center justify-center text-sm text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+              >
+                Skip for now
+              </button>
             </form>
           </div>
         ) : (

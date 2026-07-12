@@ -7,12 +7,12 @@ export default function SearchLoading() {
       <Skeleton className="h-14 w-full mb-8 rounded-xl" />
       <div className="space-y-4">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex gap-4 rounded-2xl overflow-hidden">
-            <Skeleton className="h-28 w-40 shrink-0" />
-            <div className="flex-1 py-2 space-y-3">
-              <Skeleton className="h-5 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-              <Skeleton className="h-4 w-1/3" />
+          <div key={i} className="flex gap-4 rounded-2xl border border-border bg-card overflow-hidden">
+            <Skeleton surface="muted" className="h-28 w-40 shrink-0 rounded-none" />
+            <div className="flex-1 py-3 pr-4 space-y-3">
+              <Skeleton surface="muted" className="h-5 w-3/4" />
+              <Skeleton surface="muted" className="h-4 w-1/2" />
+              <Skeleton surface="muted" className="h-4 w-1/3" />
             </div>
           </div>
         ))}

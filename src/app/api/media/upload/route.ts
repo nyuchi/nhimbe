@@ -14,6 +14,7 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { isR2Configured, uploadToR2 } from "@/lib/r2";
+import { imageBytesMatchType } from "@/lib/security/image";
 
 export const runtime = "nodejs";
 
@@ -65,6 +66,17 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json(
       { error: "Image is too large (max 4 MB). Please choose a smaller image." },
       { status: 413 },
+    );
+  }
+
+  // Defence in depth: the Content-Type header is attacker-controlled, so
+  // confirm the actual bytes are the image type they claim to be. This
+  // rejects a spoofed header smuggling SVG/HTML/polyglot content that could
+  // otherwise become stored XSS when served from the assets host.
+  if (!imageBytesMatchType(buffer, contentType)) {
+    return NextResponse.json(
+      { error: "File contents do not match a supported image type." },
+      { status: 415 },
     );
   }
 

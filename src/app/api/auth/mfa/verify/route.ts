@@ -42,12 +42,20 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const auth = await getWorkOS().userManagement.authenticateWithTotp({
+    // authenticateWithTotp only needs code + pendingAuthenticationToken; WorkOS
+    // derives the challenge from the pending token. Passing an empty
+    // authenticationChallengeId makes WorkOS reject the request
+    // ("authentication_challenge_id_string_required"), so only include it when we
+    // actually have one. The SDK types it as required, hence the cast.
+    const totpOptions = {
       clientId,
       code,
       pendingAuthenticationToken,
-      authenticationChallengeId: challengeId,
-    });
+      ...(challengeId ? { authenticationChallengeId: challengeId } : {}),
+    } as Parameters<
+      ReturnType<typeof getWorkOS>["userManagement"]["authenticateWithTotp"]
+    >[0];
+    const auth = await getWorkOS().userManagement.authenticateWithTotp(totpOptions);
     // Persist the encrypted WorkOS session cookie. AuthProvider then syncs the
     // user into identity.persons on the next render.
     await saveSession(auth, request);

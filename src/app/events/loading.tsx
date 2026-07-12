@@ -12,11 +12,11 @@ export default function EventsLoading() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="rounded-2xl overflow-hidden">
-            <Skeleton className="h-48 w-full" />
+          <div key={i} className="rounded-2xl border border-border bg-card overflow-hidden">
+            <Skeleton surface="muted" className="h-48 w-full rounded-none" />
             <div className="p-4 space-y-3">
-              <Skeleton className="h-5 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
+              <Skeleton surface="muted" className="h-5 w-3/4" />
+              <Skeleton surface="muted" className="h-4 w-1/2" />
             </div>
           </div>
         ))}

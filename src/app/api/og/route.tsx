@@ -235,7 +235,7 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (e) {
-    console.error(e);
+    console.error("[mukoko] GET /api/og failed", e);
     return new Response("Failed to generate image", { status: 500 });
   }
 }

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Loader2, Mail, KeyRound, ArrowLeft, AlertCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OtpInput, OTP_LENGTH } from "@/components/ui/otp-input";
 
 // Self-hosted sign-in: everything happens on our own UI — no redirect to a
 // WorkOS-hosted page. Two methods share one card:
@@ -40,6 +41,8 @@ function SignInForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Transient confirmation after re-requesting an email code.
+  const [resent, setResent] = useState(false);
 
   // MFA step-up: set once a primary method reports the account needs a TOTP code.
   // The pending token is short-lived and single-use — held here only until the
@@ -58,6 +61,7 @@ function SignInForm() {
     setError(null);
     setMfaPending(null);
     setMfaCode("");
+    setResent(false);
   }
 
   async function sendCode(e: React.FormEvent) {
@@ -80,15 +84,43 @@ function SignInForm() {
     }
   }
 
-  async function verifyCode(e: React.FormEvent) {
-    e.preventDefault();
+  // Re-request an email code from the code-entry step (email didn't arrive /
+  // expired). Stays on the code step and shows a transient confirmation.
+  async function resendCode() {
+    setLoading(true);
+    setError(null);
+    setResent(false);
+    try {
+      const res = await fetch("/api/auth/magic/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Couldn't send a new code.");
+      setCode("");
+      setResent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyCode(e?: React.FormEvent, codeOverride?: string) {
+    e?.preventDefault();
+    // On auto-submit the completed value arrives via `codeOverride` because the
+    // `code` state hasn't flushed yet in the same tick.
+    const submitCode = codeOverride ?? code;
+    // Guard against a partial submit (e.g. Enter with fewer than 6 digits).
+    if (submitCode.length < OTP_LENGTH) return;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/auth/magic/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code }),
+        body: JSON.stringify({ email, code: submitCode }),
       });
       const data = (await res.json().catch(() => ({}))) as AuthResponse;
       if (!res.ok) throw new Error(data.error || "That code didn't work.");
@@ -132,9 +164,11 @@ function SignInForm() {
     }
   }
 
-  async function verifyMfa(e: React.FormEvent) {
-    e.preventDefault();
+  async function verifyMfa(e?: React.FormEvent, codeOverride?: string) {
+    e?.preventDefault();
     if (!mfaPending) return;
+    const submitCode = codeOverride ?? mfaCode;
+    if (submitCode.length < OTP_LENGTH) return;
     setLoading(true);
     setError(null);
     try {
@@ -142,7 +176,7 @@ function SignInForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          code: mfaCode,
+          code: submitCode,
           pendingAuthenticationToken: mfaPending.token,
           challengeId: mfaPending.challengeId,
         }),
@@ -201,23 +235,18 @@ function SignInForm() {
             <div className="flex justify-center">
               <ShieldCheck className="h-8 w-8 text-primary" aria-hidden />
             </div>
-            <Input
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              autoFocus
-              required
-              enterKeyHint="go"
+            <OtpInput
               value={mfaCode}
-              onChange={(e) => setMfaCode(e.target.value)}
-              placeholder="123456"
-              aria-label="Authenticator code"
-              className="h-[var(--touch-target-lg)] text-center text-lg tracking-widest"
+              onChange={setMfaCode}
+              onComplete={(v) => verifyMfa(undefined, v)}
+              autoFocus
+              disabled={loading}
+              ariaLabel="Authenticator code"
             />
             <Button
               type="submit"
               size="lg"
-              disabled={loading || !mfaCode}
+              disabled={loading || mfaCode.length < OTP_LENGTH}
               className="h-[var(--touch-target-lg)] w-full rounded-[var(--radius-lg)] bg-primary text-primary-foreground"
             >
               {loading ? (
@@ -243,23 +272,18 @@ function SignInForm() {
         ) : inCodeEntry ? (
           // Code-entry step takes over the card — the user is mid-flow.
           <form onSubmit={verifyCode} className="space-y-4">
-            <Input
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              autoFocus
-              required
-              enterKeyHint="go"
+            <OtpInput
               value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="123456"
-              aria-label="One-time code"
-              className="h-[var(--touch-target-lg)] text-center text-lg tracking-widest"
+              onChange={setCode}
+              onComplete={(v) => verifyCode(undefined, v)}
+              autoFocus
+              disabled={loading}
+              ariaLabel="One-time code"
             />
             <Button
               type="submit"
               size="lg"
-              disabled={loading || !code}
+              disabled={loading || code.length < OTP_LENGTH}
               className="h-[var(--touch-target-lg)] w-full rounded-[var(--radius-lg)] bg-primary text-primary-foreground"
             >
               {loading ? (
@@ -270,17 +294,34 @@ function SignInForm() {
                 "Sign in"
               )}
             </Button>
-            <button
-              type="button"
-              onClick={() => {
-                setStep("email");
-                setCode("");
-                setError(null);
-              }}
-              className="flex min-h-[var(--touch-target)] w-full items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" aria-hidden /> Use a different email
-            </button>
+            {resent && (
+              <p className="text-center text-sm text-primary" role="status">
+                A new code is on its way.
+              </p>
+            )}
+            <div className="flex items-center justify-center gap-4 text-sm">
+              <button
+                type="button"
+                onClick={resendCode}
+                disabled={loading}
+                className="min-h-[var(--touch-target)] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+              >
+                Resend code
+              </button>
+              <span aria-hidden className="text-border">·</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep("email");
+                  setCode("");
+                  setError(null);
+                  setResent(false);
+                }}
+                className="flex min-h-[var(--touch-target)] items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden /> Different email
+              </button>
+            </div>
           </form>
         ) : method === "password" ? (
           <div className="space-y-5">
@@ -295,7 +336,7 @@ function SignInForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 aria-label="Email address"
-                className="h-[var(--touch-target-lg)] text-base"
+                className="h-[var(--touch-target-lg)] text-base text-foreground"
               />
               <Input
                 type="password"
@@ -306,7 +347,7 @@ function SignInForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Your password"
                 aria-label="Password"
-                className="h-[var(--touch-target-lg)] text-base"
+                className="h-[var(--touch-target-lg)] text-base text-foreground"
               />
               <Button
                 type="submit"
@@ -348,7 +389,7 @@ function SignInForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 aria-label="Email address"
-                className="h-[var(--touch-target-lg)] text-base"
+                className="h-[var(--touch-target-lg)] text-base text-foreground"
               />
               <Button
                 type="submit"

@@ -48,6 +48,30 @@ describe("SignInPage", () => {
     expect(await screen.findByLabelText(/one-time code/i)).toBeInTheDocument();
   });
 
+  it("resends a code from the code step and confirms", async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) // magic/start
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) }); // resend magic/start
+    render(<SignInPage />);
+
+    fireEvent.change(screen.getByLabelText(/email address/i), {
+      target: { value: "person@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /email me a code/i }));
+    await screen.findByLabelText(/one-time code/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /resend code/i }));
+
+    await waitFor(() =>
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        "/api/auth/magic/start",
+        expect.objectContaining({ method: "POST" })
+      )
+    );
+    expect(await screen.findByText(/a new code is on its way/i)).toBeInTheDocument();
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
   it("signs in with a password and navigates on success", async () => {
     const assign = stubLocationAssign();
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
@@ -96,10 +120,10 @@ describe("SignInPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
 
-    // The authenticator step takes over the card.
-    const codeInput = await screen.findByLabelText(/authenticator code/i);
-    fireEvent.change(codeInput, { target: { value: "654321" } });
-    fireEvent.click(screen.getByRole("button", { name: /^verify$/i }));
+    // The authenticator step takes over the card — a 6-box OTP field. Pasting a
+    // full code fills it and auto-submits via onComplete.
+    const firstBox = await screen.findByLabelText(/digit 1 of 6/i);
+    fireEvent.paste(firstBox, { clipboardData: { getData: () => "654321" } });
 
     await waitFor(() =>
       expect(mockFetch).toHaveBeenLastCalledWith(
