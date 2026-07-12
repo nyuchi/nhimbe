@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Don't advertise the framework via the `X-Powered-By: Next.js` response
+  // header — it's free reconnaissance for an attacker and offers no value to
+  // legitimate clients.
+  poweredByHeader: false,
   images: {
     remotePatterns: [
       {
