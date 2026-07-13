@@ -159,7 +159,9 @@ The mzizi events-domain brand components, ported into `src/components/ui/` and e
 - **`nyuchi-rsvp-button.tsx`** (`NyuchiRSVPButton`) — stateful RSVP pill (none/pending/confirmed/waitlisted/declined) with a capacity indicator; wired into the event-detail sidebar (`events/[id]/rsvp-button.tsx`) over the existing `rsvpToEvent` action.
 - **`nyuchi-ticket-card.tsx`** (`NyuchiTicketCard`) — digital ticket (QR area, tier, status); rendered on the my-events **Attending** tab.
 - **`nyuchi-programme-item.tsx`** (`NyuchiProgrammeItem`) — timeline agenda row; renders the event-detail programme (`events/[id]/event-specifics.tsx`).
-- **`nyuchi-calendar.tsx`** (`NyuchiCalendar`) — branded month view with mineral event-dots + an agenda render-prop; powers `/calendar` (the shadcn `calendar` primitive stays for form date-pickers).
+- **`nyuchi-calendar.tsx`** (`NyuchiCalendar`) — branded month view with mineral event-dots + an agenda render-prop; powers `/calendar` (the shadcn `calendar` primitive stays for form date-pickers). Cells are `aspect-square` (4.2.0 compact calendar).
+- **`nyuchi-meta-tile.tsx`** (`NyuchiMetaTile`) — 4.2.0 date/location signature: rounded-square icon/date chip + bold 16px primary + 13px muted secondary; used for the When / Where rows on event detail.
+- **`nyuchi-timeline.tsx`** (`NyuchiTimeline`) — 4.2.0 date-railed discover list (weekday · day · month rail + tight horizontal rows: time · title · host · location · avatar stack · thumbnail). Powers the home feed, `/events`, and `/search` (via `NyuchiSearchView`'s `timeline` mode).
 - **`nyuchi-create-listing.tsx`** — create/edit form shell (`CoverThemePicker`, `FormSection`, `FormRow`, `FormTextArea`, `PublishBar`, `CreateHeader`); the create-event wizard adopts `PublishBar` for its sticky CTA without replacing its state or the `createEvent` action.
 
 Per-event mineral accents come from **`src/lib/category-mineral.ts`** (`categoryToMineral`), keyword-matched with a **tanzanite** default so the brand lead is always the fallback face. `nyuchi-forecast-card` was intentionally **not** ported: nhimbe's weather is the Mukoko iframe embed (`weather-embed.tsx`, `src/lib/weather.ts`) — a presentational forecast shell has no structured data to bind, so duplicating it was skipped.
@@ -189,8 +191,8 @@ Per-event mineral accents come from **`src/lib/category-mineral.ts`** (`category
 - `calendar.ts`, `timezone.ts` — date/time utilities (+ tests).
 - `fallback-chain.ts` — resilient data-loading fallback pattern.
 - `use-focus-trap.ts`, `use-tracked-link.ts`, `use-save-event.ts` — hooks.
-- `themes.ts` — mineral theme definitions.
-- `category-mineral.ts` — `categoryToMineral()` event-category → mineral accent map (tanzanite default) for the branded nyuchi event components (+ tests).
+- `themes.ts` — washed per-event theme definitions (mzizi 4.2.0): heritage + experimental palettes + a tanzanite default, each carrying `{ accent, wash, onWash, gradient }` for light + dark. `getTheme()` / `themeIds` / `getThemeColors()`; legacy `mineralThemes` / `mineralThemeIds` aliases retained (+ tests).
+- `category-mineral.ts` — `categoryToMineral()` event-category → mineral accent map (tanzanite default) for the branded nyuchi event components (+ tests). Independent of the washed theme options in `themes.ts` — it is a per-card categorisation cue, not a theme picker.
 - `observability.ts` — frontend structured logging (`[mukoko]` prefix).
 - `i18n/` — lightweight custom i18n (`t()`, `setLocale()`, `getLocale()`); English (default) + Shona.
 - `utils.ts` — shared helpers incl. `cn()` (+ tests).
@@ -228,7 +230,7 @@ Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/se
 | `src/lib/api.ts`                                  | Same-origin REST client + `getMediaUrl`                        |
 | `src/lib/observability.ts`                        | Frontend structured logging (`[mukoko]`)                       |
 | `src/lib/i18n/index.ts`                           | i18n translations (English + Shona)                            |
-| `src/lib/themes.ts`                               | Mineral theme definitions                                      |
+| `src/lib/themes.ts`                               | Washed per-event theme options (heritage + experimental, 4.2.0)|
 | `src/components/auth/auth-context.tsx`            | Auth state management                                          |
 | `src/components/auth/workos-provider.tsx`         | AuthKit provider wrapping the app                              |
 | `src/components/error/section-error-boundary.tsx` | Mukoko 3-layer error boundary                                  |
@@ -254,6 +256,7 @@ Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/se
   - **tanzanite stays the brand `--primary`** in every theme (cobalt is the "exceptional" mineral for links/info only — `--nh-secondary`/`--info`). Do **not** switch `--primary` to cobalt.
   - **Compact touch-target scale is intentional** (`--touch-target-lg: 48px` / `40px` / `34px`); blanket min-heights are deliberately **not** enforced (see the comment in `globals.css`). Control heights are token-driven (`--h-button-default`/`--h-button-sm`/`--h-input`, currently 36/32/36) — the single knob to adopt the doctrine's 56/48 later without touching components.
   - Extended spacing ladder (`*-plus` half-steps, `--space-4xl/5xl/6xl`), type tokens (`--fs-display-sm/h6/code`), the `--font-mono` (JetBrains Mono, loaded via `next/font` in `layout.tsx`), shadow rungs (`--shadow-none/xs/inner/focus-ring`), and motion aliases (`--motion-duration-*`, `--motion-ease-spring`, `--motion-stagger-*`) are all present.
+  - **4.2.0 washed refresh (density + cover-wash + timeline):** the `Card` primitive is compact (14px padding `py-3.5 px-3.5`, 10px `gap-2.5`, full 1px border); brand-card metadata is 13px `text-muted-foreground`. Per-event **theme options** are the mzizi **heritage + experimental** washed palettes (`src/lib/themes.ts`), tanzanite default. `EventThemeWrapper` emits each theme's light+dark values as inline `--ev-*` vars; `globals.css` selects the active mode and computes **`--wash`** (active surface + event accent, ~7% light / ~12% dark) which paints the event-detail ground. The idle RSVP CTA derives its fill from `--event-primary`. Signature patterns: **`nyuchi-meta-tile`** (date/location chip) on event detail, and **`nyuchi-timeline`** (date-rail discover list) on the home feed, `/events`, and `/search`. Compact `nyuchi-calendar` cells are `aspect-square`. **tanzanite remains the app `--primary`** — the per-theme wash only tints event surfaces (guarded by `design-tokens.test.ts`).
 - **Schema.org alignment** — events and users modeled after schema.org specs.
 - **Structured logging** — `[mukoko]` prefix on all log output.
 - **Path alias** — `@/*` maps to `./src/*`.
