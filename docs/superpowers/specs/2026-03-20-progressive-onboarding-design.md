@@ -1,5 +1,15 @@
 # Progressive Onboarding Design
 
+> **⚠️ Archived spec — historical record (2026-03-20).** The design intent (inline,
+> contextual prompts instead of a blocking wizard) shipped. The **data-layer
+> details are superseded**: profile writes now go through a **Server Action** to
+> **MongoDB** (`identity.persons`), not a Hono `PATCH /api/auth/profile` on a
+> Worker. The **D1/Supabase column mapping** described below no longer applies —
+> nhimbe has no D1 or Supabase. Kept for historical context — see
+> [`../../README.md`](../../README.md) and the root `CLAUDE.md` for current state.
+
+<!-- archival banner ends -->
+
 > Replaces the 3-step onboarding wizard with contextual, inline prompts that collect user data at the moment it becomes useful.
 
 ## Problem
