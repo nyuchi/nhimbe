@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { Loader2, ArrowRight, Globe, Sun, Cloud, CloudRain, CloudLightning, CloudSnow, CloudFog, CloudSun, TrendingUp, Flame, Clock, Users, Plus, CalendarDays, Compass, MapPin } from "lucide-react";
+import { Loader2, ArrowRight, Globe, TrendingUp, Flame, Clock, Users, Plus, CalendarDays, Compass, MapPin } from "lucide-react";
 import dynamic from "next/dynamic";
 import { EventCardHorizontal } from "@/components/ui/event-card-horizontal";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,21 +22,8 @@ const CommunityInsightsCompact = dynamic(
 );
 import { type Event, type Category, type CommunityStats } from "@/lib/api";
 import { getEventsAction, getCategoriesAction, getCommunityStatsAction } from "@/app/actions/discovery";
-import { getUserTimezone, getCurrentTimeWithTimezone, getWeather, type WeatherData } from "@/lib/timezone";
-
-// Weather icon component
-function WeatherIcon({ icon }: { icon: string }) {
-  const iconProps = { className: "w-4 h-4" };
-  switch (icon) {
-    case "cloud": return <Cloud {...iconProps} />;
-    case "cloud-rain": return <CloudRain {...iconProps} />;
-    case "cloud-lightning": return <CloudLightning {...iconProps} />;
-    case "cloud-snow": return <CloudSnow {...iconProps} />;
-    case "cloud-fog": return <CloudFog {...iconProps} />;
-    case "cloud-sun": return <CloudSun {...iconProps} />;
-    default: return <Sun {...iconProps} />;
-  }
-}
+import { getUserTimezone, getCurrentTimeWithTimezone } from "@/lib/timezone";
+import { HomeWeather } from "@/app/home-weather";
 
 // Format large numbers (e.g., 2800 -> "2.8K")
 function formatCount(n: number): string {
@@ -186,20 +173,16 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
   const [activeCity, setActiveCity] = useState<string | null>(null);
   const [detectedCity, setDetectedCity] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState<string>("");
-  const [weather, setWeather] = useState<WeatherData | null>(null);
   const [communityStats, setCommunityStats] = useState<CommunityStats | null>(null);
 
-  // Detect user location, timezone, and weather on mount
+  // Detect user location and timezone on mount. Weather is handled by the
+  // HomeWeather dropdown (Mukoko embed), seeded with the timezone city and
+  // upgradable via browser geolocation.
   useEffect(() => {
-    // Set current time with timezone
     setCurrentTime(getCurrentTimeWithTimezone());
-
-    // Use timezone city as location hint and fetch weather
     const tz = getUserTimezone();
     if (tz.city) {
       setDetectedCity(tz.city);
-      // Fetch weather for the detected city
-      getWeather(tz.city).then(setWeather).catch(() => {});
     }
   }, []);
 
@@ -277,12 +260,7 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
       {currentTime && (
         <div className="border-b border-elevated/50">
           <div className="max-w-300 mx-auto px-6 py-2 flex items-center justify-end gap-4 text-sm text-text-tertiary">
-            {weather && (
-              <div className="flex items-center gap-2">
-                <WeatherIcon icon={weather.icon} />
-                <span>{weather.temp}</span>
-              </div>
-            )}
+            <HomeWeather fallbackCity={detectedCity} />
             <div className="flex items-center gap-2">
               <Globe className="w-4 h-4" />
               <span>{currentTime}</span>
