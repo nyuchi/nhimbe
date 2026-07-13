@@ -26,6 +26,7 @@ export { NyuchiNotificationItem } from "./nyuchi-notification-item";
 export { NyuchiOnboardingStep } from "./nyuchi-onboarding-step";
 export { NyuchiSuccessScreen } from "./nyuchi-success-screen";
 export { NyuchiActionSheet } from "./nyuchi-action-sheet";
+export { NyuchiShareCard } from "./nyuchi-share-card";
 export { NyuchiRSVPButton } from "./nyuchi-rsvp-button";
 export { NyuchiTicketCard } from "./nyuchi-ticket-card";
 export { NyuchiProgrammeItem } from "./nyuchi-programme-item";
