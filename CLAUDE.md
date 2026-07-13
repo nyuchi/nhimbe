@@ -142,7 +142,16 @@ Cloudflare is otherwise used only for R2 storage and the Shamwari AI Gateway. Tr
 
 ### UI Components (Mukoko Registry)
 
-shadcn/Radix primitives installed from the Mukoko registry (`registry.mukoko.com`), configured in `components.json` (new-york style, RSC, Tailwind v4, Lucide icons). All primitives use `data-slot` attributes, CVA variants, and Radix for accessibility. In `src/components/ui/`: core primitives (button, card, dialog, drawer, tabs, select, form, table, …) plus Mukoko-exclusive composites (rating, stats-card, filter-bar, status-indicator, timeline, copy-button, file-upload, share-dialog, lazy-section, detail-layout, responsive-modal, share-button, QR code, community-insights, city-dropdown, theme-toggle, …).
+shadcn/Radix primitives installed from the Mukoko registry (`registry.mukoko.com`), configured in `components.json` (new-york style, RSC, Tailwind v4, Lucide icons). All primitives use `data-slot` attributes, CVA variants, and Radix for accessibility. In `src/components/ui/`: core primitives (button, card, dialog, drawer, tabs, select, form, table, empty, …) plus Mukoko-exclusive composites (rating, stats-card, filter-bar, status-indicator, timeline, copy-button, file-upload, share-dialog, lazy-section, detail-layout, responsive-modal, share-button, QR code, community-insights, city-dropdown, theme-toggle, verified-badge, …).
+
+#### nyuchi-harness (`src/components/ui/harness.tsx`)
+
+The infrastructure spine the mzizi-branded component library compiles against. It **unifies nhimbe's existing infra modules** behind one contract rather than re-implementing them — observability (`src/lib/observability.ts`), a11y announcements (`src/components/ui/live-region.tsx`), error resilience (`src/components/error/section-error-boundary.tsx`), and skeleton loading (`src/components/ui/skeleton.tsx`). Motion is token-driven (`--motion-duration-*` / `--motion-ease-*`, with fallbacks) and honours `prefers-reduced-motion`; shared entry keyframes are injected at runtime so `globals.css` stays owned by the design-system PR. Two entry points:
+
+- **`NyuchiHarness`** — declarative section wrapper: `<NyuchiHarness name="feed" loading skeleton={…} fallback={…}>…</NyuchiHarness>` (error boundary + skeleton + render-timing log + entry animation + a11y roles).
+- **`useNyuchiHarness(name)`** — imperative hook for leaf brand components, returning `{ log, motion, animStyle, prefersReducedMotion, locale, theme, reportHealth, announce, announceUrgent }`. Also exports the standalone `animStyle()` / `prefersReducedMotion()` helpers.
+
+`verified-badge.tsx` (trust-tier verification badge; tanzanite top tier) is the first brand component wired to it. New brand components should consume the harness rather than touching the underlying modules directly.
 
 ### Components (`src/components/`)
 
