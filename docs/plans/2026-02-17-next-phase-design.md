@@ -1,7 +1,15 @@
 # nhimbe Next Phase Design
 
+> **⚠️ Archived plan — historical record (2026-02-17).** This roadmap predates the
+> platform consolidation. Its Phase 1 (Hono backend refactor) is **superseded** —
+> the standalone REST worker was retired and nhimbe is now a single Next.js 16 app
+> on Vercel with server-side MongoDB. Email later shipped via **Resend on the app**
+> (`src/lib/email/`), not the worker; the **Paynow** payment work below was **not
+> adopted** (no payment provider is integrated). Kept for historical context —
+> see [`../README.md`](../README.md) and the root `CLAUDE.md` for current state.
+
 **Date:** 2026-02-17
-**Status:** Approved
+**Status:** Archived (superseded)
 **Approach:** Architecture First — refactor backend before adding features
 
 ## Goals
