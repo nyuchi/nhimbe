@@ -139,7 +139,7 @@ export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
               "Free"
             )}
           </div>
-          <RSVPButton eventId={event.id} price={event.offers} />
+          <RSVPButton eventId={event.id} price={event.offers} spotsRemaining={spotsLeft} />
 
           {event.maximumAttendeeCapacity && (
             <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--event-border)" }}>
