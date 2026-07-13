@@ -7,6 +7,8 @@ import "leaflet/dist/leaflet.css";
 import type { Event } from "@/lib/api";
 import { getMapPlaceById } from "@/app/actions/map-places";
 import { BASE_LAYERS, type BaseLayerId } from "@/lib/map/tiles";
+import { NyuchiPlaceCard } from "@/components/ui/nyuchi-place-card";
+import { categoryToMineral } from "@/lib/category-mineral";
 
 /**
  * Map-first discovery view. Uses OpenStreetMap raster tiles directly (no API
@@ -279,32 +281,25 @@ export function MapClient({ initialEvents }: MapClientProps) {
         {selected && (
           <div
             data-slot="map-event-card"
-            className="absolute left-4 right-4 bottom-4 md:left-auto md:w-[320px] md:right-4 z-[1000] rounded-[var(--radius-lg)] bg-card border border-border shadow-lg overflow-hidden"
+            className="absolute left-4 right-4 bottom-4 z-[1000] shadow-lg md:left-auto md:right-4 md:w-[340px]"
           >
             <button
               type="button"
               onClick={() => setSelected(null)}
               aria-label="Close"
-              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-background/80 backdrop-blur text-foreground hover:bg-background transition-colors text-sm"
+              className="absolute -top-2 -right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-foreground shadow-sm backdrop-blur transition-colors hover:bg-background"
             >
               ×
             </button>
-            <Link href={`/events/${selected.id}`} className="block p-4">
-              <div className="flex items-start gap-3">
-                <span
-                  className="w-3 h-3 rounded-full shrink-0 mt-1.5"
-                  style={{ background: pinColor(selected.category) }}
-                  aria-hidden
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground mb-0.5">
-                    {selected.date.month} {selected.date.day} · {selected.category}
-                  </div>
-                  <h2 className="font-serif text-base font-semibold leading-tight line-clamp-2">{selected.name}</h2>
-                  <p className="mt-1 text-xs text-muted-foreground line-clamp-1">{selected.location.name || selected.location.addressLocality}</p>
-                </div>
-              </div>
-            </Link>
+            {/* Branded venue card for the selected pin, linking through to the
+                event. The mineral accent mirrors the pin's category bucket. */}
+            <NyuchiPlaceCard
+              name={selected.location.name || selected.location.addressLocality}
+              category={`${selected.date.month} ${selected.date.day} · ${selected.category}`}
+              address={selected.location.name ? selected.location.addressLocality : undefined}
+              mineral={categoryToMineral(selected.category)}
+              href={`/events/${selected.id}`}
+            />
           </div>
         )}
       </div>
