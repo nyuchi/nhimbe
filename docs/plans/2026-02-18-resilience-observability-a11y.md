@@ -1,5 +1,15 @@
 # Resilience, Observability & Accessibility Implementation Plan
 
+> **⚠️ Archived plan — historical record (2026-02-18).** The Next.js error
+> boundaries and accessibility tasks here largely shipped (`src/components/error/`,
+> `src/lib/observability.ts`, focus-trap hooks). The **Hono worker middleware**,
+> request tracing, rate limiting, and D1/KV health probe target the old REST
+> worker, which has been retired — nhimbe is now a single Next.js 16 app on Vercel
+> with server-side MongoDB. Kept for historical context — see
+> [`../README.md`](../README.md) and the root `CLAUDE.md` for current state.
+
+<!-- archival banner ends -->
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Make the nhimbe app crash-resilient (no single component breaks the site), add worker observability, and close accessibility gaps.
