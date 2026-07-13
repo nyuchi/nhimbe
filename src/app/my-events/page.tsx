@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CalendarPlus, Ticket, Users, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { NyuchiListingCard } from "@/components/ui/nyuchi-listing-card";
 import { NyuchiTicketCard } from "@/components/ui/nyuchi-ticket-card";
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
+import { NyuchiEmptyState } from "@/components/ui/nyuchi-empty-state";
 import { categoryToMineral } from "@/lib/category-mineral";
 import { getMediaUrl } from "@/lib/api";
 import { AuthGuard } from "@/components/auth/auth-guard";
@@ -18,6 +19,7 @@ type TabType = "attending" | "hosting" | "past";
 
 function MyEventsContent() {
   const { user } = useAuth();
+  const router = useRouter();
   const [events, setEvents] = useState<MyEventsResult>({ attending: [], hosting: [], past: [] });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>("attending");
@@ -150,30 +152,25 @@ function MyEventsContent() {
           )}
         </div>
       ) : (
-        <Empty className="py-16">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              {activeTab === "hosting" ? <Users className="w-6 h-6" /> : <Ticket className="w-6 h-6" />}
-            </EmptyMedia>
-            <EmptyTitle>
-              {activeTab === "hosting" ? "No events hosted yet" : activeTab === "past" ? "No past events" : "No events found"}
-            </EmptyTitle>
-            <EmptyDescription>
-              {activeTab === "hosting"
-                ? "Create your first event and bring your community together"
-                : activeTab === "past"
-                  ? "Events you've attended or hosted will appear here"
-                  : "Explore events and find gatherings that interest you"}
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Link href={activeTab === "hosting" ? "/events/create" : "/"}>
-              <Button variant="default" className="rounded-full">
-                {activeTab === "hosting" ? "Create Event" : "Explore Events"}
-              </Button>
-            </Link>
-          </EmptyContent>
-        </Empty>
+        <NyuchiEmptyState
+          icon={activeTab === "hosting" ? <Users /> : <Ticket />}
+          title={
+            activeTab === "hosting"
+              ? "No events hosted yet"
+              : activeTab === "past"
+                ? "No past events"
+                : "No events found"
+          }
+          description={
+            activeTab === "hosting"
+              ? "Create your first event and bring your community together"
+              : activeTab === "past"
+                ? "Events you've attended or hosted will appear here"
+                : "Explore events and find gatherings that interest you"
+          }
+          actionLabel={activeTab === "hosting" ? "Create event" : "Explore events"}
+          onAction={() => router.push(activeTab === "hosting" ? "/events/create" : "/")}
+        />
       )}
     </div>
   );

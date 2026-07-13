@@ -6,6 +6,7 @@ import { Search, MapPin, Clock, ArrowRight, Loader2, X, Sparkles } from "lucide-
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { NyuchiEmptyState } from "@/components/ui/nyuchi-empty-state";
 import { type Event, type Category } from "@/lib/api";
 import { getEventsAction, getCategoriesAction } from "@/app/actions/discovery";
 import { searchEventsAction } from "@/app/actions/search";
@@ -209,15 +210,11 @@ export default function SearchPage() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
-                <Search className="w-8 h-8 text-text-tertiary" />
-              </div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">No results found</h3>
-              <p className="text-text-secondary">
-                Try different keywords or browse by category
-              </p>
-            </div>
+            <NyuchiEmptyState
+              icon={<Search />}
+              title="No results found"
+              description="Try different keywords or browse by category"
+            />
           )}
         </div>
       ) : (
