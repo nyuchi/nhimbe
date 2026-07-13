@@ -18,8 +18,10 @@ interface EventWeatherProps {
 export function EventWeather({ city, eventDate }: EventWeatherProps) {
   if (!city || city === "Online") return null;
 
+  const eventDateObj = new Date(eventDate);
+  const now = new Date();
   const daysUntilEvent = Math.ceil(
-    (new Date(eventDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+    (eventDateObj.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
   );
   const type: WeatherWidgetType =
     daysUntilEvent >= 0 && daysUntilEvent <= 7 ? "5day" : "current";
