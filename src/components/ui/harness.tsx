@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { createLogger } from "@/lib/observability";
+import { useAnnounce } from "@/components/ui/live-region";
 import { getLocale, type Locale } from "@/lib/i18n";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -214,3 +215,76 @@ function useTokenVerifier(componentName: string): void {
 // Re-exported so leaf components can read the active locale directly.
 export { getLocale };
 export type { Locale, ResolvedTheme };
+
+// ─── useNyuchiHarness hook ─────────────────────────────────────
+// The imperative API for leaf brand components. Combines every layer
+// above into a single zero-config hook.
+
+export interface ComponentHarnessResult {
+  /** Scoped observability logger (backed by the shared `[mukoko]` logger). */
+  log: ScopedLogger;
+  /** Motion configuration respecting the user's reduced-motion preference. */
+  motion: MotionConfig;
+  /** Build an entry-animation style, honouring reduced motion + tokens. */
+  animStyle: (options?: AnimStyleOptions) => React.CSSProperties;
+  /** Whether the user prefers reduced motion. */
+  prefersReducedMotion: boolean;
+  /** The active locale (from `src/lib/i18n`). */
+  locale: Locale;
+  /** The resolved theme (`light` | `dark`) maintained by ThemeProvider. */
+  theme: ResolvedTheme;
+  /** Report component health (structured log the health monitor can pick up). */
+  reportHealth: (status: HealthStatus, detail?: string) => void;
+  /** Announce a message to screen readers (polite). */
+  announce: (message: string) => void;
+  /** Announce urgently to screen readers. */
+  announceUrgent: (message: string) => void;
+}
+
+/**
+ * Imperative harness for leaf brand components. Wires observability,
+ * motion, a11y (via the shared LiveRegion), theme, and locale into a
+ * single hook so branded components stay zero-config.
+ */
+export function useNyuchiHarness(componentName: string): ComponentHarnessResult {
+  const log = React.useMemo(() => createScopedLogger(componentName), [componentName]);
+  const motion = React.useMemo(() => getMotionConfig(), []);
+  const announce = useAnnounce();
+  const locale = getLocale();
+  const theme = useResolvedTheme();
+
+  useTokenVerifier(componentName);
+  useHarnessKeyframes();
+
+  React.useEffect(() => {
+    log.debug("mounted");
+    return () => log.debug("unmounted");
+  }, [log]);
+
+  const reportHealth = React.useCallback(
+    (status: HealthStatus, detail?: string) => {
+      const suffix = detail ? ` — ${detail}` : "";
+      if (status === "error") log.error(`status: error${suffix}`);
+      else if (status === "degraded") log.warn(`status: degraded${suffix}`);
+      else log.debug(`status: ${status}${suffix}`);
+    },
+    [log]
+  );
+
+  const boundAnimStyle = React.useCallback(
+    (options?: AnimStyleOptions) => animStyle(options, motion.prefersReduced),
+    [motion.prefersReduced]
+  );
+
+  return {
+    log,
+    motion,
+    animStyle: boundAnimStyle,
+    prefersReducedMotion: motion.prefersReduced,
+    locale,
+    theme,
+    reportHealth,
+    announce,
+    announceUrgent: announce,
+  };
+}
