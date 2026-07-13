@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { useAuth } from "@/components/auth/auth-context";
 import { NamePrompt } from "@/components/prompts/name-prompt";
+import { NyuchiOnboardingStep } from "@/components/ui/nyuchi-onboarding-step";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const CreateEventForm = dynamic(() => import("./create-event-form"), {
@@ -35,10 +36,14 @@ function CreateEventContent() {
 
   if (needsName && !nameProvided) {
     return (
-      <div className="max-w-100 mx-auto px-6 py-16">
-        <h2 className="text-xl font-bold mb-2">Before you create an event</h2>
-        <p className="text-text-secondary mb-6">We need your name so attendees know who&apos;s hosting.</p>
-        <NamePrompt onComplete={() => setNameProvided(true)} />
+      <div className="max-w-100 mx-auto">
+        <NyuchiOnboardingStep
+          illustration="🎉"
+          title="Before you create an event"
+          description="We need your name so attendees know who's hosting."
+        >
+          <NamePrompt onComplete={() => setNameProvided(true)} />
+        </NyuchiOnboardingStep>
       </div>
     );
   }
