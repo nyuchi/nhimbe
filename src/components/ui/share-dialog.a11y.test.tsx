@@ -14,8 +14,6 @@ describe("ShareDialog accessibility", () => {
         description="Send a link to your friends"
       />
     );
-    // baseElement is needed because Radix portals the dialog outside
-    // the rendered container into document.body.
     const results = await axe(baseElement);
     expect(results).toHaveNoViolations();
   });
@@ -28,16 +26,23 @@ describe("ShareDialog accessibility", () => {
     expect(results).toHaveNoViolations();
   });
 
-  it("renders each channel link with rel='noopener noreferrer'", () => {
+  it("renders the branded share card with a labelled modal dialog", () => {
     const { baseElement } = render(
       <ShareDialog open onOpenChange={() => {}} url="https://nhimbe.com/e/abc" title="Hi" />
     );
-    const channels = baseElement.querySelector('[data-slot="share-dialog-channels"]');
-    const links = channels?.querySelectorAll("a");
-    expect(links?.length).toBeGreaterThan(0);
-    links?.forEach((a) => {
-      expect(a.getAttribute("rel")).toBe("noopener noreferrer");
-      expect(a.getAttribute("target")).toBe("_blank");
-    });
+    const card = baseElement.querySelector('[data-slot="nyuchi-share-card"]');
+    expect(card).not.toBeNull();
+    expect(card?.getAttribute("role")).toBe("dialog");
+    expect(card?.getAttribute("aria-modal")).toBe("true");
+    // Copy-link + the three external targets render as action buttons.
+    const buttons = card?.querySelectorAll("button");
+    expect((buttons?.length ?? 0)).toBeGreaterThanOrEqual(4);
+  });
+
+  it("is not rendered when closed", () => {
+    const { baseElement } = render(
+      <ShareDialog open={false} onOpenChange={() => {}} url="https://nhimbe.com/e/abc" />
+    );
+    expect(baseElement.querySelector('[data-slot="nyuchi-share-card"]')).toBeNull();
   });
 });

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { Badge } from "@/components/ui/badge";
 import { NyuchiListingCard } from "@/components/ui/nyuchi-listing-card";
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
+import { NyuchiEmptyState } from "@/components/ui/nyuchi-empty-state";
 import { CityDropdown } from "@/components/ui/city-dropdown";
 import { categoryToMineral } from "@/lib/category-mineral";
 import { type Event, type Category, getMediaUrl } from "@/lib/api";
@@ -215,20 +215,13 @@ export function EventsClient({ initialEvents, initialCategories, initialCities }
           ))}
         </div>
       ) : (
-        <Empty className="py-16">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Search className="w-6 h-6" />
-            </EmptyMedia>
-            <EmptyTitle>No events found</EmptyTitle>
-            <EmptyDescription>Try adjusting your filters or search terms</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button variant="outline" onClick={clearFilters} className="rounded-full">
-              Clear all filters
-            </Button>
-          </EmptyContent>
-        </Empty>
+        <NyuchiEmptyState
+          icon={<Search />}
+          title="No events found"
+          description="Try adjusting your filters or search terms"
+          secondaryLabel="Clear all filters"
+          onSecondary={clearFilters}
+        />
       )}
     </div>
   );

@@ -40,6 +40,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { NyuchiNotificationItem } from "@/components/ui/nyuchi-notification-item";
+import { NyuchiActionSheet } from "@/components/ui/nyuchi-action-sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -107,6 +109,7 @@ function ManageEventContent() {
   const [actionLoading, setActionLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [blastMessage, setBlastMessage] = useState("");
+  const [sheetGuest, setSheetGuest] = useState<Registration | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -494,6 +497,39 @@ function ManageEventContent() {
             </CardContent>
           </Card>
 
+          {/* Recent Activity — branded notification feed of the latest guests */}
+          {registrations.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent activity</CardTitle>
+                <CardDescription>The latest guests to respond to your event.</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y divide-border">
+                  {registrations.slice(0, 6).map((r) => (
+                    <NyuchiNotificationItem
+                      key={r.id}
+                      type={
+                        r.checkedIn ? "trust" : r.status === "pending" ? "verification" : "event"
+                      }
+                      title={`${r.name} ${
+                        r.checkedIn
+                          ? "checked in"
+                          : r.status === "pending"
+                            ? "requested to join"
+                            : "RSVP’d"
+                      }`}
+                      message={r.email}
+                      timestamp={r.date}
+                      actorName={r.name}
+                      read
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* When & Where */}
           <Card>
             <CardHeader>
@@ -671,6 +707,13 @@ function ManageEventContent() {
                         <Check className="w-4 h-4" />
                       </button>
                     )}
+                    <button
+                      onClick={() => setSheetGuest(registration)}
+                      aria-label={`Actions for ${registration.name}`}
+                      className="w-9 h-9 rounded-full bg-elevated hover:bg-surface flex items-center justify-center transition-colors"
+                    >
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -1204,6 +1247,54 @@ function ManageEventContent() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Per-guest action sheet — branded bottom-sheet action list */}
+      <NyuchiActionSheet
+        open={!!sheetGuest}
+        onClose={() => setSheetGuest(null)}
+        title={sheetGuest?.name}
+        actions={
+          sheetGuest
+            ? [
+                ...(sheetGuest.status === "pending"
+                  ? [
+                      {
+                        id: "approve",
+                        label: "Approve",
+                        icon: "✓",
+                        onSelect: () => handleApprove(sheetGuest.id),
+                      },
+                      {
+                        id: "reject",
+                        label: "Reject",
+                        icon: "✕",
+                        destructive: true,
+                        onSelect: () => handleReject(sheetGuest.id),
+                      },
+                    ]
+                  : []),
+                ...(sheetGuest.status !== "pending" && !sheetGuest.checkedIn
+                  ? [
+                      {
+                        id: "checkin",
+                        label: "Check in",
+                        icon: "✓",
+                        onSelect: () => handleCheckIn(sheetGuest.id),
+                      },
+                    ]
+                  : []),
+                {
+                  id: "copy-email",
+                  label: "Copy email",
+                  icon: "✉️",
+                  onSelect: () => {
+                    void navigator.clipboard?.writeText(sheetGuest.email);
+                  },
+                },
+              ]
+            : []
+        }
+      />
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (

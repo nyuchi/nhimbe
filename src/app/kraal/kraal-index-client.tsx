@@ -2,15 +2,18 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Users, Flame, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { NyuchiGroupCard } from "@/components/ui/nyuchi-group-card";
+import { NyuchiEmptyState } from "@/components/ui/nyuchi-empty-state";
 import { useAuth } from "@/components/auth/auth-context";
 import { getMyCircles, type KraalSummary } from "@/app/actions/circles";
 import { useT } from "@/lib/i18n";
 
 export default function KraalIndexClient() {
   const { t } = useT();
+  const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const personId = user?.personId ?? null;
   // Default to "not loading" — only flip true once we've actually kicked
@@ -92,22 +95,13 @@ export default function KraalIndexClient() {
       )}
 
       {isAuthenticated && !loading && !error && circles.length === 0 && (
-        <Card className="border-0 bg-surface">
-          <CardContent className="p-8 text-center">
-            <Users className="w-10 h-10 mx-auto mb-3 text-text-secondary" aria-hidden />
-            <h2 className="font-serif text-xl font-semibold mb-2">No kraals yet</h2>
-            <p className="text-text-secondary mb-5">
-              Hosts open a kraal alongside their event so attendees can keep the conversation going. Once you join one, it appears here.
-            </p>
-            <Link
-              href="/events"
-              className="inline-flex items-center gap-2 px-5 h-[var(--touch-target)] rounded-full bg-primary text-primary-foreground font-semibold"
-            >
-              Find an event
-              <ArrowRight className="w-4 h-4" aria-hidden />
-            </Link>
-          </CardContent>
-        </Card>
+        <NyuchiEmptyState
+          icon={<Users />}
+          title="No kraals yet"
+          description="Hosts open a kraal alongside their event so attendees can keep the conversation going. Once you join one, it appears here."
+          actionLabel="Find an event"
+          onAction={() => router.push("/events")}
+        />
       )}
 
       {isAuthenticated && !loading && circles.length > 0 && (
