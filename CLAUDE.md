@@ -153,6 +153,19 @@ The infrastructure spine the mzizi-branded component library compiles against. I
 
 `verified-badge.tsx` (trust-tier verification badge; tanzanite top tier) is the first brand component wired to it. New brand components should consume the harness rather than touching the underlying modules directly.
 
+#### nyuchi event components (ported from mzizi)
+
+The mzizi events-domain brand components, ported into `src/components/ui/` and each wired through the harness (`useNyuchiHarness`) for observability, reduced-motion entry animation, and a11y:
+
+- **`nyuchi-listing-card.tsx`** (`NyuchiListingCard`) — the foundational universal listing card, variants `row` / `compact` / `hero`, with a mineral category accent. **Replaces `event-card` / `event-card-horizontal` at the home feed, events listing, my-events (hosting/past), and calendar agenda.** (`event-card*.tsx` remain only for the signage + map surfaces that still import them.)
+- **`nyuchi-rsvp-button.tsx`** (`NyuchiRSVPButton`) — stateful RSVP pill (none/pending/confirmed/waitlisted/declined) with a capacity indicator; wired into the event-detail sidebar (`events/[id]/rsvp-button.tsx`) over the existing `rsvpToEvent` action.
+- **`nyuchi-ticket-card.tsx`** (`NyuchiTicketCard`) — digital ticket (QR area, tier, status); rendered on the my-events **Attending** tab.
+- **`nyuchi-programme-item.tsx`** (`NyuchiProgrammeItem`) — timeline agenda row; renders the event-detail programme (`events/[id]/event-specifics.tsx`).
+- **`nyuchi-calendar.tsx`** (`NyuchiCalendar`) — branded month view with mineral event-dots + an agenda render-prop; powers `/calendar` (the shadcn `calendar` primitive stays for form date-pickers).
+- **`nyuchi-create-listing.tsx`** — create/edit form shell (`CoverThemePicker`, `FormSection`, `FormRow`, `FormTextArea`, `PublishBar`, `CreateHeader`); the create-event wizard adopts `PublishBar` for its sticky CTA without replacing its state or the `createEvent` action.
+
+Per-event mineral accents come from **`src/lib/category-mineral.ts`** (`categoryToMineral`), keyword-matched with a **tanzanite** default so the brand lead is always the fallback face. `nyuchi-forecast-card` was intentionally **not** ported: nhimbe's weather is the Mukoko iframe embed (`weather-embed.tsx`, `src/lib/weather.ts`) — a presentational forecast shell has no structured data to bind, so duplicating it was skipped.
+
 ### Components (`src/components/`)
 
 - `ui/` — primitives + domain composites.
@@ -179,6 +192,7 @@ The infrastructure spine the mzizi-branded component library compiles against. I
 - `fallback-chain.ts` — resilient data-loading fallback pattern.
 - `use-focus-trap.ts`, `use-tracked-link.ts`, `use-save-event.ts` — hooks.
 - `themes.ts` — mineral theme definitions.
+- `category-mineral.ts` — `categoryToMineral()` event-category → mineral accent map (tanzanite default) for the branded nyuchi event components (+ tests).
 - `observability.ts` — frontend structured logging (`[mukoko]` prefix).
 - `i18n/` — lightweight custom i18n (`t()`, `setLocale()`, `getLocale()`); English (default) + Shona.
 - `utils.ts` — shared helpers incl. `cn()` (+ tests).
