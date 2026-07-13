@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Rating } from "@/components/ui/rating";
 import { NyuchiAlertBanner, type AlertSeverity } from "@/components/ui/nyuchi-alert-banner";
+import { NyuchiMetaTile } from "@/components/ui/nyuchi-meta-tile";
 import { AddToCalendarButton, GetDirectionsButton } from "./event-actions";
 import { EventThemeWrapper } from "./event-theme-wrapper";
 import { EventMap } from "./event-map";
@@ -221,49 +222,38 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
               </span>
             </Link>
 
-            {/* Date Row - Luma calendar block style */}
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-14 h-14 rounded-xl flex flex-col items-center justify-center shrink-0 border" style={{ borderColor: "var(--event-surface)" }}>
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-foreground/50 leading-none">
-                  {event.date.month.slice(0, 3)}
-                </div>
-                <div className="text-xl font-bold leading-none mt-0.5" style={{ color: "var(--event-primary)" }}>
-                  {event.date.day}
-                </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-semibold">{event.date.full}</h4>
-                <p className="text-sm text-foreground/60">{event.date.time}</p>
-              </div>
-              <AddToCalendarButton event={event} />
-            </div>
+            {/* Date + Location — 4.2.0 meta tiles (date/icon chip + primary/secondary) */}
+            <NyuchiMetaTile
+              className="mb-4"
+              date={{ month: event.date.month, day: event.date.day }}
+              primary={event.date.full}
+              secondary={event.date.time}
+              trailing={<AddToCalendarButton event={event} />}
+            />
 
-            {/* Location Row - Luma style with pin */}
-            <div className="flex items-center gap-4 mb-6 sm:mb-8">
-              <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "var(--event-surface)", color: "var(--event-primary)" }}>
-                {isOnline ? <Video className="w-5 h-5" /> : <MapPin className="w-5 h-5" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-semibold truncate">{event.location.name}</h4>
-                {isOnline && event.meetingPlatform ? (
-                  <p className="text-sm text-foreground/60">
-                    {event.meetingPlatform === "zoom" && "Zoom Meeting"}
-                    {event.meetingPlatform === "google_meet" && "Google Meet"}
-                    {event.meetingPlatform === "teams" && "Microsoft Teams"}
-                    {event.meetingPlatform === "other" && "Online Meeting"}
-                  </p>
+            <NyuchiMetaTile
+              className="mb-6 sm:mb-8"
+              icon={isOnline ? Video : MapPin}
+              primary={event.location.name}
+              secondary={
+                isOnline && event.meetingPlatform
+                  ? event.meetingPlatform === "zoom"
+                    ? "Zoom Meeting"
+                    : event.meetingPlatform === "google_meet"
+                      ? "Google Meet"
+                      : event.meetingPlatform === "teams"
+                        ? "Microsoft Teams"
+                        : "Online Meeting"
+                  : `${event.location.addressLocality}, ${event.location.addressCountry}`
+              }
+              trailing={
+                isOnline && event.meetingUrl ? (
+                  <Button variant="secondary" size="sm" onClick={() => window.open(trackedMeetingUrl || event.meetingUrl, "_blank")}>Join</Button>
                 ) : (
-                  <p className="text-sm text-foreground/60 truncate">
-                    {event.location.addressLocality}, {event.location.addressCountry}
-                  </p>
-                )}
-              </div>
-              {isOnline && event.meetingUrl ? (
-                <Button variant="secondary" size="sm" onClick={() => window.open(trackedMeetingUrl || event.meetingUrl, "_blank")}>Join</Button>
-              ) : (
-                <GetDirectionsButton event={event} />
-              )}
-            </div>
+                  <GetDirectionsButton event={event} />
+                )
+              }
+            />
 
             {/* Description */}
             <div>
