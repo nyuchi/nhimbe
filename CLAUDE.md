@@ -101,7 +101,7 @@ Auth uses **WorkOS's hosted AuthKit UI**. nhimbe no longer ships a self-hosted s
 - `src/lib/auth/dev.ts` + `/api/auth/dev-login` — local dev auth bypass (kept).
 - `/callback` is the canonical post-auth landing; `/authenticate` is a legacy redirect → `/`.
 
-> **WorkOS environment alignment (critical):** `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, the `identity.nyuchi.com` custom domain (where the hosted AuthKit UI is served), and the hosted AuthKit configuration **must all belong to the same WorkOS environment**. A key/client-id/domain split across environments makes the hosted redirect succeed but the callback code exchange fail.
+> **WorkOS environment alignment (critical):** `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, the `authenticate.nyuchi.com` custom **API** domain (`WORKOS_API_HOSTNAME`), and the `identity.nyuchi.com` hosted **AuthKit UI** domain **must all belong to the same WorkOS environment**. Two distinct domains: `authenticate.nyuchi.com` serves the WorkOS API (authorize/token/JWKS — what the SDK and token verifier call), while `identity.nyuchi.com` serves the hosted sign-in UI (configured in the WorkOS dashboard). A key/client-id/domain split across environments makes the hosted redirect succeed but the callback code exchange fail.
 
 ### AI — Shamwari (`src/lib/ai/`)
 
@@ -266,7 +266,7 @@ Set in Vercel (prod + preview) and locally in `.env.local`:
 - `WORKOS_CLIENT_ID` — WorkOS Client ID (server-only; no `NEXT_PUBLIC_` prefix).
 - `WORKOS_API_KEY` — server-only, used by the AuthKit proxy.
 - `WORKOS_COOKIE_PASSWORD` — server-only session-cookie encryption key (≥32 chars).
-- `WORKOS_API_HOSTNAME` *(optional)* — defaults to `api.workos.com`; set to `identity.nyuchi.com` to route WorkOS calls (and the hosted AuthKit UI) through the Nyuchi custom domain.
+- `WORKOS_API_HOSTNAME` *(optional)* — defaults to `api.workos.com`; set to `authenticate.nyuchi.com` (the custom **API** domain) to route WorkOS API calls — authorize/token/JWKS — through it. The hosted AuthKit sign-in **UI** is served separately from `identity.nyuchi.com` (configured in the WorkOS dashboard, not via this variable).
 - `NEXT_PUBLIC_WORKOS_REDIRECT_URI` — usually `${NEXT_PUBLIC_SITE_URL}/callback`. The `NEXT_PUBLIC_` prefix is **required** — AuthKit reads it from the client bundle to form the OAuth start URL.
 - `SHAMWARI_AI_GATEWAY_URL`, `SHAMWARI_AI_GATEWAY_TOKEN` — Cloudflare AI Gateway base + provider bearer; optional `SHAMWARI_AI_GATEWAY_AUTH_TOKEN` for the authenticated gateway.
 - `RESEND_API_KEY` — server-only; used for transactional email via Resend (`src/lib/email/`). Sends from the verified `notify.mukoko.com` domain (`events@notify.mukoko.com`). When unset, email sends are skipped (never throw).
