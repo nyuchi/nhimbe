@@ -83,27 +83,25 @@ Mutations and client-invoked reads: `auth`, `events`, `discovery`, `my-events`, 
 
 ### Route Handlers (`src/app/api/`)
 
-Same-origin fallback endpoints: `events`, `events/[id]` (both also take bearer-authed `POST`/`PATCH` for the MCP), `categories`, `cities`, `community/stats`, `og` (OG image), `media/upload` (WorkOS-gated cover-image upload to R2), and the self-hosted auth routes `auth/magic/{start,verify}`, `auth/password`, `auth/mfa/{verify,enroll,activate,remove}`, `auth/sso` (dormant).
+Same-origin fallback endpoints: `events`, `events/[id]` (both also take bearer-authed `POST`/`PATCH` for the MCP), `categories`, `cities`, `community/stats`, `og` (OG image), `media/upload` (WorkOS-gated cover-image upload to R2), and `auth/dev-login` (local dev bypass only). Auth itself is handled by the hosted-AuthKit entry route `/auth/hosted` (redirects to WorkOS) and `/callback` — see the Authentication Flow section.
 
-### Authentication Flow (WorkOS AuthKit — self-hosted UI)
+### Authentication Flow (WorkOS AuthKit — hosted UI)
 
-Auth is **self-hosted**: the sign-in UI lives in our own app (`src/app/auth/signin/`) and talks to WorkOS's **headless User Management API** — users never leave nhimbe.com for a WorkOS-hosted page. Primary methods, all on our own UI:
+Auth uses **WorkOS's hosted AuthKit UI**. nhimbe no longer ships a self-hosted sign-in page or headless User Management routes — every "Sign in" / "Sign up" affordance links to the entry route **`/auth/hosted`** (`src/app/auth/hosted/route.ts`), which builds the hosted URL and redirects to WorkOS:
 
-- **Email code (Magic Auth)** — `POST /api/auth/magic/start` (`createMagicAuth`) → `POST /api/auth/magic/verify` (`authenticateWithMagicAuth` + `saveSession`). Fully in-app.
-- **Password** — `POST /api/auth/password` (`authenticateWithPassword` + `saveSession`). Fully in-app.
-- **MFA (TOTP)** — **optional** step-up. When a primary method returns a `pendingAuthenticationToken` (account has a factor), prompt for the 6-digit code → `POST /api/auth/mfa/verify` (`authenticateWithTotp`). Enrollment is user-initiated in profile settings (`src/components/auth/two-factor-setup.tsx`): `POST /api/auth/mfa/enroll` (`createUserAuthFactor`, authenticator-app QR) → `POST /api/auth/mfa/activate` (`challengeFactor` + `verifyChallenge`). A **"Skip for now"** deletes the unconfirmed factor via `POST /api/auth/mfa/remove` (ownership-checked `deleteFactor`) so it can't linger as an orphan that forces a phantom challenge. All 6-digit entry uses the shared segmented OTP input (`src/components/ui/otp-input.tsx`). Requires MFA enabled for the WorkOS environment.
+- **Sign in** — `getSignInUrl({ returnTo })`; **Sign up** — `getSignUpUrl({ returnTo })` via `?screen=sign-up`. The route is a Route Handler (not an RSC) because these writers set PKCE/state cookies. `return_to` is a deep-link back into the app after login, clamped to a same-origin absolute path by `safeReturnTo` (`src/lib/auth/return-to.ts`) so it can never be an open redirect (rejects `//host`, `/\`, external URLs). A missing/misconfigured WorkOS env yields a clear **503**.
+- The **hosted UI owns all methods** — email code, password, **MFA (TOTP)**, **passkeys** and **social login** are configured in the WorkOS dashboard, not in our code. (This replaces the former self-hosted magic/password/MFA-OTP/SSO surface, which is gone.)
+- After the user authenticates, WorkOS redirects to **`/callback`** (`handleAuth`) which exchanges the code for a session and sets the encrypted session cookie.
 
-We deliberately **do not use social login**. **Passkeys are not available self-hosted** — WorkOS exposes no headless passkey authenticate API (only webhook events), so they'd require AuthKit's hosted UI / `authkit-js` WebAuthn; deferred. An **organization SSO** helper (`POST /api/auth/sso` → domain→org lookup → `{ url }`, back to `/callback`) exists in `src/lib/auth/flows.ts` but is dormant (not surfaced in the primary UI).
+`src/lib/auth/workos-token.ts` verifies bearer access tokens (for the MCP write endpoints) — a separate trust boundary, untouched by the hosted migration.
 
-`/callback` (`handleAuth`) exchanges any returned OAuth/SSO code for a session. `src/lib/auth/workos-token.ts` verifies bearer access tokens (for the MCP write endpoints).
-
-- `src/proxy.ts` — Next.js 16 proxy (was middleware in <=15); manages AuthKit session cookies.
+- `src/proxy.ts` — Next.js 16 proxy (was middleware in <=15); manages AuthKit session cookies. Guards a missing-env misconfig with a 503 on `/auth/*` and `/callback`.
 - `withAuth()` from `@workos-inc/authkit-nextjs` gives server components/actions the current user.
-- Server actions sync the WorkOS user into `identity.persons` (upsert on WorkOS user id).
-- `src/lib/auth/dev.ts` — local dev auth bypass.
+- **First-login person sync** — the `AuthProvider` (`syncCurrentUser` server action) and `resolveActingPerson` (`src/lib/auth/current-person.ts`) both resolve the session via `withAuth()` and lazily upsert the WorkOS user into `identity.persons`. This fires on the first render after the hosted `/callback` establishes the session — it never depended on the removed routes.
+- `src/lib/auth/dev.ts` + `/api/auth/dev-login` — local dev auth bypass (kept).
 - `/callback` is the canonical post-auth landing; `/authenticate` is a legacy redirect → `/`.
 
-> **WorkOS environment alignment (critical):** `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, the `authenticate.nyuchi.com` custom domain, and Magic Auth **must all belong to the same WorkOS environment**. A key/client-id/domain split across environments makes Magic Auth codes send but fail verification ("code rejected").
+> **WorkOS environment alignment (critical):** `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, the `authenticate.nyuchi.com` custom domain, and the hosted AuthKit configuration **must all belong to the same WorkOS environment**. A key/client-id/domain split across environments makes the hosted redirect succeed but the callback code exchange fail.
 
 ### AI — Shamwari (`src/lib/ai/`)
 
