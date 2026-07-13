@@ -41,6 +41,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { NyuchiNotificationItem } from "@/components/ui/nyuchi-notification-item";
+import { NyuchiActionSheet } from "@/components/ui/nyuchi-action-sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -108,6 +109,7 @@ function ManageEventContent() {
   const [actionLoading, setActionLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [blastMessage, setBlastMessage] = useState("");
+  const [sheetGuest, setSheetGuest] = useState<Registration | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -705,6 +707,13 @@ function ManageEventContent() {
                         <Check className="w-4 h-4" />
                       </button>
                     )}
+                    <button
+                      onClick={() => setSheetGuest(registration)}
+                      aria-label={`Actions for ${registration.name}`}
+                      className="w-9 h-9 rounded-full bg-elevated hover:bg-surface flex items-center justify-center transition-colors"
+                    >
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -1238,6 +1247,54 @@ function ManageEventContent() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Per-guest action sheet — branded bottom-sheet action list */}
+      <NyuchiActionSheet
+        open={!!sheetGuest}
+        onClose={() => setSheetGuest(null)}
+        title={sheetGuest?.name}
+        actions={
+          sheetGuest
+            ? [
+                ...(sheetGuest.status === "pending"
+                  ? [
+                      {
+                        id: "approve",
+                        label: "Approve",
+                        icon: "✓",
+                        onSelect: () => handleApprove(sheetGuest.id),
+                      },
+                      {
+                        id: "reject",
+                        label: "Reject",
+                        icon: "✕",
+                        destructive: true,
+                        onSelect: () => handleReject(sheetGuest.id),
+                      },
+                    ]
+                  : []),
+                ...(sheetGuest.status !== "pending" && !sheetGuest.checkedIn
+                  ? [
+                      {
+                        id: "checkin",
+                        label: "Check in",
+                        icon: "✓",
+                        onSelect: () => handleCheckIn(sheetGuest.id),
+                      },
+                    ]
+                  : []),
+                {
+                  id: "copy-email",
+                  label: "Copy email",
+                  icon: "✉️",
+                  onSelect: () => {
+                    void navigator.clipboard?.writeText(sheetGuest.email);
+                  },
+                },
+              ]
+            : []
+        }
+      />
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
