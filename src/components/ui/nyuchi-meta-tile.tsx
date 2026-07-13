@@ -64,7 +64,9 @@ export function NyuchiMetaTile({
             </span>
           </>
         ) : Icon ? (
-          <Icon className="size-5" strokeWidth={2.2} style={{ color: tint } as React.CSSProperties} />
+          <span style={{ color: tint }}>
+            <Icon className="size-5" strokeWidth={2.2} />
+          </span>
         ) : null}
       </div>
 
