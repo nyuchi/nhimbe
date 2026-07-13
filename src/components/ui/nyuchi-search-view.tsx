@@ -106,6 +106,9 @@ export function NyuchiSearchView({
 }: NyuchiSearchViewProps) {
   const { animStyle } = useNyuchiHarness("search-view");
   const hasQuery = query.trim().length > 0;
+  // Show the results region when the user is querying OR has narrowed by a
+  // category chip — so category browsing works without typing.
+  const showResults = hasQuery || activeCategories.length > 0;
 
   return (
     <div data-slot="nyuchi-search-view" style={animStyle()} className={cn("space-y-4", className)}>
@@ -160,11 +163,12 @@ export function NyuchiSearchView({
             <NyuchiListingCard key={i} variant="row" title="" loading />
           ))}
         </div>
-      ) : hasQuery ? (
+      ) : showResults ? (
         <div>
           <p className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
             {searching && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
-            {results.length} result{results.length !== 1 ? "s" : ""} for &ldquo;{query}&rdquo;
+            {results.length} result{results.length !== 1 ? "s" : ""}
+            {hasQuery ? <> for &ldquo;{query}&rdquo;</> : null}
           </p>
           {results.length > 0 ? (
             <div className="space-y-2">
