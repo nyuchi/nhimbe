@@ -4,8 +4,9 @@ import { useState, useEffect, useSyncExternalStore, useMemo, useCallback } from 
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Plus, Search, User, LogIn } from "lucide-react";
+import { Plus, Search, LogIn, User, Ticket, Heart, Settings } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
+import { NyuchiUserMenu, type UserMenuItem } from "@/components/ui/nyuchi-user-menu";
 
 const navLinks = [
   { href: "/", label: "Discover" },
@@ -64,19 +65,25 @@ export function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const [isScrolled, setIsScrolled] = useState(false);
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, signOut } = useAuth();
 
-  // Get user initials from auth context
   const userName = user?.name;
-  const userInitials = useMemo(() => {
-    if (!userName) return null;
-    return userName
-      .split(" ")
-      .map((n: string) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  }, [userName]);
+
+  // Account dropdown items — surfaced through the branded user menu.
+  const userMenuItems: UserMenuItem[] = useMemo(
+    () => [
+      { label: "Profile", icon: User, href: "/profile" },
+      { label: "My Tickets", icon: Ticket, href: "/my-events" },
+      { label: "Saved Events", icon: Heart, href: "/my-events?tab=saved" },
+      { label: "Edit Profile", icon: Settings, href: "/profile/edit" },
+    ],
+    [],
+  );
+
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    router.push("/");
+  }, [signOut, router]);
 
   // Memoize the subscription function based on pathname
   const subscribeToH1 = useMemo(() => createH1Subscription(pathname), [pathname]);
@@ -213,19 +220,15 @@ export function Header() {
               <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
             </div>
           ) : isAuthenticated ? (
-            <Link
-              href="/profile"
-              className="flex items-center justify-center w-11 h-11 rounded-full bg-background/20 hover:bg-background/30 transition-colors overflow-hidden"
-              aria-label="Profile"
-            >
-              {userInitials ? (
-                <div className="w-9 h-9 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-sm font-bold text-primary-foreground">
-                  {userInitials}
-                </div>
-              ) : (
-                <User className="w-5 h-5 text-primary-foreground" />
-              )}
-            </Link>
+            <NyuchiUserMenu
+              compact
+              name={userName || "User"}
+              email={user?.email}
+              avatarUrl={user?.image}
+              menuItems={userMenuItems}
+              onSignOut={handleSignOut}
+              className="w-11 h-11 justify-center bg-background/20 p-0 hover:bg-background/30"
+            />
           ) : (
             <Link
               href={`/auth/hosted?return_to=${encodeURIComponent(pathname)}`}

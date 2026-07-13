@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Users, Flame, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { NyuchiGroupCard } from "@/components/ui/nyuchi-group-card";
 import { NyuchiEmptyState } from "@/components/ui/nyuchi-empty-state";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/components/auth/auth-context";
 import { getMyCircles, type KraalSummary } from "@/app/actions/circles";
 import { useT } from "@/lib/i18n";
@@ -81,7 +81,7 @@ export default function KraalIndexClient() {
       {isAuthenticated && loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full rounded-(--radius-card)" />
+            <NyuchiGroupCard key={i} name="" memberCount={0} loading />
           ))}
         </div>
       )}
@@ -107,41 +107,15 @@ export default function KraalIndexClient() {
       {isAuthenticated && !loading && circles.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {circles.map((c) => (
-            <Link key={c.id} href={`/kraal/${c.id}`} className="block group">
-              <Card className="border-0 bg-surface transition-transform duration-[var(--motion-emphasis)] ease-[var(--easing-spring)] group-hover:-translate-y-0.5 group-hover:shadow-lg">
-                <CardContent className="p-5">
-                  <div className="flex items-start gap-4">
-                    <div
-                      className="w-12 h-12 rounded-xl shrink-0 flex items-center justify-center text-primary-foreground font-bold"
-                      style={{
-                        background:
-                          "linear-gradient(135deg, var(--heritage-savanna), var(--heritage-baobab))",
-                      }}
-                      aria-hidden
-                    >
-                      {c.name.slice(0, 1).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold mb-1 truncate">{c.name}</h3>
-                      <p className="text-sm text-text-secondary line-clamp-2">
-                        {c.description || c.circle_purpose}
-                      </p>
-                      <div className="flex items-center gap-3 mt-3 text-xs text-text-tertiary">
-                        <span className="inline-flex items-center gap-1">
-                          <Users className="w-3.5 h-3.5" aria-hidden />
-                          {c.member_count ?? 0}
-                        </span>
-                        {c.linked_event_id && (
-                          <span className="inline-flex items-center gap-1">
-                            <Flame className="w-3.5 h-3.5" aria-hidden />
-                            Event kraal
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            <Link key={c.id} href={`/kraal/${c.id}`} className="block">
+              <NyuchiGroupCard
+                name={c.name}
+                description={c.description || c.circle_purpose}
+                memberCount={c.member_count ?? 0}
+                // Kraals are private to the people in them.
+                privacy="closed"
+                topics={c.linked_event_id ? ["Event kraal"] : []}
+              />
             </Link>
           ))}
         </div>

@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProfileBadges } from "@/components/ui/profile-badges";
+import { NyuchiProfileBlock } from "@/components/ui/nyuchi-profile-block";
 
 type MenuItem = {
   icon: LucideIcon;
@@ -56,16 +57,6 @@ function ProfileContent() {
     await signOut();
     router.push("/");
   };
-
-  // Get user initials
-  const initials = user?.name
-    ? user.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
-    : "??";
 
   // Format join date
   const joinedDate = user?.id
@@ -128,22 +119,19 @@ function ProfileContent() {
 
   return (
     <div className="max-w-150 mx-auto px-6 py-8">
-      {/* Profile Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-20 h-20 rounded-full bg-linear-to-br from-primary to-secondary flex items-center justify-center text-2xl font-bold text-background">
-          {initials}
+      {/* Profile Header — branded identity block (centred avatar + name). */}
+      <NyuchiProfileBlock
+        className="mb-8"
+        name={user?.name || "User"}
+        subtitle={user?.email}
+        avatar={user?.image}
+      />
+      {(user?.addressLocality || user?.addressCountry) && (
+        <div className="-mt-6 mb-8 flex items-center justify-center gap-1 text-sm text-text-tertiary">
+          <MapPin className="w-3.5 h-3.5" />
+          {[user?.addressLocality, user?.addressCountry].filter(Boolean).join(", ")}
         </div>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-foreground">{user?.name || "User"}</h1>
-          <p className="text-text-secondary">{user?.email}</p>
-          {(user?.addressLocality || user?.addressCountry) && (
-            <div className="flex items-center gap-1 text-sm text-text-tertiary mt-1">
-              <MapPin className="w-3.5 h-3.5" />
-              {[user?.addressLocality, user?.addressCountry].filter(Boolean).join(", ")}
-            </div>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Interests */}
       {user?.interests && user.interests.length > 0 && (

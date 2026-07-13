@@ -32,6 +32,16 @@ Object.defineProperty(global, 'localStorage', { value: localStorageMock });
 // Mock fetch
 global.fetch = vi.fn();
 
+// jsdom lacks ResizeObserver — provide a no-op so components that observe
+// element size (e.g. FilterBar's overflow fades) can mount under test.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
+
 // Reset mocks before each test
 beforeEach(() => {
   vi.clearAllMocks();
