@@ -4,7 +4,8 @@ import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { Loader2, ArrowRight, Globe, TrendingUp, Flame, Clock, Users, Plus, CalendarDays, Compass, MapPin } from "lucide-react";
 import dynamic from "next/dynamic";
-import { EventCardHorizontal } from "@/components/ui/event-card-horizontal";
+import { NyuchiListingCard } from "@/components/ui/nyuchi-listing-card";
+import { categoryToMineral } from "@/lib/category-mineral";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CityDropdown } from "@/components/ui/city-dropdown";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ const CommunityInsightsCompact = dynamic(
     loading: () => <Skeleton className="h-40 w-full rounded-xl" />,
   }
 );
-import { type Event, type Category, type CommunityStats } from "@/lib/api";
+import { type Event, type Category, type CommunityStats, getMediaUrl } from "@/lib/api";
 import { getEventsAction, getCategoriesAction, getCommunityStatsAction } from "@/app/actions/discovery";
 import { getUserTimezone, getCurrentTimeWithTimezone } from "@/lib/timezone";
 import { HomeWeather } from "@/app/home-weather";
@@ -155,6 +156,30 @@ function CommunityStatsBar({ eventCount, stats }: { eventCount: number; stats: C
         </div>
       ))}
     </div>
+  );
+}
+
+// A single discovery row, rendered with the branded nyuchi-listing-card.
+// Category drives the mineral accent (tanzanite is the nhimbe default).
+function EventRow({ event, index }: { event: Event; index: number }) {
+  const meta = [
+    { label: "date", value: `${event.date.month} ${event.date.day}`, icon: CalendarDays },
+    { label: "venue", value: event.location.name || event.location.addressLocality, icon: MapPin },
+  ];
+  if (event.attendeeCount > 0) {
+    meta.push({ label: "going", value: `${event.attendeeCount} going`, icon: Users });
+  }
+  return (
+    <NyuchiListingCard
+      variant="row"
+      index={index}
+      href={`/events/${event.id}`}
+      title={event.name}
+      category={event.category}
+      mineral={categoryToMineral(event.category)}
+      image={event.image ? getMediaUrl(event.image) : undefined}
+      meta={meta}
+    />
   );
 }
 
@@ -433,35 +458,15 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-2">
                 {/* Left Column */}
                 <div className="space-y-2">
-                  {leftColumnEvents.map((event) => (
-                    <EventCardHorizontal
-                      key={event.id}
-                      id={event.id}
-                      title={event.name}
-                      date={event.date}
-                      location={event.location}
-                      coverImage={event.image}
-                      coverGradient={event.coverGradient}
-                      attendeeCount={event.attendeeCount}
-                      maximumAttendeeCapacity={event.maximumAttendeeCapacity}
-                    />
+                  {leftColumnEvents.map((event, i) => (
+                    <EventRow key={event.id} event={event} index={i * 2} />
                   ))}
                 </div>
 
                 {/* Right Column */}
                 <div className="space-y-2">
-                  {rightColumnEvents.map((event) => (
-                    <EventCardHorizontal
-                      key={event.id}
-                      id={event.id}
-                      title={event.name}
-                      date={event.date}
-                      location={event.location}
-                      coverImage={event.image}
-                      coverGradient={event.coverGradient}
-                      attendeeCount={event.attendeeCount}
-                      maximumAttendeeCapacity={event.maximumAttendeeCapacity}
-                    />
+                  {rightColumnEvents.map((event, i) => (
+                    <EventRow key={event.id} event={event} index={i * 2 + 1} />
                   ))}
                 </div>
               </div>

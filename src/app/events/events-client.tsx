@@ -2,14 +2,16 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { Search, Loader2, SlidersHorizontal, X } from "lucide-react";
+import { Search, Loader2, SlidersHorizontal, X, MapPin, CalendarClock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { Badge } from "@/components/ui/badge";
-import { EventCard } from "@/components/ui/event-card";
+import { NyuchiListingCard } from "@/components/ui/nyuchi-listing-card";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 import { CityDropdown } from "@/components/ui/city-dropdown";
-import { type Event, type Category } from "@/lib/api";
+import { categoryToMineral } from "@/lib/category-mineral";
+import { type Event, type Category, getMediaUrl } from "@/lib/api";
 import { getEventsAction, getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
 import { LocationPrompt } from "@/components/prompts/location-prompt";
 import { InterestsPrompt } from "@/components/prompts/interests-prompt";
@@ -194,38 +196,39 @@ export function EventsClient({ initialEvents, initialCategories, initialCities }
         </div>
       ) : filteredEvents.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEvents.map((event) => (
-            <EventCard
+          {filteredEvents.map((event, i) => (
+            <NyuchiListingCard
               key={event.id}
-              id={event.id}
+              variant="compact"
+              index={i}
+              href={`/events/${event.id}`}
               title={event.name}
-              date={event.date}
-              location={event.location}
+              description={event.description}
               category={event.category}
-              coverImage={event.image}
-              coverGradient={event.coverGradient}
-              attendeeCount={event.attendeeCount}
-              friendsCount={event.friendsCount}
+              mineral={categoryToMineral(event.category)}
+              image={event.image ? getMediaUrl(event.image) : undefined}
+              meta={[
+                { label: "date", value: `${event.date.month} ${event.date.day}`, icon: CalendarClock },
+                { label: "venue", value: event.location.name || event.location.addressLocality, icon: MapPin },
+              ]}
             />
           ))}
         </div>
       ) : (
-        <div className="text-center py-16">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
-            <Search className="w-8 h-8 text-text-tertiary" />
-          </div>
-          <h3 className="text-lg font-semibold text-foreground mb-2">No events found</h3>
-          <p className="text-text-secondary mb-6">
-            Try adjusting your filters or search terms
-          </p>
-          <Button
-            variant="ghost"
-            onClick={clearFilters}
-            className="text-primary font-medium hover:underline"
-          >
-            Clear all filters
-          </Button>
-        </div>
+        <Empty className="py-16">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Search className="w-6 h-6" />
+            </EmptyMedia>
+            <EmptyTitle>No events found</EmptyTitle>
+            <EmptyDescription>Try adjusting your filters or search terms</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" onClick={clearFilters} className="rounded-full">
+              Clear all filters
+            </Button>
+          </EmptyContent>
+        </Empty>
       )}
     </div>
   );
