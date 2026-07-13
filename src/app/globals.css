@@ -102,6 +102,16 @@
   --touch-target:    40px;
   --touch-target-sm: 34px;
   --min-touch:       40px;
+
+  /* Control heights — single knob for the deliberate nhimbe divergence from
+   * mzizi doctrine 4.1.0. The doctrine specifies default 56px / min 48px for
+   * buttons and inputs; nhimbe keeps its compact scale (36/32) for now. To
+   * adopt the doctrine sizing later, bump these three values in one place —
+   * Button (default/sm) and Input read their height from these tokens.
+   *   doctrine: --h-button-default: 3.5rem; --h-button-sm: 3rem; --h-input: 3.5rem; */
+  --h-button-default: 2.25rem;  /* 36px — nhimbe compact (doctrine 56px) */
+  --h-button-sm:      2rem;     /* 32px — nhimbe compact (doctrine 48px) */
+  --h-input:          2.25rem;  /* 36px — nhimbe compact (doctrine 56px) */
   --header-height:    52px;
   --bottom-nav-height: 80px;
   --page-max-width:    1280px;
