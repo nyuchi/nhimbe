@@ -20,6 +20,17 @@ export {
   prefersReducedMotion,
 } from "./harness";
 export { NyuchiListingCard, listingCardVariants } from "./nyuchi-listing-card";
+export { NyuchiCoverHeader } from "./nyuchi-cover-header";
+export { NyuchiUserCard } from "./nyuchi-user-card";
+export { NyuchiUserMenu } from "./nyuchi-user-menu";
+export { NyuchiGroupCard } from "./nyuchi-group-card";
+export { NyuchiBadgeDisplay } from "./nyuchi-badge-display";
+export { NyuchiTrustMeter } from "./nyuchi-trust-meter";
+export { NyuchiSourceBadge } from "./nyuchi-source-badge";
+export { NyuchiLeaderboardRow } from "./nyuchi-leaderboard-row";
+export { NyuchiProfileBlock } from "./nyuchi-profile-block";
+export { NyuchiProfileHeader } from "./nyuchi-profile-header";
+export { NyuchiProfileSettings } from "./nyuchi-profile-settings";
 export { NyuchiRSVPButton } from "./nyuchi-rsvp-button";
 export { NyuchiTicketCard } from "./nyuchi-ticket-card";
 export { NyuchiProgrammeItem } from "./nyuchi-programme-item";

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Trophy, Users, Share2, Crown, Medal, Award, Loader2 } from "lucide-react";
+import { Trophy, Users, Share2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NyuchiLeaderboardRow } from "@/components/ui/nyuchi-leaderboard-row";
 import { type ReferralLeaderboardEntry } from "@/lib/api";
 import { getEventReferralLeaderboardAction } from "@/app/actions/engagement";
 
@@ -20,12 +21,6 @@ interface ReferralLeaderboardProps {
   userReferrals?: number;
   className?: string;
 }
-
-const rankIcons = {
-  1: { icon: Crown, color: "text-accent", bg: "bg-accent/20" },
-  2: { icon: Medal, color: "text-gray-300", bg: "bg-gray-300/20" },
-  3: { icon: Award, color: "text-amber-600", bg: "bg-amber-600/20" },
-};
 
 export function ReferralLeaderboard({
   eventId,
@@ -99,55 +94,18 @@ export function ReferralLeaderboard({
         )}
       </div>
 
-      {/* Leaderboard */}
+      {/* Leaderboard — branded ranked rows (podium colouring for the top 3). */}
       {referrers.length > 0 ? (
-        <div className="space-y-2 mb-6">
-          {referrers.slice(0, 5).map((referrer) => {
-          const rankStyle = rankIcons[referrer.rank as keyof typeof rankIcons];
-          const RankIcon = rankStyle?.icon;
-
-          return (
-            <div
+        <div className="mb-6 rounded-xl bg-elevated/40 py-1" role="list">
+          {referrers.slice(0, 5).map((referrer) => (
+            <NyuchiLeaderboardRow
               key={referrer.id}
-              className={`flex items-center gap-3 p-3 rounded-xl transition-colors ${
-                referrer.rank <= 3 ? "bg-elevated" : "hover:bg-elevated"
-              }`}
-            >
-              {/* Rank */}
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  rankStyle ? rankStyle.bg : "bg-surface"
-                }`}
-              >
-                {RankIcon ? (
-                  <RankIcon className={`w-4 h-4 ${rankStyle.color}`} />
-                ) : (
-                  <span className="text-sm font-bold text-text-tertiary">
-                    {referrer.rank}
-                  </span>
-                )}
-              </div>
-
-              {/* Avatar & Name */}
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-secondary to-primary flex items-center justify-center text-sm font-bold text-background">
-                {referrer.initials}
-              </div>
-              <div className="flex-1">
-                <div className="font-medium">{referrer.name}</div>
-                <div className="text-xs text-text-tertiary">
-                  {referrer.referrals} friend{referrer.referrals !== 1 ? "s" : ""} invited
-                </div>
-              </div>
-
-              {/* Badge for top 3 */}
-              {referrer.rank === 1 && (
-                <span className="px-2 py-1 bg-accent/20 text-accent text-xs font-semibold rounded-full">
-                  Top Builder
-                </span>
-              )}
-            </div>
-          );
-        })}
+              position={referrer.rank}
+              name={referrer.name}
+              score={referrer.referrals}
+              scoreLabel="invites"
+            />
+          ))}
         </div>
       ) : (
         <div className="text-center py-6 mb-6">
