@@ -1,5 +1,16 @@
 # Progressive Onboarding Implementation Plan
 
+> **⚠️ Archived plan — historical record (2026-03-20).** The progressive-onboarding
+> UX shipped (inline prompts in `src/components/prompts/`, a profile edit page, and
+> `profileCompleteness` in the auth context). The **backend mechanics below are
+> superseded**: profile updates are now a **Server Action** writing to **MongoDB**
+> (`identity.persons`), not a Hono `PATCH /api/auth/profile` on a Cloudflare Worker
+> backed by D1. References to `worker/src/routes/auth.ts`, D1 columns, and Supabase
+> no longer apply. Kept for historical context — see
+> [`../../README.md`](../../README.md) and the root `CLAUDE.md` for current state.
+
+<!-- archival banner ends -->
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the 3-step onboarding wizard with inline contextual prompts that collect user data at the moment it matters.

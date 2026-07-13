@@ -1,6 +1,9 @@
 # Mukoko Navigation System
 
-A reusable navigation system for Mukoko ecosystem apps. This document provides copy-paste ready components with full code snippets.
+A reusable navigation system for Mukoko ecosystem apps. This document is a
+**design-system reference** — copy-paste-ready header, footer, and theme
+components — not a description of nhimbe's runtime architecture. For that, see
+[`README.md`](./README.md) (the docs index) and the root `CLAUDE.md`.
 
 ## Table of Contents
 
@@ -774,5 +777,5 @@ import { Plus, Search, Bell, Settings } from "lucide-react";
 
 ---
 
-_Last updated: December 2025_
+_Reviewed: July 2026 — still current against Next.js 16 + Tailwind v4._
 _Part of the Mukoko Design System_
