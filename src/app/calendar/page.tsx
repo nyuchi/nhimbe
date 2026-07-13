@@ -1,29 +1,22 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import Link from "next/link";
-import { ChevronLeft, ChevronRight, MapPin, Loader2, Moon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { MapPin, Loader2, Moon, Clock } from "lucide-react";
 import { MoonPhase } from "@/components/ui/moon-phase";
-import { type Event } from "@/lib/api";
+import { NyuchiCalendar, type CalendarEvent } from "@/components/ui/nyuchi-calendar";
+import { NyuchiListingCard } from "@/components/ui/nyuchi-listing-card";
+import { categoryToMineral } from "@/lib/category-mineral";
+import { type Event, getMediaUrl } from "@/lib/api";
 import { getEventsAction } from "@/app/actions/discovery";
 
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
-];
+// A calendar dot carries the source event through to the agenda slot.
+type EventCalendarEvent = CalendarEvent & { event: Event };
 
 export default function CalendarPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentDate, setCurrentDate] = useState(() => new Date()); // Current month
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-
-  // Fetch events on mount
   useEffect(() => {
     async function fetchEvents() {
       try {
@@ -38,56 +31,16 @@ export default function CalendarPage() {
     fetchEvents();
   }, []);
 
-  // Get calendar grid data
-  const calendarDays = useMemo(() => {
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const days: (number | null)[] = [];
-
-    // Add empty slots for days before the first day of the month
-    for (let i = 0; i < firstDay; i++) {
-      days.push(null);
-    }
-
-    // Add the days of the month
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i);
-    }
-
-    return days;
-  }, [year, month]);
-
-  // Get events for each day
-  const eventsByDay = useMemo(() => {
-    const map: Record<number, Event[]> = {};
-    events.forEach((event) => {
-      const eventDate = new Date(event.startDate);
-      if (eventDate.getFullYear() === year && eventDate.getMonth() === month) {
-        const day = eventDate.getDate();
-        if (!map[day]) map[day] = [];
-        map[day].push(event);
-      }
-    });
-    return map;
-  }, [events, year, month]);
-
-  const goToPreviousMonth = () => {
-    setCurrentDate(new Date(year, month - 1, 1));
-  };
-
-  const goToNextMonth = () => {
-    setCurrentDate(new Date(year, month + 1, 1));
-  };
-
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
-
-  const today = new Date();
-  const isToday = (day: number) =>
-    day === today.getDate() &&
-    month === today.getMonth() &&
-    year === today.getFullYear();
+  // Map events → mineral-coded calendar dots (category drives the mineral).
+  const calendarEvents = useMemo<EventCalendarEvent[]>(
+    () =>
+      events.map((event) => ({
+        date: event.startDate.slice(0, 10),
+        mineral: categoryToMineral(event.category),
+        event,
+      })),
+    [events],
+  );
 
   return (
     <div className="max-w-300 mx-auto px-6 py-12">
@@ -95,69 +48,11 @@ export default function CalendarPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Calendar</h1>
-          <p className="text-text-secondary mt-1">
-            View all upcoming events at a glance
-          </p>
+          <p className="text-text-secondary mt-1">View all upcoming events at a glance</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            onClick={goToToday}
-          >
-            Today
-          </Button>
-        </div>
-      </div>
-
-      {/* Calendar Navigation */}
-      <div className="flex items-center justify-between mb-6">
-        <Button
-          variant="ghost"
-          onClick={goToPreviousMonth}
-          aria-label="Previous month"
-          className="w-11 h-11 p-0"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </Button>
-        <div className="flex items-center gap-2">
-          <select
-            value={month}
-            onChange={(e) => setCurrentDate(new Date(year, Number(e.target.value), 1))}
-            className="text-xl font-semibold bg-transparent border-none outline-none cursor-pointer appearance-none pr-1"
-            aria-label="Select month"
-          >
-            {MONTHS.map((m, i) => (
-              <option key={m} value={i}>{m}</option>
-            ))}
-          </select>
-          <select
-            value={year}
-            onChange={(e) => setCurrentDate(new Date(Number(e.target.value), month, 1))}
-            className="text-xl font-semibold bg-transparent border-none outline-none cursor-pointer appearance-none"
-            aria-label="Select year"
-          >
-            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i).map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-        </div>
-        <Button
-          variant="ghost"
-          onClick={goToNextMonth}
-          aria-label="Next month"
-          className="w-11 h-11 p-0"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </Button>
-      </div>
-
-      {/* Lunar tag — calendar surfaces moon phase per day (top-right of each
-          cell). Sub-Saharan gathering traditions often plan by moonlight, so
-          phase is exposed as an ambient cue. From the Nhimbe.html design. */}
-      <div className="flex justify-end mb-2">
         <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
           <Moon className="w-3 h-3" strokeWidth={2.2} aria-hidden />
-          Lunar
+          Lunar-aware
         </span>
       </div>
 
@@ -166,109 +61,83 @@ export default function CalendarPage() {
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
         </div>
       ) : (
-        <>
-          {/* Calendar Grid */}
-          <div className="bg-surface rounded-xl border border-elevated overflow-hidden">
-            {/* Day headers */}
-            <div className="grid grid-cols-7 border-b border-elevated">
-              {DAYS.map((day) => (
-                <div
-                  key={day}
-                  className="py-3 text-center text-sm font-medium text-text-secondary"
-                >
-                  {day}
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,420px)_1fr] gap-8 lg:gap-12 items-start">
+          <NyuchiCalendar
+            events={calendarEvents}
+            selectedDate={selectedDate}
+            onDateSelect={setSelectedDate}
+            renderAgenda={(date, dayEvents) => (
+              <div className="rounded-[var(--radius-lg)] bg-muted p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-serif text-lg font-bold text-foreground">
+                    {date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+                  </h3>
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+                    <MoonPhase date={date} size={12} />
+                    Lunar
+                  </span>
                 </div>
-              ))}
-            </div>
+                {dayEvents.length > 0 ? (
+                  <div className="space-y-2">
+                    {(dayEvents as EventCalendarEvent[]).map((ce, i) => (
+                      <NyuchiListingCard
+                        key={ce.event.id}
+                        variant="row"
+                        index={i}
+                        href={`/events/${ce.event.id}`}
+                        title={ce.event.name}
+                        category={ce.event.category}
+                        mineral={categoryToMineral(ce.event.category)}
+                        image={ce.event.image ? getMediaUrl(ce.event.image) : undefined}
+                        meta={[
+                          {
+                            label: "time",
+                            value: ce.event.date.time || `${ce.event.date.month} ${ce.event.date.day}`,
+                            icon: Clock,
+                          },
+                          {
+                            label: "venue",
+                            value: ce.event.location.name || ce.event.location.addressLocality,
+                            icon: MapPin,
+                          },
+                        ]}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No gatherings on this day.</p>
+                )}
+              </div>
+            )}
+          />
 
-            {/* Calendar days */}
-            <div className="grid grid-cols-7">
-              {calendarDays.map((day, index) => (
-                <div
-                  key={index}
-                  className={`min-h-30 p-2 border-b border-r border-elevated relative ${
-                    day === null ? "bg-elevated/30" : ""
-                  } ${index % 7 === 6 ? "border-r-0" : ""}`}
-                >
-                  {day !== null && (
-                    <>
-                      {/* Lunar phase marker — top-right corner */}
-                      <span className="absolute top-1.5 right-1.5" aria-hidden>
-                        <MoonPhase date={new Date(year, month, day)} size={9} />
-                      </span>
-                      <div
-                        className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium mb-1 ${
-                          isToday(day)
-                            ? "bg-primary text-primary-foreground"
-                            : "text-foreground"
-                        }`}
-                      >
-                        {day}
-                      </div>
-                      <div className="space-y-1">
-                        {eventsByDay[day]?.slice(0, 2).map((event) => (
-                          <Badge key={event.id} variant="default" asChild className="block bg-primary/20 text-primary hover:bg-primary/30 truncate rounded border-0">
-                            <Link href={`/events/${event.id}`}>
-                              {event.name}
-                            </Link>
-                          </Badge>
-                        ))}
-                        {eventsByDay[day]?.length > 2 && (
-                          <span className="text-xs text-text-tertiary px-2">
-                            +{eventsByDay[day].length - 2} more
-                          </span>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Upcoming Events List */}
-          <div className="mt-12">
-            <h3 className="text-xl font-semibold mb-6">Upcoming This Month</h3>
-            <div className="space-y-4">
+          {/* Upcoming list — the same branded row card, sorted by date. */}
+          <div>
+            <h3 className="text-xl font-semibold mb-6">Upcoming</h3>
+            <div className="space-y-2">
               {events
-                .filter((event) => {
-                  const eventDate = new Date(event.startDate);
-                  return eventDate.getFullYear() === year && eventDate.getMonth() === month;
-                })
+                .slice()
                 .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
-                .map((event) => (
-                  <Link
+                .slice(0, 12)
+                .map((event, i) => (
+                  <NyuchiListingCard
                     key={event.id}
+                    variant="row"
+                    index={i}
                     href={`/events/${event.id}`}
-                    className="flex items-center gap-4 p-4 bg-surface rounded-xl border border-elevated hover:border-primary/50 transition-colors"
-                  >
-                    <div className="w-14 h-14 flex flex-col items-center justify-center bg-elevated rounded-lg">
-                      <span className="text-xs text-text-tertiary uppercase">
-                        {event.date.month}
-                      </span>
-                      <span className="text-xl font-bold text-foreground">
-                        {event.date.day}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-foreground truncate">
-                        {event.name}
-                      </h4>
-                      <div className="flex items-center gap-1 text-sm text-text-secondary">
-                        <MapPin className="w-3.5 h-3.5" />
-                        <span className="truncate">
-                          {event.location.name}, {event.location.addressLocality}
-                        </span>
-                      </div>
-                    </div>
-                    <Badge variant="default" className="bg-primary/20 text-primary border-0">
-                      {event.category}
-                    </Badge>
-                  </Link>
+                    title={event.name}
+                    category={event.category}
+                    mineral={categoryToMineral(event.category)}
+                    image={event.image ? getMediaUrl(event.image) : undefined}
+                    meta={[
+                      { label: "date", value: `${event.date.month} ${event.date.day}`, icon: Clock },
+                      { label: "venue", value: event.location.name || event.location.addressLocality, icon: MapPin },
+                    ]}
+                  />
                 ))}
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
