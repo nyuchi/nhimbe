@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { createLogger } from "@/lib/observability";
+import { getLocale, type Locale } from "@/lib/i18n";
 
 /* ═══════════════════════════════════════════════════════════════
    nyuchi component harness — zero-config infrastructure wiring
@@ -150,3 +151,66 @@ export function useHarnessKeyframes(): void {
     ensureHarnessKeyframes();
   }, []);
 }
+
+// ─── resolved theme (reads ThemeProvider's output) ─────────────
+// ThemeProvider writes `light`/`dark` onto <html>. We read that class so
+// the harness reflects the resolved theme without coupling to (or
+// throwing outside of) the provider — safe in tests and RSC hydration.
+
+type ResolvedTheme = "light" | "dark";
+
+function getResolvedTheme(): ResolvedTheme {
+  if (typeof document === "undefined") return "dark";
+  return document.documentElement.classList.contains("light") ? "light" : "dark";
+}
+
+function subscribeToThemeClass(callback: () => void): () => void {
+  if (typeof document === "undefined") return () => {};
+  const observer = new MutationObserver(callback);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
+  });
+  return () => observer.disconnect();
+}
+
+function useResolvedTheme(): ResolvedTheme {
+  return React.useSyncExternalStore(
+    subscribeToThemeClass,
+    getResolvedTheme,
+    () => "dark" as ResolvedTheme
+  );
+}
+
+// ─── token verifier (dev-only) ─────────────────────────────────
+// Warns when the mineral/radius tokens are missing, which almost always
+// means the theme was not mounted above this component.
+
+function useTokenVerifier(componentName: string): void {
+  React.useEffect(() => {
+    if (process.env.NODE_ENV !== "development") return;
+    if (typeof window === "undefined") return;
+
+    const style = getComputedStyle(document.documentElement);
+    const requiredTokens = [
+      "--color-tanzanite",
+      "--color-cobalt",
+      "--color-gold",
+      "--color-terracotta",
+      "--radius-card",
+    ];
+    const missing = requiredTokens.filter(
+      (token) => !style.getPropertyValue(token).trim()
+    );
+    if (missing.length > 0) {
+      createLogger(componentName).warn(
+        `Missing CSS tokens: ${missing.join(", ")}. Is the theme mounted above this component?`,
+        { data: { missing } }
+      );
+    }
+  }, [componentName]);
+}
+
+// Re-exported so leaf components can read the active locale directly.
+export { getLocale };
+export type { Locale, ResolvedTheme };
