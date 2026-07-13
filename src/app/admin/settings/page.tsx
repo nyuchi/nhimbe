@@ -230,7 +230,7 @@ export default function SettingsPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <div className="font-medium">Event Registrations</div>
@@ -298,7 +298,7 @@ export default function SettingsPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <div className="font-medium">Require Email Verification</div>
@@ -346,7 +346,7 @@ export default function SettingsPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           <div className="flex items-center justify-between p-4 bg-red-500/5 rounded-xl border border-red-500/20">
             <div>
               <div className="font-medium">Maintenance Mode</div>

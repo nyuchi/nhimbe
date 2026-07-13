@@ -353,7 +353,7 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
 
       {/* Hero Section — public only */}
       {!isAuthenticated && (
-        <section className="py-16 md:py-24 relative overflow-hidden">
+        <section className="py-10 md:py-16 relative overflow-hidden">
           {/* Mineral wash backdrop — malachite → tanzanite */}
           <div
             aria-hidden
@@ -538,7 +538,7 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
 
       {/* CTA Section — public only */}
       {!isAuthenticated && (
-        <section className="py-16 border-t border-elevated">
+        <section className="py-10 border-t border-elevated">
           <div className="max-w-300 mx-auto px-6 text-center">
             <p className="font-serif italic text-lg text-text-secondary mb-4">
               &ldquo;Together we gather, together we grow&rdquo;
