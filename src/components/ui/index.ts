@@ -20,6 +20,7 @@ export {
   prefersReducedMotion,
 } from "./harness";
 export { NyuchiListingCard, listingCardVariants } from "./nyuchi-listing-card";
+export { NyuchiEmptyState } from "./nyuchi-empty-state";
 export { NyuchiRSVPButton } from "./nyuchi-rsvp-button";
 export { NyuchiTicketCard } from "./nyuchi-ticket-card";
 export { NyuchiProgrammeItem } from "./nyuchi-programme-item";
