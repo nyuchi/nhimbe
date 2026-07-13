@@ -3,6 +3,28 @@
 import { useEffect, useState } from "react";
 import { Award } from "lucide-react";
 import { getProfileBadges, type ProfileBadge } from "@/app/actions/badges";
+import { NyuchiBadgeDisplay, type BadgeItem, type BadgeRarity } from "@/components/ui/nyuchi-badge-display";
+
+const RARITIES: readonly BadgeRarity[] = ["common", "uncommon", "rare", "legendary"];
+
+/** Coerce the free-form `ubuntu.badges.rarity` into the brand palette scale. */
+function toRarity(rarity: string | null): BadgeRarity | undefined {
+  const r = rarity?.toLowerCase();
+  return RARITIES.find((v) => v === r);
+}
+
+/** Map an Ubuntu ProfileBadge to the brand NyuchiBadgeDisplay item shape. */
+function toBadgeItem(badge: ProfileBadge): BadgeItem {
+  return {
+    id: badge.id,
+    name: badge.name,
+    description: badge.description ?? undefined,
+    icon: badge.icon ?? undefined,
+    rarity: toRarity(badge.rarity),
+    locked: !badge.earned,
+    earnedAt: badge.earned?.awardedAt,
+  };
+}
 
 /**
  * ProfileBadges — Ubuntu reputation badges earned by a person.
@@ -65,45 +87,8 @@ export function ProfileBadges({ personId }: ProfileBadgesProps) {
           {earnedCount} earned
         </span>
       </header>
-      <ul className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x">
-        {badges.map((badge) => (
-          <li key={badge.id} className="snap-start shrink-0 w-[140px]">
-            <BadgeTile badge={badge} />
-          </li>
-        ))}
-      </ul>
+      {/* Branded Ubuntu badge grid (mineral rarity tints; locked badges dim). */}
+      <NyuchiBadgeDisplay badges={badges.map(toBadgeItem)} />
     </section>
-  );
-}
-
-function BadgeTile({ badge }: { badge: ProfileBadge }) {
-  const isLocked = !badge.earned;
-  return (
-    <div
-      className="h-full rounded-[var(--radius-lg)] p-3 flex flex-col items-center text-center"
-      style={
-        isLocked
-          ? { background: "var(--muted)", opacity: 0.6 }
-          : { background: "var(--nh-lead-soft)", color: "var(--nh-lead)" }
-      }
-    >
-      <div
-        className="w-12 h-12 rounded-full flex items-center justify-center mb-2 text-xl"
-        style={isLocked ? { background: "var(--background)" } : { background: "var(--background)", color: "var(--nh-lead)" }}
-        aria-hidden
-      >
-        {/* Most badge icons are emoji or single-char glyphs; we render the raw
-            value to keep the open-graph icon system flexible. */}
-        {badge.icon ?? "•"}
-      </div>
-      <span className="text-[12px] font-semibold leading-tight text-foreground line-clamp-2">
-        {badge.name}
-      </span>
-      {isLocked && (
-        <span className="mt-1 text-[10px] uppercase tracking-[0.04em] text-muted-foreground">
-          Locked
-        </span>
-      )}
-    </div>
   );
 }
