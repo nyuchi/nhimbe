@@ -21,7 +21,7 @@ import { NextResponse, type NextRequest } from "next/server";
 //                                     the OAuth callback URL.
 // Optional:
 //   WORKOS_API_HOSTNAME             — defaults to api.workos.com. Set to
-//                                     authenticate.nyuchi.com to route all
+//                                     identity.nyuchi.com to route all
 //                                     WorkOS API calls (and hosted AuthKit
 //                                     UI) through the custom domain.
 const WORKOS_PASSWORD = process.env.WORKOS_COOKIE_PASSWORD;
