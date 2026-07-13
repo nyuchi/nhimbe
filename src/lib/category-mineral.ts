@@ -18,17 +18,18 @@ export type Mineral = "cobalt" | "tanzanite" | "malachite" | "gold" | "terracott
 export const NHIMBE_LEAD_MINERAL: Mineral = "tanzanite";
 
 // keyword → mineral. A category (id or display name) is lower-cased and matched
-// by substring against these keyword lists. Tanzanite is checked first so it
-// wins ties for the arts/culture families the brand leads with.
+// by substring against these keyword lists, first match wins. Gold precedes
+// tanzanite deliberately: "agriculture" contains the substring "culture", so
+// the agriculture/food family must be resolved before the arts/culture family.
 const MINERAL_KEYWORDS: [Mineral, string[]][] = [
+  // Gold — food, faith, agriculture, markets (prosperity / earth).
+  ["gold", ["food", "drink", "dinner", "tasting", "menu", "faith", "spiritual", "religious", "worship", "church", "prayer", "agricultur", "farming", "market"]],
   // Tanzanite (nhimbe lead) — arts, culture, music, entertainment.
   ["tanzanite", ["music", "festival", "concert", "art", "culture", "heritage", "film", "comedy", "theatre", "dance", "fashion", "photograph", "writing", "book", "entertain", "gaming", "esport"]],
   // Cobalt — knowledge, tech, business, civic (information mineral).
   ["cobalt", ["tech", "ai-", "machine", "startup", "business", "finance", "invest", "trade", "commerce", "education", "research", "academ", "conference", "workshop", "network", "diaspora", "governance", "policy", "advocacy", "human-rights", "language"]],
   // Malachite — outdoors, sport, wellness, environment, health (green).
   ["malachite", ["outdoor", "hike", "hiking", "trail", "run", "walk", "sport", "football", "fitness", "wellness", "mindful", "environment", "climate", "wildlife", "conservation", "nature", "health", "medicine", "mental", "adventure", "cycling", "swim", "climb", "marathon", "parkrun"]],
-  // Gold — food, faith, agriculture, markets (prosperity / earth).
-  ["gold", ["food", "drink", "dinner", "tasting", "menu", "faith", "spiritual", "religious", "worship", "church", "prayer", "agricultur", "farming", "market"]],
   // Terracotta — community, family, ubuntu, social gatherings (earth/clay).
   ["terracotta", ["community", "family", "parent", "ubuntu", "social", "meetup", "mixer", "volunteer", "charity", "civic"]],
 ];
