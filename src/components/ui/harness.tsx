@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createLogger } from "@/lib/observability";
 
 /* ═══════════════════════════════════════════════════════════════
    nyuchi component harness — zero-config infrastructure wiring
@@ -9,10 +10,35 @@ import * as React from "react";
    the infrastructure they all rely on: observability, a11y, error
    resilience, skeleton loading, motion, theme, and locale.
 
-   This module is built up in layers. First layer: motion — entry
-   animations that honour `prefers-reduced-motion` and the
-   `--motion-duration-*` / `--motion-ease-*` design tokens.
+   Built up in layers: motion, then observability, then theme/locale,
+   then the hook + declarative wrapper that compose them.
    ═══════════════════════════════════════════════════════════════ */
+
+// ─── scoped logger (backed by observability) ───────────────────
+// Each component gets its own logger. We reuse the shared
+// `[mukoko:<module>]` logger from `src/lib/observability.ts` rather than
+// inventing a second logging channel; the scoped signature below is the
+// contract brand components compile against.
+
+export interface ScopedLogger {
+  debug: (message: string, data?: Record<string, unknown>) => void;
+  info: (message: string, data?: Record<string, unknown>) => void;
+  warn: (message: string, data?: Record<string, unknown>) => void;
+  error: (message: string, error?: Error, data?: Record<string, unknown>) => void;
+}
+
+function createScopedLogger(componentName: string): ScopedLogger {
+  const logger = createLogger(componentName);
+  return {
+    debug: (message, data) => logger.debug(message, { data }),
+    info: (message, data) => logger.info(message, { data }),
+    warn: (message, data) => logger.warn(message, { data }),
+    error: (message, error, data) => logger.error(message, { error, data }),
+  };
+}
+
+/** Component health status reported through the scoped logger. */
+export type HealthStatus = "healthy" | "degraded" | "error" | "loading";
 
 // ─── motion (design-token driven, reduced-motion aware) ─────────
 
