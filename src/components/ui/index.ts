@@ -22,6 +22,7 @@ export {
 export { NyuchiListingCard, listingCardVariants } from "./nyuchi-listing-card";
 export { NyuchiEmptyState } from "./nyuchi-empty-state";
 export { NyuchiAlertBanner } from "./nyuchi-alert-banner";
+export { NyuchiNotificationItem } from "./nyuchi-notification-item";
 export { NyuchiRSVPButton } from "./nyuchi-rsvp-button";
 export { NyuchiTicketCard } from "./nyuchi-ticket-card";
 export { NyuchiProgrammeItem } from "./nyuchi-programme-item";
