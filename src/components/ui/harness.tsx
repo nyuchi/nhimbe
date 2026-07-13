@@ -135,8 +135,16 @@ const HARNESS_KEYFRAMES = `
 .nyuchi-animate-in {
   animation: nyuchi-fade-slide-up var(--motion-duration-md, 200ms) var(--motion-ease-out, cubic-bezier(0, 0, 0.2, 1)) both;
 }
+/* Reduced-motion suppression at the CSS layer. This covers both the
+   class-based entry animation and any inline animStyle() output — the
+   [style*=…] selector with !important is the one case a stylesheet beats
+   an inline declaration, which makes animStyle SSR-hydration-safe (the
+   server renders without a window and cannot know the user's preference). */
 @media (prefers-reduced-motion: reduce) {
-  .nyuchi-animate-in { animation: none; }
+  .nyuchi-animate-in,
+  [style*="nyuchi-fade-slide-up"] {
+    animation: none !important;
+  }
 }
 `;
 
