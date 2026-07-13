@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Heart, MessageCircle, Send, Users, Flame, Archive } from "lucide-react";
+import { ArrowLeft, Heart, MessageCircle, Users, Flame, Archive } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { NyuchiContentComposer } from "@/components/ui/nyuchi-content-composer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/components/auth/auth-context";
 import {
@@ -45,7 +46,6 @@ export default function KraalDetailClient({ circleId }: KraalDetailClientProps) 
   const [posts, setPosts] = useState<KraalPost[]>([]);
   const [members, setMembers] = useState<KraalMember[]>([]);
   const [archived, setArchived] = useState<KraalPost[]>([]);
-  const [composer, setComposer] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"stream" | "members" | "archive">("stream");
@@ -99,14 +99,15 @@ export default function KraalDetailClient({ circleId }: KraalDetailClientProps) 
     if (next === "archive") void loadArchive();
   };
 
-  const handlePost = async () => {
-    if (!personId || !composer.trim()) return;
+  const handlePost = async (text: string) => {
+    const body = text.trim();
+    if (!personId || !body) return;
     setSubmitting(true);
     setError(null);
     try {
       const newPost = await createCirclePost({
         circleId,
-        text: composer.trim(),
+        text: body,
       });
       // Optimistic — backfill author from current user
       const me = members.find((m) => m.person_id === personId)?.person ?? {
@@ -117,7 +118,6 @@ export default function KraalDetailClient({ circleId }: KraalDetailClientProps) 
         image: null,
       };
       setPosts((prev) => [{ ...newPost, author: me }, ...prev]);
-      setComposer("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to post");
     } finally {
@@ -247,28 +247,15 @@ export default function KraalDetailClient({ circleId }: KraalDetailClientProps) 
 
             <TabsContent value="stream">
               {isAuthenticated && isMember && (
-                <Card className="border-0 bg-surface mb-4">
-                  <CardContent className="p-4">
-                    <textarea
-                      value={composer}
-                      onChange={(e) => setComposer(e.target.value)}
-                      placeholder={t("kraal.compose.placeholder")}
-                      rows={3}
-                      className="w-full bg-transparent border-none outline-none resize-none placeholder:text-text-tertiary text-sm"
-                    />
-                    <div className="flex justify-end mt-2">
-                      <Button
-                        size="sm"
-                        onClick={handlePost}
-                        disabled={!composer.trim() || submitting}
-                        className="rounded-full"
-                      >
-                        <Send className="w-4 h-4" aria-hidden />
-                        Post
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                <NyuchiContentComposer
+                  className="mb-4"
+                  placeholder={t("kraal.compose.placeholder")}
+                  userName={user?.name ?? undefined}
+                  submitLabel="Post"
+                  submitting={submitting}
+                  showToolbar={false}
+                  onSubmit={handlePost}
+                />
               )}
 
               {posts.length === 0 ? (
