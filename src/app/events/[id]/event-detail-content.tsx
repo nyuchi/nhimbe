@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Rating } from "@/components/ui/rating";
+import { NyuchiAlertBanner, type AlertSeverity } from "@/components/ui/nyuchi-alert-banner";
 import { AddToCalendarButton, GetDirectionsButton } from "./event-actions";
 import { EventThemeWrapper } from "./event-theme-wrapper";
 import { EventMap } from "./event-map";
@@ -53,8 +54,46 @@ interface EventDetailContentProps {
   event: Event;
 }
 
+/** Map a schema.org eventStatus to a branded alert; null when scheduled. */
+function eventStatusAlert(
+  status?: string,
+): { severity: AlertSeverity; headline: string; description: string } | null {
+  if (!status) return null;
+  const s = status.replace(/^https?:\/\/schema\.org\//, "");
+  switch (s) {
+    case "EventCancelled":
+      return {
+        severity: "severe",
+        headline: "This event has been cancelled",
+        description:
+          "The host has cancelled this event. Check back for updates or explore other events.",
+      };
+    case "EventPostponed":
+      return {
+        severity: "moderate",
+        headline: "This event has been postponed",
+        description: "A new date has not been confirmed yet. Watch this page for the rescheduled time.",
+      };
+    case "EventRescheduled":
+      return {
+        severity: "moderate",
+        headline: "This event has been rescheduled",
+        description: "The date or time has changed — check the details below.",
+      };
+    case "EventMovedOnline":
+      return {
+        severity: "watch",
+        headline: "This event has moved online",
+        description: "The event is now taking place online. See the joining details below.",
+      };
+    default:
+      return null;
+  }
+}
+
 export function EventDetailContent({ event }: EventDetailContentProps) {
   const { user } = useAuth();
+  const statusAlert = eventStatusAlert(event.eventStatus);
   const [userReferral, setUserReferral] = useState<UserReferralCode | null>(null);
   const [stats, setStats] = useState<EventStats | null>(null);
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
@@ -117,6 +156,16 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
           <ArrowLeft className="w-4.5 h-4.5" />
           Back to events
         </Link>
+
+        {statusAlert && (
+          <NyuchiAlertBanner
+            type="Event update"
+            severity={statusAlert.severity}
+            headline={statusAlert.headline}
+            description={statusAlert.description}
+            className="mb-4 sm:mb-6"
+          />
+        )}
 
         <EventCover event={event} stats={stats} reviewStats={reviewStats} />
 
