@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Mountain, Music, Calendar as CalendarIcon, Utensils, Sparkles, ArrowUpRight } from "lucide-react";
+import { Mountain, Music, Calendar as CalendarIcon, Utensils, Sparkles } from "lucide-react";
 import { listProgrammeItems, type ProgrammeItem } from "@/app/actions/programme";
+import { NyuchiProgrammeItem } from "@/components/ui/nyuchi-programme-item";
+import { categoryToMineral } from "@/lib/category-mineral";
 import type { Event } from "@/lib/api";
 
 /**
@@ -210,27 +212,20 @@ function ProgrammeCard({ rows, category }: { rows: ProgrammeItem[]; category: st
           {rows.length} {rows.length === 1 ? "item" : "items"}
         </span>
       </header>
-      <ol className="space-y-3">
-        {rows.map((r) => (
-          <li key={r.id} className="flex items-start gap-3">
-            <span className="font-mono text-[11px] text-muted-foreground pt-0.5 w-10 shrink-0">
-              {formatProgrammeTime(r.startDate)}
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-foreground line-clamp-1">{r.name}</div>
-              {r.description && (
-                <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{r.description}</p>
-              )}
-              {r.performer && (
-                <div className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: "var(--nh-lead)" }}>
-                  <ArrowUpRight className="w-3 h-3" aria-hidden />
-                  {r.performer}
-                </div>
-              )}
-            </div>
-          </li>
+      {/* Branded timeline — nyuchi-programme-item, mineral-coded by category. */}
+      <div role="list">
+        {rows.map((r, i) => (
+          <NyuchiProgrammeItem
+            key={r.id}
+            time={formatProgrammeTime(r.startDate)}
+            title={r.name}
+            speaker={r.performer ?? undefined}
+            description={r.description ?? undefined}
+            mineral={categoryToMineral(category)}
+            isLast={i === rows.length - 1}
+          />
         ))}
-      </ol>
+      </div>
     </div>
   );
 }

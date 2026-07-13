@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { NyuchiRSVPButton } from "@/components/ui/nyuchi-rsvp-button";
 import { trackEventViewAction } from "@/app/actions/discovery";
 import { rsvpToEvent } from "@/app/actions/registrations";
 import { useAuth } from "@/components/auth/auth-context";
@@ -18,9 +19,11 @@ interface RSVPButtonProps {
     url?: string;
     availability?: string;
   };
+  /** Remaining capacity — surfaced under the idle RSVP pill when known. */
+  spotsRemaining?: number | null;
 }
 
-export function RSVPButton({ eventId, price }: RSVPButtonProps) {
+export function RSVPButton({ eventId, price, spotsRemaining }: RSVPButtonProps) {
   const [loading, setLoading] = useState(false);
   const [registered, setRegistered] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,34 +92,29 @@ export function RSVPButton({ eventId, price }: RSVPButtonProps) {
       );
     }
     return (
-      <Button
-        variant="default"
-        className="w-full py-4 text-base"
-        onClick={() => setShowNamePrompt(true)}
-      >
-        {price ? "Get Tickets" : "RSVP Now"}
-      </Button>
+      <NyuchiRSVPButton
+        status="none"
+        price={price?.price ?? 0}
+        spotsRemaining={spotsRemaining ?? undefined}
+        onRSVP={() => setShowNamePrompt(true)}
+      />
     );
   }
 
+  // Confirmed — the branded pill reflects the rsvp_action state.
   if (registered) {
-    return (
-      <Button variant="secondary" className="w-full py-4 text-base" disabled>
-        Registered
-      </Button>
-    );
+    return <NyuchiRSVPButton status="confirmed" />;
   }
 
   return (
     <div>
-      <Button
-        variant="default"
-        className="w-full py-4 text-base"
-        onClick={handleRSVP}
-        disabled={loading}
-      >
-        {loading ? "Registering..." : price ? "Get Tickets" : "RSVP Now"}
-      </Button>
+      <NyuchiRSVPButton
+        status="none"
+        price={price?.price ?? 0}
+        spotsRemaining={spotsRemaining ?? undefined}
+        loading={loading}
+        onRSVP={handleRSVP}
+      />
       {error && (
         <div className="flex items-center gap-2 mt-2 p-2 bg-red-500/10 rounded-lg">
           <span className="text-red-400 text-sm">{error}</span>
