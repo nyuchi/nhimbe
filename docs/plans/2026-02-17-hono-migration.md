@@ -1,5 +1,16 @@
 # Hono Migration Implementation Plan
 
+> **⚠️ Archived plan — historical record (2026-02-17).** This plan targeted the
+> old standalone REST worker (`worker/src/index.ts`). That backend has since been
+> **retired**: nhimbe is now a single Next.js 16 app on Vercel with data read and
+> written server-side against MongoDB, and the `worker/` directory is now the
+> task-based `nhimbe-mcp` server (it owns no data and is not on the request path).
+> The Hono routing described below was never adopted as the app backend. Kept for
+> historical context only — see [`../README.md`](../README.md) and the root
+> `CLAUDE.md` for the current architecture.
+
+<!-- archival banner ends -->
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Migrate the 3,362-line `worker/src/index.ts` monolith to Hono router framework with modular route files, zero behavior changes.
