@@ -1,5 +1,13 @@
 # Resilience, Observability & Accessibility Design
 
+> **⚠️ Archived plan — historical record (2026-02-18).** The **error-boundary** and
+> **accessibility** work here largely shipped (see `src/components/error/` and
+> `src/lib/observability.ts`), but the **worker-side** observability, rate limiting,
+> and the `/api/health` D1/KV probe describe the old REST worker, which has since
+> been retired — nhimbe is now a single Next.js 16 app on Vercel with server-side
+> MongoDB (no D1, no KV). Kept for historical context — see
+> [`../README.md`](../README.md) and the root `CLAUDE.md` for current state.
+
 **Date:** 2026-02-18
 **Branch:** feature/resilience-observability-a11y (from feature/hono-migration)
 
