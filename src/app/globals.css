@@ -119,23 +119,28 @@
    * --nh-* is set per-theme block below so dark/light values flow.
    */
 
-  /* ─── Typography scale (design system canonical) ───────────────────── */
-  --fs-display: 4.5rem;   /* 72 — serif 700 */
-  --fs-h1:      3rem;     /* 48 — serif 700 */
-  --fs-h2:      2.25rem;  /* 36 — serif 600 */
-  --fs-h3:      1.875rem; /* 30 — serif 600 */
-  --fs-h4:      1.5rem;   /* 24 — sans 600 */
-  --fs-h5:      1.25rem;  /* 20 — sans 600 */
-  --fs-body-lg: 1.125rem; /* 18 — sans 400 */
-  --fs-body:    1rem;     /* 16 — sans 400 */
-  --fs-small:   0.875rem; /* 14 — sans 400 */
-  --fs-caption: 0.75rem;  /* 12 — sans 400 */
+  /* ─── Typography scale (design system canonical) ─────────────────────
+   * mzizi doctrine 4.1.0 adds --fs-display-sm, --fs-h6, --fs-code (+ --lh-h6). */
+  --fs-display:    4.5rem;   /* 72 — serif 700 */
+  --fs-display-sm: 3.75rem;  /* 60 — serif 700 */
+  --fs-h1:         3rem;     /* 48 — serif 700 */
+  --fs-h2:         2.25rem;  /* 36 — serif 600 */
+  --fs-h3:         1.875rem; /* 30 — serif 600 */
+  --fs-h4:         1.5rem;   /* 24 — sans 600 */
+  --fs-h5:         1.25rem;  /* 20 — sans 600 */
+  --fs-h6:         1rem;     /* 16 — sans 600 */
+  --fs-body-lg:    1.125rem; /* 18 — sans 400 */
+  --fs-body:       1rem;     /* 16 — sans 400 */
+  --fs-small:      0.875rem; /* 14 — sans 400 */
+  --fs-caption:    0.75rem;  /* 12 — sans 400 */
+  --fs-code:       0.875rem; /* 14 — mono 400 */
   --lh-display: 1.1;
   --lh-h1:      1.15;
   --lh-h2:      1.2;
   --lh-h3:      1.25;
   --lh-h4:      1.3;
   --lh-h5:      1.4;
+  --lh-h6:      1.4;
   --lh-body:    1.6;
   --lh-small:   1.5;
 
@@ -466,9 +471,10 @@
   --color-nh-accent: var(--nh-accent);
   --color-nh-secondary: var(--nh-secondary);
 
-  /* Typography */
+  /* Typography — sans (body), serif (headings), mono (code/kiosk codes) */
   --font-sans: "Noto Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: "Noto Serif", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
 
   /* Radii — ecosystem numbers + legacy aliases.
    * mzizi doctrine 4.1.0: buttons AND inputs are pill-shaped (radius-full).
