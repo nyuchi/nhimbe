@@ -129,7 +129,7 @@ export function LocationModal({
         )}
         {!isOnline && (
           <>
-            {/* Google Places Autocomplete */}
+            {/* Venue / address search — DB catalogue first, then OSM Nominatim */}
             <div>
               <Label className="block text-sm text-text-secondary mb-2">Search Location</Label>
               <AddressAutocomplete

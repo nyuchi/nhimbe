@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { MapPin, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { MapPin, Loader2, Database, Globe2 } from "lucide-react";
+import { geocodeAddress, type GeocodeSuggestion } from "@/app/actions/geocode";
 
-declare global {
-  interface Window {
-    google: typeof google;
-    initGoogleMaps?: () => void;
-  }
-}
+/**
+ * Address autocomplete backed by nhimbe's own places catalogue first and OSM
+ * Nominatim as a fallback — no Google Maps, no API key, no third-party script
+ * in the browser. Keystrokes are debounced and resolved through the
+ * `geocodeAddress` server action (which keeps the browser off both Mongo and
+ * the geocoder). DB hits are flagged "In catalogue"; OSM hits "OpenStreetMap".
+ *
+ * The exported props are unchanged from the previous Google-backed component so
+ * every caller keeps working; `AddressComponents` now additionally carries the
+ * selected `latitude`/`longitude` (optional — existing callers ignore them).
+ */
 
 interface AddressComponents {
   venue: string;
@@ -16,6 +22,8 @@ interface AddressComponents {
   city: string;
   country: string;
   placeId: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 interface AddressAutocompleteProps {
@@ -26,43 +34,9 @@ interface AddressAutocompleteProps {
   className?: string;
 }
 
-// Google Maps API key from environment variable
-const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
-
-let googleMapsLoaded = false;
-let googleMapsLoading = false;
-const loadCallbacks: (() => void)[] = [];
-
-function loadGoogleMapsScript(): Promise<void> {
-  return new Promise((resolve) => {
-    if (googleMapsLoaded) {
-      resolve();
-      return;
-    }
-
-    loadCallbacks.push(resolve);
-
-    if (googleMapsLoading) {
-      return;
-    }
-
-    googleMapsLoading = true;
-
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&callback=initGoogleMaps`;
-    script.async = true;
-    script.defer = true;
-
-    window.initGoogleMaps = () => {
-      googleMapsLoaded = true;
-      googleMapsLoading = false;
-      loadCallbacks.forEach((cb) => cb());
-      loadCallbacks.length = 0;
-    };
-
-    document.head.appendChild(script);
-  });
-}
+// Debounce keystrokes before hitting the geocoder. Also the main lever for
+// staying within Nominatim's <=1 req/sec etiquette.
+const DEBOUNCE_MS = 450;
 
 export function AddressAutocomplete({
   value,
@@ -71,137 +45,190 @@ export function AddressAutocomplete({
   placeholder = "Search for a venue or address...",
   className = "",
 }: AddressAutocompleteProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  // Initialize state based on API key availability to avoid setState in effect
-  const [isLoading, setIsLoading] = useState(!!GOOGLE_MAPS_API_KEY);
-  const [isFocused, setIsFocused] = useState(false);
-  const [apiKeyMissing] = useState(!GOOGLE_MAPS_API_KEY);
+  const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
 
-  const handlePlaceChanged = useCallback(() => {
-    if (!autocompleteRef.current) return;
+  const listboxId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guards against out-of-order responses overwriting a newer query's results.
+  const requestSeq = useRef(0);
+  // When we programmatically set the input on select, skip the next search.
+  const skipNextSearch = useRef(false);
 
-    const place = autocompleteRef.current.getPlace();
-    if (!place.address_components) return;
-
-    let venue = place.name || "";
-    let streetNumber = "";
-    let route = "";
-    let city = "";
-    let country = "";
-
-    for (const component of place.address_components) {
-      const types = component.types;
-
-      if (types.includes("street_number")) {
-        streetNumber = component.long_name;
-      }
-      if (types.includes("route")) {
-        route = component.long_name;
-      }
-      if (types.includes("locality") || types.includes("administrative_area_level_2")) {
-        city = city || component.long_name;
-      }
-      if (types.includes("country")) {
-        country = component.long_name;
-      }
+  const runSearch = useCallback(async (query: string) => {
+    const seq = ++requestSeq.current;
+    setIsLoading(true);
+    try {
+      const results = await geocodeAddress(query);
+      if (seq !== requestSeq.current) return; // a newer query superseded us
+      setSuggestions(results);
+      setActiveIndex(-1);
+      setIsOpen(results.length > 0);
+    } catch {
+      if (seq !== requestSeq.current) return;
+      setSuggestions([]);
+      setIsOpen(false);
+    } finally {
+      if (seq === requestSeq.current) setIsLoading(false);
     }
+  }, []);
 
-    const address = [streetNumber, route].filter(Boolean).join(" ");
-
-    // If the place name is the same as the address, clear venue
-    if (venue === address || venue === place.formatted_address) {
-      venue = "";
-    }
-
-    onPlaceSelect({
-      venue: venue || route || "",
-      address,
-      city,
-      country,
-      placeId: place.place_id || "",
-    });
-
-    // Update input with formatted address
-    onChange(place.formatted_address || value);
-  }, [onPlaceSelect, onChange, value]);
-
+  // Debounced search whenever the input value changes.
   useEffect(() => {
-    let mounted = true;
+    if (skipNextSearch.current) {
+      skipNextSearch.current = false;
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
 
-    // Skip if API key is not configured (already handled via initial state)
-    if (!GOOGLE_MAPS_API_KEY) {
+    const query = value.trim();
+    if (query.length < 3) {
+      requestSeq.current++; // cancel any in-flight response
+      setSuggestions([]);
+      setIsOpen(false);
+      setIsLoading(false);
       return;
     }
 
-    loadGoogleMapsScript().then(() => {
-      if (!mounted || !inputRef.current) return;
-
-      setIsLoading(false);
-
-      // Initialize autocomplete
-      autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
-        types: ["establishment", "geocode"],
-        fields: ["address_components", "formatted_address", "name", "place_id", "geometry"],
-      });
-
-      autocompleteRef.current.addListener("place_changed", handlePlaceChanged);
-    }).catch(() => {
-      if (mounted) {
-        setIsLoading(false);
-      }
-    });
-
+    debounceRef.current = setTimeout(() => runSearch(query), DEBOUNCE_MS);
     return () => {
-      mounted = false;
-      if (autocompleteRef.current) {
-        google.maps.event.clearInstanceListeners(autocompleteRef.current);
-      }
+      if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [handlePlaceChanged]);
+  }, [value, runSearch]);
 
-  // If API key is missing, show a message to use manual entry
-  if (apiKeyMissing) {
-    return (
-      <div className={`relative ${className}`}>
-        <div className="p-4 bg-surface rounded-xl border border-elevated">
-          <div className="flex items-center gap-3 text-text-secondary">
-            <MapPin className="w-5 h-5 text-text-tertiary" />
-            <div>
-              <p className="text-sm font-medium">Google Places not configured</p>
-              <p className="text-xs text-text-tertiary mt-0.5">
-                Please enter the address manually below
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Close the list on outside click.
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  const handleSelect = useCallback(
+    (s: GeocodeSuggestion) => {
+      skipNextSearch.current = true;
+      onPlaceSelect({
+        venue: s.name,
+        address: s.address,
+        city: s.city,
+        country: s.country,
+        placeId: s.placeId,
+        latitude: s.latitude,
+        longitude: s.longitude,
+      });
+      onChange(s.displayName);
+      setSuggestions([]);
+      setIsOpen(false);
+      setActiveIndex(-1);
+    },
+    [onPlaceSelect, onChange],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (!isOpen || suggestions.length === 0) return;
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          setActiveIndex((i) => (i + 1) % suggestions.length);
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          setActiveIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+          break;
+        case "Enter":
+          if (activeIndex >= 0 && activeIndex < suggestions.length) {
+            e.preventDefault();
+            handleSelect(suggestions[activeIndex]);
+          }
+          break;
+        case "Escape":
+          setIsOpen(false);
+          setActiveIndex(-1);
+          break;
+      }
+    },
+    [isOpen, suggestions, activeIndex, handleSelect],
+  );
 
   return (
-    <div className={`relative ${className}`}>
+    <div ref={rootRef} className={`relative ${className}`}>
       <div className="relative">
         <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary pointer-events-none" />
         <input
-          ref={inputRef}
           type="text"
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-controls={listboxId}
+          aria-autocomplete="list"
+          aria-activedescendant={
+            activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined
+          }
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          onFocus={() => {
+            if (suggestions.length > 0) setIsOpen(true);
+          }}
+          onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className="w-full pl-12 pr-10 py-3 bg-surface rounded-xl border-none outline-none text-foreground placeholder:text-text-tertiary"
-          disabled={isLoading}
+          autoComplete="off"
         />
         {isLoading && (
           <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary animate-spin" />
         )}
       </div>
-      {isFocused && !isLoading && (
-        <p className="mt-2 text-xs text-text-tertiary">
-          Start typing to search for venues and addresses
-        </p>
+
+      {isOpen && suggestions.length > 0 && (
+        <ul
+          id={listboxId}
+          role="listbox"
+          aria-label="Address suggestions"
+          className="absolute z-50 mt-2 w-full overflow-hidden rounded-xl border border-elevated bg-surface shadow-lg"
+        >
+          {suggestions.map((s, i) => (
+            <li
+              key={s.placeId || `${s.latitude},${s.longitude}`}
+              id={`${listboxId}-option-${i}`}
+              role="option"
+              aria-selected={i === activeIndex}
+              onMouseDown={(e) => {
+                // mousedown (not click) so selection fires before the input blur.
+                e.preventDefault();
+                handleSelect(s);
+              }}
+              onMouseEnter={() => setActiveIndex(i)}
+              className={`flex cursor-pointer items-start gap-3 px-4 py-3 text-sm ${
+                i === activeIndex ? "bg-elevated" : ""
+              }`}
+            >
+              <span className="mt-0.5 text-text-tertiary" aria-hidden>
+                {s.source === "db" ? (
+                  <Database className="w-4 h-4" />
+                ) : (
+                  <Globe2 className="w-4 h-4" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium text-foreground">
+                  {s.name || s.displayName}
+                </span>
+                <span className="block truncate text-xs text-text-tertiary">
+                  {s.displayName}
+                </span>
+              </span>
+              <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
+                {s.source === "db" ? "In catalogue" : "OpenStreetMap"}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

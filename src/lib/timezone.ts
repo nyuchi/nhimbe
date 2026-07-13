@@ -95,49 +95,7 @@ export function getCurrentTimeWithTimezone(): string {
   return `${time} ${offset}`;
 }
 
-// Weather data interface
-export interface WeatherData {
-  temp: string;
-  condition: string;
-  icon: string;
-}
-
-// Fetch weather data for a city using wttr.in (free, no API key)
-export async function getWeather(city: string): Promise<WeatherData | null> {
-  try {
-    const response = await fetch(
-      `https://wttr.in/${encodeURIComponent(city)}?format=j1`,
-      { next: { revalidate: 1800 } } // Cache for 30 mins
-    );
-
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    const current = data.current_condition?.[0];
-
-    if (!current) return null;
-
-    const tempC = current.temp_C;
-    const tempF = current.temp_F;
-    const condition = current.weatherDesc?.[0]?.value || "";
-
-    // Map weather conditions to simple icons
-    const conditionLower = condition.toLowerCase();
-    let icon = "sun"; // default
-    if (conditionLower.includes("cloud") || conditionLower.includes("overcast")) icon = "cloud";
-    if (conditionLower.includes("rain") || conditionLower.includes("drizzle")) icon = "cloud-rain";
-    if (conditionLower.includes("thunder") || conditionLower.includes("storm")) icon = "cloud-lightning";
-    if (conditionLower.includes("snow") || conditionLower.includes("sleet")) icon = "cloud-snow";
-    if (conditionLower.includes("fog") || conditionLower.includes("mist")) icon = "cloud-fog";
-    if (conditionLower.includes("clear") || conditionLower.includes("sunny")) icon = "sun";
-    if (conditionLower.includes("partly")) icon = "cloud-sun";
-
-    return {
-      temp: `${tempC}°C / ${tempF}°F`,
-      condition,
-      icon,
-    };
-  } catch {
-    return null;
-  }
-}
+// Weather has moved to the shared Mukoko weather embed
+// (`weather.mukoko.com/embed/widget`) — see `src/lib/weather.ts` and
+// `src/components/ui/weather-embed.tsx`. The old wttr.in `getWeather` fetch and
+// its `WeatherData` shape were removed with that migration.

@@ -79,7 +79,7 @@ Hosting is **entity-centric**: `events.events.primaryHostEntityId` → `entity.e
 
 ### Server Actions (`src/app/actions/`)
 
-Mutations and client-invoked reads: `auth`, `events`, `discovery`, `my-events`, `registrations`, `host-registrations`, `host-entities`, `host-card`, `kiosk`, `admin`, `engagement`, `saves`, `waitlist`, `search`, `profile`, `circles`, `circle-detail`, `campfire`, `places`, `map-places`, `polls`, `programme`, `badges`, `ai`.
+Mutations and client-invoked reads: `auth`, `events`, `discovery`, `my-events`, `registrations`, `host-registrations`, `host-entities`, `host-card`, `kiosk`, `admin`, `engagement`, `saves`, `waitlist`, `search`, `profile`, `circles`, `circle-detail`, `campfire`, `places`, `map-places`, `geocode`, `polls`, `programme`, `badges`, `ai`.
 
 ### Route Handlers (`src/app/api/`)
 
@@ -164,6 +164,8 @@ shadcn/Radix primitives installed from the Mukoko registry (`registry.mukoko.com
 - `email/` — Resend transactional email client + templates (`server-only`).
 - `auth/dev.ts` — dev auth bypass.
 - `shamwari.ts` — Shamwari assistant helpers.
+- `map/tiles.ts` — shared OpenStreetMap base-layer config (Leaflet tiles + attribution), used by the discovery map and the per-event venue map.
+- `weather.ts` — Mukoko weather-embed helpers (`slugifyLocation`, `weatherEmbedUrl`) for the `weather.mukoko.com/embed/widget` iframe (+ tests).
 - `calendar.ts`, `timezone.ts` — date/time utilities (+ tests).
 - `fallback-chain.ts` — resilient data-loading fallback pattern.
 - `use-focus-trap.ts`, `use-tracked-link.ts`, `use-save-event.ts` — hooks.
@@ -244,7 +246,8 @@ Set in Vercel (prod + preview) and locally in `.env.local`:
 - `RESEND_API_KEY` — server-only; used for transactional email via Resend (`src/lib/email/`). Sends from the verified `notify.mukoko.com` domain (`events@notify.mukoko.com`). When unset, email sends are skipped (never throw).
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — server-only R2 S3 API credentials for cover-image uploads (`src/lib/r2.ts`). `R2_BUCKET` *(optional)* defaults to `mukoko-storage`. When unset, `/api/media/upload` returns 503 and uploads fall back to a gradient cover.
 - `NEXT_PUBLIC_SITE_URL` — public site URL.
-- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — Google Maps.
 - `NEXT_PUBLIC_ASSETS_URL` *(optional)* — override the R2 assets host (defaults to `https://assets-s001.mukoko.com`).
+
+Maps, address search and weather need **no API keys**: maps render **Leaflet + OpenStreetMap** tiles client-side (`src/lib/map/tiles.ts`), address geocoding is **DB-first (`places.places`) then OSM Nominatim** server-side (`src/app/actions/geocode.ts`), and weather is the shared **Mukoko embed** (`weather.mukoko.com/embed/widget`, `src/lib/weather.ts`) — replacing the former Google Maps + wttr.in stack. `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` has been removed; delete it from Vercel.
 
 **Intentionally unset**: `NEXT_PUBLIC_API_URL` — the API is same-origin. There are **no** Supabase/Postgres environment variables.

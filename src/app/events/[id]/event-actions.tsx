@@ -66,8 +66,8 @@ export function EventActions({ event }: EventActionsProps) {
     const address = encodeURIComponent(
       `${event.location.name}, ${event.location.streetAddress}, ${event.location.addressLocality}, ${event.location.addressCountry}`
     );
-    // Open in Google Maps (works on all platforms)
-    window.open(`https://www.google.com/maps/search/?api=1&query=${address}`, "_blank");
+    // Open in OpenStreetMap (works on all platforms, no API key)
+    window.open(`https://www.openstreetmap.org/search?query=${address}`, "_blank");
   };
 
   const handleShare = async () => {
@@ -241,7 +241,7 @@ export function GetDirectionsButton({ event }: EventActionsProps) {
     const address = encodeURIComponent(
       `${event.location.name}, ${event.location.streetAddress}, ${event.location.addressLocality}, ${event.location.addressCountry}`
     );
-    window.open(`https://www.google.com/maps/search/?api=1&query=${address}`, "_blank");
+    window.open(`https://www.openstreetmap.org/search?query=${address}`, "_blank");
   };
 
   return (

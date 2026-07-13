@@ -1,15 +1,17 @@
 /**
  * Timezone & Date Utility Tests
  *
- * Tests date formatting, relative dates, and weather fetching:
+ * Tests date formatting and relative dates:
  * - formatTime: locale time formatting
  * - formatDate: locale date formatting
  * - getRelativeDate: today/tomorrow/weekday logic
  * - formatEventDateTime: combined date+time display
- * - getWeather: weather API with icon mapping
+ *
+ * Weather moved to the Mukoko embed (`src/lib/weather.ts`) — see
+ * `weather.test.ts` for its coverage.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   getUserTimezone,
   formatTime,
@@ -17,7 +19,6 @@ import {
   getRelativeDate,
   formatEventDateTime,
   getCurrentTimeWithTimezone,
-  getWeather,
 } from './timezone';
 
 // ============================================
@@ -181,123 +182,5 @@ describe('getCurrentTimeWithTimezone', () => {
   it('returns time with GMT offset', () => {
     const result = getCurrentTimeWithTimezone();
     expect(result).toMatch(/\d{1,2}:\d{2}\s*(AM|PM)\s*GMT[+-]\d/);
-  });
-});
-
-// ============================================
-// getWeather
-// ============================================
-
-describe('getWeather', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    global.fetch = vi.fn();
-  });
-
-  it('returns weather data on success', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        current_condition: [{
-          temp_C: '25',
-          temp_F: '77',
-          weatherDesc: [{ value: 'Sunny' }],
-        }],
-      }),
-    });
-
-    const result = await getWeather('Harare');
-    expect(result).not.toBeNull();
-    expect(result!.temp).toBe('25°C / 77°F');
-    expect(result!.condition).toBe('Sunny');
-    expect(result!.icon).toBe('sun');
-  });
-
-  it('maps cloud conditions to cloud icon', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        current_condition: [{
-          temp_C: '20',
-          temp_F: '68',
-          weatherDesc: [{ value: 'Partly cloudy' }],
-        }],
-      }),
-    });
-
-    const result = await getWeather('Harare');
-    expect(result!.icon).toBe('cloud-sun');
-  });
-
-  it('maps rain conditions to rain icon', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        current_condition: [{
-          temp_C: '15',
-          temp_F: '59',
-          weatherDesc: [{ value: 'Light rain' }],
-        }],
-      }),
-    });
-
-    const result = await getWeather('Harare');
-    expect(result!.icon).toBe('cloud-rain');
-  });
-
-  it('maps thunder conditions to lightning icon', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({
-        current_condition: [{
-          temp_C: '18',
-          temp_F: '64',
-          weatherDesc: [{ value: 'Thunderstorm' }],
-        }],
-      }),
-    });
-
-    const result = await getWeather('Harare');
-    expect(result!.icon).toBe('cloud-lightning');
-  });
-
-  it('returns null on API failure', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-    });
-
-    const result = await getWeather('Harare');
-    expect(result).toBeNull();
-  });
-
-  it('returns null on network error', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'));
-
-    const result = await getWeather('Harare');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when current_condition is missing', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({}),
-    });
-
-    const result = await getWeather('Harare');
-    expect(result).toBeNull();
-  });
-
-  it('encodes city name in URL', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ current_condition: [{ temp_C: '30', temp_F: '86', weatherDesc: [{ value: 'Clear' }] }] }),
-    });
-
-    await getWeather('Cape Town');
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('Cape%20Town'),
-      expect.anything()
-    );
   });
 });
