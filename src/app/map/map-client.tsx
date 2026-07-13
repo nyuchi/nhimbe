@@ -6,10 +6,12 @@ import { Layers, ArrowLeft, MapPin, Mountain } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import type { Event } from "@/lib/api";
 import { getMapPlaceById } from "@/app/actions/map-places";
+import { BASE_LAYERS, type BaseLayerId } from "@/lib/map/tiles";
 
 /**
  * Map-first discovery view. Uses OpenStreetMap raster tiles directly (no API
- * key, attribution required) with three switchable base layers:
+ * key, attribution required) with three switchable base layers defined in the
+ * shared `@/lib/map/tiles` module (also used by the per-event venue map):
  *
  *   Standard      → OSM standard (https://tile.openstreetmap.org)
  *   Terrain       → OpenTopoMap — topographic with contour lines + hillshade,
@@ -28,32 +30,6 @@ import { getMapPlaceById } from "@/app/actions/map-places";
 interface MapClientProps {
   initialEvents: Event[];
 }
-
-type BaseLayerId = "standard" | "terrain" | "outdoor";
-
-const BASE_LAYERS: Record<BaseLayerId, { url: string; attribution: string; label: string; maxZoom: number }> = {
-  standard: {
-    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    label: "Standard",
-    maxZoom: 19,
-  },
-  terrain: {
-    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
-    attribution:
-      'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | ' +
-      'Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
-    label: "Terrain",
-    maxZoom: 17,
-  },
-  outdoor: {
-    url: "https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
-    attribution:
-      'CyclOSM | Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    label: "Outdoor",
-    maxZoom: 20,
-  },
-};
 
 // Category → CSS color for pin tinting. Maps the design's terrain-band intent:
 // outdoor groups read in savanna/baobab; music in sunset; faith in indigo;
