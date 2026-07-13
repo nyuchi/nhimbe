@@ -73,15 +73,25 @@
   --space-5xl:       6rem;
   --space-6xl:       8rem;
 
-  /* Motion */
+  /* Motion — nhimbe's --motion-* durations, plus mzizi doctrine 4.1.0
+   * --motion-duration-* aliases, a spring ease, and stagger steps so both
+   * naming schemes resolve. */
   --motion-quick:    100ms;
   --motion-standard: 200ms;
   --motion-emphasis: 350ms;
   --motion-dramatic: 500ms;
+  --motion-duration-quick:    var(--motion-quick);
+  --motion-duration-standard: var(--motion-standard);
+  --motion-duration-emphasis: var(--motion-emphasis);
+  --motion-duration-dramatic: var(--motion-dramatic);
   --easing-entrance: cubic-bezier(0.0, 0.0, 0.2, 1);
   --easing-exit:     cubic-bezier(0.4, 0.0, 1, 1);
   --easing-standard: cubic-bezier(0.4, 0.0, 0.2, 1);
   --easing-spring:   cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --motion-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-stagger-tight: 30ms;
+  --motion-stagger-base:  50ms;
+  --motion-stagger-loose: 80ms;
 
   /* Touch targets / component sizing — compact 3-tier scale.
    * lg  48px  primary mobile CTA (hero, FAB, bottom action bar)
