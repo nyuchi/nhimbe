@@ -28,8 +28,27 @@ describe("next.config security headers", () => {
     expect(csp).toContain("form-action 'self'");
     // The third parties the app legitimately talks to must remain allow-listed.
     expect(csp).toContain("https://api.workos.com");
-    expect(csp).toContain("https://maps.googleapis.com");
     expect(csp).toContain("https://*.mukoko.com");
+  });
+
+  it("allow-lists OSM + weather origins and drops Google Maps", async () => {
+    const groups = await nextConfig.headers!();
+    const root = groups.find((g) => g.source === "/:path*")!;
+    const csp = root.headers.find((h) => h.key === "Content-Security-Policy")?.value ?? "";
+
+    // Maps + geocoding now run on OpenStreetMap; Google Maps is fully removed.
+    expect(csp).not.toContain("maps.googleapis.com");
+    expect(csp).not.toContain("maps.gstatic.com");
+    expect(csp).not.toContain("google.com");
+
+    // OSM tile hosts (img-src) + Nominatim geocoding (connect-src).
+    expect(csp).toContain("https://tile.openstreetmap.org");
+    expect(csp).toContain("https://*.tile-cyclosm.openstreetmap.fr");
+    expect(csp).toContain("https://nominatim.openstreetmap.org");
+
+    // Mukoko weather widget is framed and fetched from weather.mukoko.com.
+    expect(csp).toContain("frame-src 'self' https://weather.mukoko.com");
+    expect(csp).toContain("https://weather.mukoko.com");
   });
 
   it("sets the transport, framing and isolation headers", async () => {
