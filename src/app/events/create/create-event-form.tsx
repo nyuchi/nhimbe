@@ -9,7 +9,6 @@ import {
   Lock,
   ChevronDown,
   AlignLeft,
-  Loader2,
   AlertCircle,
   ChevronLeft,
 } from "lucide-react";
@@ -29,6 +28,7 @@ import { CoverImageUpload } from "./cover-image-upload";
 import { ThemeSelector } from "./theme-selector";
 import { EventOptionsCard } from "./event-options-card";
 import { FormFieldRow } from "./form-field-row";
+import { PublishBar } from "@/components/ui/nyuchi-create-listing";
 import { WizardStepIndicator } from "./wizard-step-indicator";
 import { HostModePicker, type HostMode } from "./host-mode-picker";
 
@@ -390,8 +390,10 @@ export default function CreateEventForm() {
     }
   };
 
+  const publishLabel = uploading ? "Uploading image…" : step < 3 ? "Continue" : "Publish nhimbe";
+
   return (
-    <div className="max-w-150 mx-auto px-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))]">
+    <div className="max-w-150 mx-auto px-4">
       <WizardStepIndicator currentStep={step} steps={STEPS} />
 
       {step === 1 && (
@@ -518,50 +520,27 @@ export default function CreateEventForm() {
         </div>
       )}
 
-      {/* Sticky wizard navigation */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] bg-background/80 backdrop-blur-lg border-t border-elevated z-40">
-        <div className="max-w-150 mx-auto flex items-center gap-3">
+      {/* Sticky wizard navigation — branded nyuchi-create-listing PublishBar,
+          keeping the wizard's goNext/handleSubmit flow and server action. */}
+      <PublishBar
+        label={publishLabel}
+        loading={submitting}
+        disabled={submitting || uploading}
+        onPublish={step < 3 ? goNext : handleSubmit}
+        secondary={
           <Button
             type="button"
             variant="ghost"
             onClick={goBack}
             disabled={submitting || uploading}
-            className="rounded-xl"
+            className="rounded-full"
             aria-label={step === 1 ? "Cancel and go back" : `Back to step ${step - 1}`}
           >
             <ChevronLeft className="w-4 h-4" aria-hidden />
             Back
           </Button>
-
-          {step < 3 ? (
-            <Button
-              type="button"
-              onClick={goNext}
-              disabled={submitting || uploading}
-              className="flex-1 py-4 h-auto rounded-xl text-base"
-              size="lg"
-            >
-              Continue
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              onClick={handleSubmit}
-              disabled={submitting || uploading}
-              className="flex-1 py-4 h-auto rounded-xl text-base"
-              size="lg"
-            >
-              {uploading ? (
-                <><Loader2 className="w-5 h-5 animate-spin" aria-hidden /> Uploading image…</>
-              ) : submitting ? (
-                <><Loader2 className="w-5 h-5 animate-spin" aria-hidden /> Publishing…</>
-              ) : (
-                "Publish nhimbe"
-              )}
-            </Button>
-          )}
-        </div>
-      </div>
+        }
+      />
 
       {/* Modals */}
       <DateTimeModal isOpen={showDateModal} onClose={() => { setShowDateModal(false); touchForm(); }} eventDate={eventDate} setEventDate={setEventDate} startTime={startTime} setStartTime={setStartTime} endTime={endTime} setEndTime={setEndTime} />
