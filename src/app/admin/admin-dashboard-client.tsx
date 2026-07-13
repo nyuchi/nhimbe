@@ -2,13 +2,13 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { NyuchiStatsRow, type StatItem } from "@/components/ui/nyuchi-stats-row";
+import { NyuchiHeroStat } from "@/components/ui/nyuchi-hero-stat";
 import {
   Users,
   Calendar,
   TrendingUp,
   Eye,
-  ArrowUpRight,
-  ArrowDownRight,
   AlertCircle,
   CheckCircle,
   Clock,
@@ -61,33 +61,41 @@ export default function AdminDashboardClient({
   recentUsers,
   tickets,
 }: AdminDashboardClientProps) {
-  const statCards = [
+  // Format a growth number into a signed trend string (e.g. "+12%").
+  const trend = (n: number | null) =>
+    n == null || n === 0 ? undefined : `${n > 0 ? "+" : ""}${n}%`;
+
+  // Branded stat grid — each block a mineral-tinted, click-through metric.
+  const statItems: StatItem[] = [
     {
-      title: "Total Users",
-      value: stats.totalUsers,
-      change: stats.userGrowth,
       icon: Users,
+      label: "Total Users",
+      value: stats.totalUsers.toLocaleString(),
+      trend: trend(stats.userGrowth),
+      color: "var(--color-tanzanite)",
       href: "/admin/users",
     },
     {
-      title: "Total Events",
-      value: stats.totalEvents,
-      change: stats.eventGrowth,
       icon: Calendar,
+      label: "Total Events",
+      value: stats.totalEvents.toLocaleString(),
+      trend: trend(stats.eventGrowth),
+      color: "var(--color-cobalt)",
       href: "/admin/events",
     },
     {
-      title: "Active Events",
-      value: stats.activeEvents,
-      change: null,
       icon: TrendingUp,
+      label: "Active Events",
+      value: stats.activeEvents.toLocaleString(),
+      color: "var(--color-malachite)",
       href: "/admin/events?status=active",
     },
     {
-      title: "Page Views (30d)",
-      value: stats.recentViews,
-      change: stats.viewsGrowth,
       icon: Eye,
+      label: "Page Views (30d)",
+      value: stats.recentViews.toLocaleString(),
+      trend: trend(stats.viewsGrowth),
+      color: "var(--color-gold)",
       href: "/admin/analytics",
     },
   ];
@@ -102,50 +110,20 @@ export default function AdminDashboardClient({
         </p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((stat) => {
-          const Icon = stat.icon;
-          const isPositive = stat.change && stat.change > 0;
-          const isNegative = stat.change && stat.change < 0;
+      {/* Flagship engagement metric — the branded hero stat. */}
+      <NyuchiHeroStat
+        title="Total RSVPs"
+        value={stats.totalRegistrations.toLocaleString()}
+        subtitle="Across all events"
+        secondaryStats={[
+          { label: "Active events", value: stats.activeEvents.toLocaleString() },
+          { label: "Events", value: stats.totalEvents.toLocaleString() },
+        ]}
+        icon={<TrendingUp className="h-8 w-8" />}
+      />
 
-          return (
-            <Link key={stat.title} href={stat.href}>
-              <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Icon className="w-5 h-5 text-primary" />
-                    </div>
-                    {stat.change !== null && (
-                      <div
-                        className={`flex items-center gap-1 text-sm ${
-                          isPositive
-                            ? "text-green-400"
-                            : isNegative
-                            ? "text-red-400"
-                            : "text-text-tertiary"
-                        }`}
-                      >
-                        {isPositive ? (
-                          <ArrowUpRight className="w-4 h-4" />
-                        ) : isNegative ? (
-                          <ArrowDownRight className="w-4 h-4" />
-                        ) : null}
-                        <span>{Math.abs(stat.change)}%</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-2xl font-bold mb-1">
-                    {stat.value.toLocaleString()}
-                  </div>
-                  <div className="text-sm text-text-secondary">{stat.title}</div>
-                </CardContent>
-              </Card>
-            </Link>
-          );
-        })}
-      </div>
+      {/* Stats Grid — branded NyuchiStatsRow (mineral-tinted, click-through). */}
+      <NyuchiStatsRow layout="grid" columns={4} stats={statItems} />
 
       {/* Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

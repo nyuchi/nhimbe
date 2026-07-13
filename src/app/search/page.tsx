@@ -2,19 +2,19 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { Search, MapPin, Clock, ArrowRight, Loader2, X, Sparkles } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { ArrowRight, Clock, MapPin } from "lucide-react";
 import { type Event, type Category } from "@/lib/api";
 import { getEventsAction, getCategoriesAction } from "@/app/actions/discovery";
 import { searchEventsAction } from "@/app/actions/search";
+import { NyuchiSearchView, type SearchResultItem } from "@/components/ui/nyuchi-search-view";
+import { categoryToMineral } from "@/lib/category-mineral";
 
 export default function SearchPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeCategories, setActiveCategories] = useState<string[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   // Semantic (RAG) results from the server action. Preferred when present;
   // otherwise we fall back to the local substring filter below so search keeps
@@ -23,7 +23,6 @@ export default function SearchPage() {
   const [aiSummary, setAiSummary] = useState<string>("");
   const [searching, setSearching] = useState(false);
 
-  // Load data and recent searches
   useEffect(() => {
     async function fetchData() {
       try {
@@ -41,7 +40,6 @@ export default function SearchPage() {
     }
     fetchData();
 
-    // Load recent searches from localStorage
     const stored = localStorage.getItem("nhimbe-recent-searches");
     if (stored) {
       setRecentSearches(JSON.parse(stored));
@@ -50,9 +48,11 @@ export default function SearchPage() {
 
   const saveSearch = (query: string) => {
     if (!query.trim()) return;
-    const updated = [query, ...recentSearches.filter((s) => s !== query)].slice(0, 5);
-    setRecentSearches(updated);
-    localStorage.setItem("nhimbe-recent-searches", JSON.stringify(updated));
+    setRecentSearches((prev) => {
+      const updated = [query, ...prev.filter((s) => s !== query)].slice(0, 5);
+      localStorage.setItem("nhimbe-recent-searches", JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const clearRecentSearches = () => {
@@ -109,213 +109,102 @@ export default function SearchPage() {
   }, [searchQuery]);
 
   // Prefer server (semantic/text) results; fall back to the local substring
-  // filter until the server responds or if it returns nothing.
-  const filteredEvents =
-    semanticEvents && semanticEvents.length > 0 ? semanticEvents : localFiltered;
+  // filter. When there's no query, category chips narrow the full catalogue.
+  const baseEvents = searchQuery.trim()
+    ? semanticEvents && semanticEvents.length > 0
+      ? semanticEvents
+      : localFiltered
+    : events;
 
-  const popularCategories = categories.slice(0, 6);
+  const filteredEvents = useMemo(() => {
+    if (activeCategories.length === 0) return baseEvents;
+    const active = new Set(activeCategories.map((c) => c.toLowerCase()));
+    return baseEvents.filter((e) => active.has(e.category.toLowerCase()));
+  }, [baseEvents, activeCategories]);
+
+  const results: SearchResultItem[] = useMemo(
+    () =>
+      filteredEvents.map((event) => ({
+        id: event.id,
+        title: event.name,
+        description: event.description,
+        category: event.category,
+        mineral: categoryToMineral(event.category),
+        image: event.image,
+        href: `/events/${event.id}`,
+        meta: [
+          { icon: Clock, label: "date", value: event.date.full },
+          { icon: MapPin, label: "venue", value: event.location.addressLocality },
+        ],
+      })),
+    [filteredEvents]
+  );
+
+  const filterOptions = useMemo(
+    () => categories.map((c) => ({ id: c.name, label: c.name })),
+    [categories]
+  );
+
+  const trending = useMemo(() => categories.slice(0, 6).map((c) => c.name), [categories]);
 
   return (
-    <div className="max-w-200 mx-auto px-6 py-8">
-      {/* Search Input */}
-      <div className="relative mb-8">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-text-tertiary" />
-        <Input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && searchQuery.trim()) {
-              saveSearch(searchQuery.trim());
-            }
-          }}
-          placeholder="Search events, venues, or categories..."
-          autoFocus
-          className="w-full pl-14 pr-12 py-4 bg-surface rounded-2xl border-none outline-none text-lg text-foreground placeholder:text-text-tertiary focus:ring-2 focus:ring-primary/50"
-        />
-        {searchQuery && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSearchQuery("")}
-            className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-text-tertiary hover:text-foreground transition-colors h-auto min-h-0"
+    <div className="mx-auto max-w-200 px-6 py-8">
+      <NyuchiSearchView
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
+        placeholder="Search events, venues, or categories…"
+        categories={filterOptions}
+        activeCategories={activeCategories}
+        onCategoryChange={setActiveCategories}
+        results={results}
+        loading={loading}
+        searching={searching}
+        aiSummary={aiSummary}
+        recentSearches={recentSearches}
+        onRecentSelect={(s) => setSearchQuery(s)}
+        onClearRecent={clearRecentSearches}
+        trending={trending}
+        onTrendingSelect={(t) => setSearchQuery(t)}
+      />
+
+      {/* Persist a recent search once the query settles with matches. */}
+      <RecentSearchSaver query={searchQuery} count={results.length} onSave={saveSearch} />
+
+      {events.length > 0 && !searchQuery.trim() && activeCategories.length === 0 && (
+        <div className="mt-8">
+          <Link
+            href="/events"
+            className="flex items-center justify-center gap-2 py-3 text-sm font-medium text-primary transition-colors hover:text-primary/80"
           >
-            <X className="w-5 h-5" />
-          </Button>
-        )}
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        </div>
-      ) : searchQuery ? (
-        /* Search Results */
-        <div>
-          {/* Shamwari AI summary of the matches (RAG) */}
-          {aiSummary && (
-            <div className="mb-4 flex items-start gap-3 bg-primary/10 border border-primary/20 rounded-xl p-4">
-              <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-              <p className="text-sm text-foreground leading-relaxed">{aiSummary}</p>
-            </div>
-          )}
-          <p className="text-sm text-text-secondary mb-4 flex items-center gap-2">
-            {searching && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {filteredEvents.length} result{filteredEvents.length !== 1 ? "s" : ""} for &ldquo;{searchQuery}&rdquo;
-          </p>
-          {filteredEvents.length > 0 ? (
-            <div className="space-y-3">
-              {filteredEvents.map((event) => (
-                <Link
-                  key={event.id}
-                  href={`/events/${event.id}`}
-                  onClick={() => saveSearch(searchQuery)}
-                  className="flex items-center gap-4 p-4 bg-surface rounded-xl hover:bg-elevated transition-colors"
-                >
-                  {/* Event Cover */}
-                  <div
-                    className="w-16 h-16 rounded-lg shrink-0 overflow-hidden"
-                    style={{
-                      background: !event.image
-                        ? event.coverGradient || "linear-gradient(135deg, #004D40, #64FFDA)"
-                        : undefined,
-                    }}
-                  >
-                    {event.image && (
-                      <img
-                        src={event.image}
-                        alt=""
-                        loading="lazy"
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                  </div>
-                  {/* Event Info */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-foreground truncate">{event.name}</h3>
-                    <div className="flex items-center gap-3 text-sm text-text-secondary mt-1">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" />
-                        {event.date.full}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5" />
-                        {event.location.addressLocality}
-                      </span>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-text-tertiary" />
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
-                <Search className="w-8 h-8 text-text-tertiary" />
-              </div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">No results found</h3>
-              <p className="text-text-secondary">
-                Try different keywords or browse by category
-              </p>
-            </div>
-          )}
-        </div>
-      ) : (
-        /* Empty State - Show Recent & Suggestions */
-        <div className="space-y-8">
-          {/* Recent Searches */}
-          {recentSearches.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-text-tertiary uppercase tracking-wider">
-                  Recent Searches
-                </h2>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearRecentSearches}
-                  className="text-sm text-primary hover:underline h-auto min-h-0 p-0"
-                >
-                  Clear
-                </Button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {recentSearches.map((search) => (
-                  <Button
-                    key={search}
-                    variant="ghost"
-                    onClick={() => setSearchQuery(search)}
-                    className="px-4 py-2 bg-surface rounded-full text-sm hover:bg-elevated transition-colors"
-                  >
-                    {search}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Browse Categories */}
-          <div>
-            <h2 className="text-sm font-semibold text-text-tertiary uppercase tracking-wider mb-4">
-              Browse by Category
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {popularCategories.map((category) => (
-                <Link
-                  key={category.id}
-                  href={`/events?category=${encodeURIComponent(category.id)}`}
-                  className="p-4 bg-surface rounded-xl hover:bg-elevated transition-colors text-center"
-                >
-                  <span className="font-medium">{category.name}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Trending Events */}
-          <div>
-            <h2 className="text-sm font-semibold text-text-tertiary uppercase tracking-wider mb-4">
-              Trending Events
-            </h2>
-            <div className="space-y-3">
-              {events.slice(0, 3).map((event) => (
-                <Link
-                  key={event.id}
-                  href={`/events/${event.id}`}
-                  className="flex items-center gap-4 p-4 bg-surface rounded-xl hover:bg-elevated transition-colors"
-                >
-                  <div
-                    className="w-12 h-12 rounded-lg shrink-0"
-                    style={{
-                      background: event.image
-                        ? `url(${event.image}) center/cover`
-                        : event.coverGradient || "linear-gradient(135deg, #004D40, #64FFDA)",
-                    }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-foreground truncate">{event.name}</h3>
-                    <p className="text-sm text-text-secondary">
-                      {event.date.month} {event.date.day} · {event.location.addressLocality}
-                    </p>
-                  </div>
-                  <Badge variant="default" className="bg-primary/20 text-primary border-0">
-                    {event.category}
-                  </Badge>
-                </Link>
-              ))}
-            </div>
-            {events.length > 3 && (
-              <Link
-                href="/events"
-                className="flex items-center justify-center gap-2 mt-4 py-3 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
-              >
-                View all events
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            )}
-          </div>
+            Browse all events
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       )}
     </div>
   );
+}
+
+/**
+ * Persist a recent search after a query settles with at least one match.
+ * Kept as a tiny effect component so the page body stays declarative.
+ */
+function RecentSearchSaver({
+  query,
+  count,
+  onSave,
+}: {
+  query: string;
+  count: number;
+  onSave: (q: string) => void;
+}) {
+  useEffect(() => {
+    const q = query.trim();
+    if (!q || count === 0) return;
+    const handle = setTimeout(() => onSave(q), 800);
+    return () => clearTimeout(handle);
+    // onSave is stable enough for this debounce; re-run on query/count changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, count]);
+  return null;
 }

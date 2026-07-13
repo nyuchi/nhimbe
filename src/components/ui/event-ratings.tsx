@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Star, MessageSquare, ThumbsUp, Loader2 } from "lucide-react";
+import { Star, MessageSquare, Loader2 } from "lucide-react";
 import { Rating } from "@/components/ui/rating";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { NyuchiReviewCard } from "@/components/ui/nyuchi-review-card";
 import { type EventReview as ApiReview, type ReviewStats } from "@/lib/api";
 import { getEventReviewsAction, markReviewHelpfulAction } from "@/app/actions/engagement";
 import { useAuth } from "@/components/auth/auth-context";
@@ -17,6 +18,7 @@ interface Review {
   reviewBody: string;
   date: string;
   helpful: number;
+  verifiedAttendee: boolean;
 }
 
 interface EventRatingsProps {
@@ -66,6 +68,7 @@ export function EventRatings({
           reviewBody: r.reviewBody || "",
           date: formatRelativeDate(r.dateCreated),
           helpful: r.helpfulCount,
+          verifiedAttendee: r.isVerifiedAttendee,
         }));
         setReviews(transformedReviews);
         setStats(data.stats);
@@ -203,40 +206,25 @@ export function EventRatings({
         </div>
       </div>
 
-      {/* Reviews List */}
-      <div className="space-y-4">
-        {displayedReviews.map((review) => (
-          <div key={review.id} className="p-4 bg-elevated rounded-xl">
-            <div className="flex items-start gap-3 mb-2">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-secondary to-primary flex items-center justify-center text-sm font-bold text-background shrink-0">
-                {review.userInitials}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-medium">{review.userName}</span>
-                  <span className="text-xs text-text-tertiary">{review.date}</span>
-                </div>
-                <Rating value={review.rating} readOnly size="sm" />
-              </div>
-            </div>
-            <p className="text-sm text-text-secondary mb-3">{review.reviewBody}</p>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleHelpful(review.id)}
-              className={`flex items-center gap-1 text-xs transition-colors p-0 h-auto min-h-0 ${
-                helpfulClicked.has(review.id)
-                  ? "text-primary"
-                  : "text-text-tertiary hover:text-text-secondary"
-              }`}
-            >
-              <ThumbsUp className="w-3 h-3" />
-              <span>
-                Helpful ({review.helpful + (helpfulClicked.has(review.id) ? 1 : 0)})
-              </span>
-            </Button>
-          </div>
-        ))}
+      {/* Reviews List — branded NyuchiReviewCard. A verified attendee earns
+          the community trust dot (tier 1); the helpful vote tints malachite. */}
+      <div className="space-y-3">
+        {displayedReviews.map((review) => {
+          const marked = helpfulClicked.has(review.id);
+          return (
+            <NyuchiReviewCard
+              key={review.id}
+              reviewer={review.userName}
+              rating={review.rating}
+              text={review.reviewBody}
+              date={review.date}
+              verificationTier={review.verifiedAttendee ? 1 : 0}
+              helpfulCount={review.helpful + (marked ? 1 : 0)}
+              markedHelpful={marked}
+              onHelpful={() => handleHelpful(review.id)}
+            />
+          );
+        })}
       </div>
 
       {/* Show More / Write Review */}
