@@ -5,7 +5,11 @@ import Link from "next/link";
 import { CalendarPlus, Ticket, Users, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { EventCard } from "@/components/ui/event-card";
+import { NyuchiListingCard } from "@/components/ui/nyuchi-listing-card";
+import { NyuchiTicketCard } from "@/components/ui/nyuchi-ticket-card";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
+import { categoryToMineral } from "@/lib/category-mineral";
+import { getMediaUrl } from "@/lib/api";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { useAuth } from "@/components/auth/auth-context";
 import { getMyEvents, type MyEventsResult } from "@/app/actions/my-events";
@@ -107,47 +111,69 @@ function MyEventsContent() {
         </div>
       ) : currentEvents.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {currentEvents.map((event) => (
-            <EventCard
-              key={event.id}
-              id={event.id}
-              title={event.name}
-              date={event.date}
-              location={event.location}
-              category={event.category}
-              coverImage={event.image}
-              coverGradient={event.coverGradient}
-              attendeeCount={event.attendeeCount}
-              friendsCount={event.friendsCount}
-              isHosting={activeTab === "hosting" || hostingIdSet.has(event.id)}
-            />
-          ))}
+          {currentEvents.map((event, i) =>
+            activeTab === "attending" ? (
+              // Attending → a real ticket for the gathering.
+              <NyuchiTicketCard
+                key={event.id}
+                href={`/events/${event.id}`}
+                eventTitle={event.name}
+                eventDate={`${event.date.month} ${event.date.day}${event.date.time ? ` · ${event.date.time}` : ""}`}
+                eventVenue={event.location.name || event.location.addressLocality}
+                tierName={event.offers?.price ? "Ticket" : "Free entry"}
+                tierPrice={event.offers?.price ?? 0}
+                ticketCode={event.shortCode}
+                status="valid"
+                mineral={categoryToMineral(event.category)}
+              />
+            ) : (
+              // Hosting → straight to manage; past → the event page.
+              <NyuchiListingCard
+                key={event.id}
+                variant="compact"
+                index={i}
+                href={
+                  activeTab === "hosting" || hostingIdSet.has(event.id)
+                    ? `/events/${event.id}/manage`
+                    : `/events/${event.id}`
+                }
+                title={event.name}
+                category={event.category}
+                mineral={categoryToMineral(event.category)}
+                image={event.image ? getMediaUrl(event.image) : undefined}
+                meta={[
+                  { label: "date", value: `${event.date.month} ${event.date.day}`, icon: Clock },
+                  { label: "going", value: `${event.attendeeCount} going`, icon: Users },
+                ]}
+              />
+            ),
+          )}
         </div>
       ) : (
-        <div className="text-center py-16">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-surface flex items-center justify-center">
-            {activeTab === "hosting" ? (
-              <Users className="w-8 h-8 text-text-tertiary" />
-            ) : (
-              <Ticket className="w-8 h-8 text-text-tertiary" />
-            )}
-          </div>
-          <h3 className="text-lg font-semibold text-foreground mb-2">
-            {activeTab === "hosting" ? "No events hosted yet" : activeTab === "past" ? "No past events" : "No events found"}
-          </h3>
-          <p className="text-text-secondary mb-6">
-            {activeTab === "hosting"
-              ? "Create your first event and bring your community together"
-              : activeTab === "past"
-              ? "Events you've attended or hosted will appear here"
-              : "Explore events and find gatherings that interest you"}
-          </p>
-          <Link href={activeTab === "hosting" ? "/events/create" : "/"}>
-            <Button variant="default">
-              {activeTab === "hosting" ? "Create Event" : "Explore Events"}
-            </Button>
-          </Link>
-        </div>
+        <Empty className="py-16">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              {activeTab === "hosting" ? <Users className="w-6 h-6" /> : <Ticket className="w-6 h-6" />}
+            </EmptyMedia>
+            <EmptyTitle>
+              {activeTab === "hosting" ? "No events hosted yet" : activeTab === "past" ? "No past events" : "No events found"}
+            </EmptyTitle>
+            <EmptyDescription>
+              {activeTab === "hosting"
+                ? "Create your first event and bring your community together"
+                : activeTab === "past"
+                  ? "Events you've attended or hosted will appear here"
+                  : "Explore events and find gatherings that interest you"}
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Link href={activeTab === "hosting" ? "/events/create" : "/"}>
+              <Button variant="default" className="rounded-full">
+                {activeTab === "hosting" ? "Create Event" : "Explore Events"}
+              </Button>
+            </Link>
+          </EmptyContent>
+        </Empty>
       )}
     </div>
   );
