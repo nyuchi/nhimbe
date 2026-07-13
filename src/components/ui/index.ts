@@ -24,6 +24,27 @@ export { NyuchiRSVPButton } from "./nyuchi-rsvp-button";
 export { NyuchiTicketCard } from "./nyuchi-ticket-card";
 export { NyuchiProgrammeItem } from "./nyuchi-programme-item";
 export { NyuchiCalendar, mineralColorMap } from "./nyuchi-calendar";
+export { NyuchiSearchView } from "./nyuchi-search-view";
+export type {
+  NyuchiSearchViewProps,
+  SearchResultItem,
+  SearchListingResult,
+  SearchPlaceResult,
+} from "./nyuchi-search-view";
+export { NyuchiSidebarNav } from "./nyuchi-sidebar-nav";
+export type { NavItem, NyuchiSidebarNavProps } from "./nyuchi-sidebar-nav";
+export { NyuchiStatsRow } from "./nyuchi-stats-row";
+export type { NyuchiStatsRowProps, StatItem } from "./nyuchi-stats-row";
+export { NyuchiHeroStat } from "./nyuchi-hero-stat";
+export type { NyuchiHeroStatProps } from "./nyuchi-hero-stat";
+export { NyuchiReviewCard } from "./nyuchi-review-card";
+export type { NyuchiReviewCardProps } from "./nyuchi-review-card";
+export { NyuchiPlaceCard } from "./nyuchi-place-card";
+export type { NyuchiPlaceCardProps } from "./nyuchi-place-card";
+export { NyuchiArticleCard } from "./nyuchi-article-card";
+export type { NyuchiArticleCardProps, FactCheckStatus } from "./nyuchi-article-card";
+export { NyuchiOfferCard } from "./nyuchi-offer-card";
+export type { NyuchiOfferCardProps } from "./nyuchi-offer-card";
 export {
   CoverThemePicker,
   FormSection,
