@@ -2,7 +2,10 @@
 
 import * as React from "react";
 import { createLogger } from "@/lib/observability";
+import { cn } from "@/lib/utils";
 import { useAnnounce } from "@/components/ui/live-region";
+import { SectionErrorBoundary } from "@/components/error/section-error-boundary";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getLocale, type Locale } from "@/lib/i18n";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -287,4 +290,94 @@ export function useNyuchiHarness(componentName: string): ComponentHarnessResult 
     announce,
     announceUrgent: announce,
   };
+}
+
+// ─── NyuchiHarness declarative wrapper ─────────────────────────
+
+export interface NyuchiHarnessProps {
+  /** Unique name for this section (used in logs + as the boundary label). */
+  name: string;
+  /** Content to render. */
+  children: React.ReactNode;
+  /** Whether the section is loading. */
+  loading?: boolean;
+  /** Custom skeleton for the loading state. */
+  skeleton?: React.ReactNode;
+  /** Custom fallback for the error state (defaults to the branded boundary). */
+  fallback?: React.ReactNode;
+  /** Animate the entry of healthy content. Defaults to `true`. */
+  animate?: boolean;
+  className?: string;
+}
+
+/**
+ * Declarative wrapper for page sections: branded error boundary +
+ * optional skeleton + render-timing log + entry animation + a11y.
+ * Reuses nhimbe's SectionErrorBoundary and Skeleton so the harness is a
+ * thin unifier, not a re-implementation.
+ */
+export function NyuchiHarness({
+  name,
+  children,
+  loading = false,
+  skeleton,
+  fallback,
+  animate = true,
+  className,
+}: NyuchiHarnessProps) {
+  const reduced = prefersReducedMotion();
+
+  // Render-timing log — warns on slow (>1 frame) mounts.
+  React.useEffect(() => {
+    if (loading) return;
+    const start = performance.now();
+    const raf =
+      typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame(() => {
+            const duration = Math.round((performance.now() - start) * 100) / 100;
+            const logger = createLogger(name);
+            if (duration > 16) logger.warn(`slow render: ${duration}ms`, { data: { duration } });
+            else logger.debug(`rendered in ${duration}ms`, { data: { duration } });
+          })
+        : 0;
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [name, loading]);
+
+  useHarnessKeyframes();
+
+  if (loading) {
+    return (
+      <div
+        data-slot="nyuchi-harness"
+        data-section={name}
+        data-status="loading"
+        role="status"
+        aria-label={`${name} loading`}
+        className={className}
+      >
+        {skeleton ?? (
+          <div className="rounded-[var(--radius-card,16px)] bg-card p-4 ring-1 ring-foreground/10">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="mt-2 h-3 w-full" />
+            <Skeleton className="mt-2 h-3 w-1/2" />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <SectionErrorBoundary section={name} fallback={fallback} className={className}>
+      <div
+        data-slot="nyuchi-harness"
+        data-section={name}
+        data-status="healthy"
+        className={cn(animate && !reduced && "nyuchi-animate-in", className)}
+      >
+        {children}
+      </div>
+    </SectionErrorBoundary>
+  );
 }
