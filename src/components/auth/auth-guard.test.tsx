@@ -11,6 +11,7 @@ vi.mock('next/navigation', () => ({
     replace: vi.fn(),
     prefetch: vi.fn(),
   }),
+  usePathname: () => '/admin',
 }));
 
 // Create a mutable auth state for testing
@@ -75,8 +76,8 @@ describe('AuthGuard', () => {
       </AuthGuard>
     );
 
-    // Should redirect to sign in
-    expect(mockPush).toHaveBeenCalledWith('/auth/signin');
+    // Should redirect to the hosted AuthKit UI, deep-linking back
+    expect(mockPush).toHaveBeenCalledWith('/auth/hosted?return_to=%2Fadmin');
     // Should not show content
     expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
   });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth, hasPermission, type UserRole } from "./auth-context";
 import { Loader2, ShieldAlert } from "lucide-react";
 
@@ -19,12 +19,15 @@ interface AuthGuardProps {
 export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
   const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push("/auth/signin");
+      // Send the user to the hosted AuthKit UI, deep-linking back to the
+      // guarded page after login.
+      router.push(`/auth/hosted?return_to=${encodeURIComponent(pathname)}`);
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, pathname, router]);
 
   if (isLoading) {
     return (

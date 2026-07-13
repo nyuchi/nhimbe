@@ -70,7 +70,7 @@ export function RSVPButton({ eventId, price }: RSVPButtonProps) {
   // Show sign in prompt if not authenticated
   if (!isAuthenticated) {
     return (
-      <Link href={`/auth/signin?return_to=${encodeURIComponent(pathname)}`}>
+      <Link href={`/auth/hosted?return_to=${encodeURIComponent(pathname)}`}>
         <Button variant="default" className="w-full py-4 text-base">
           <LogIn className="w-5 h-5 mr-2" />
           Sign in to RSVP

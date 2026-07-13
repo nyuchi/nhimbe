@@ -28,18 +28,18 @@ APIs, an agent first obtains a WorkOS AuthKit access token via the OAuth 2.1
 authorization-code flow with PKCE:
 
 1. Start authorization at the WorkOS authorize endpoint:
-   \`https://api.workos.com/user_management/authorize\` (with a PKCE
+   \`https://identity.nyuchi.com/user_management/authorize\` (with a PKCE
    \`code_challenge\`).
 2. Exchange the returned authorization code for tokens at the WorkOS token
-   endpoint: \`https://api.workos.com/user_management/authenticate\` (supplying
+   endpoint: \`https://identity.nyuchi.com/user_management/authenticate\` (supplying
    the PKCE \`code_verifier\`).
 3. Call nhimbe APIs with the access token:
    \`Authorization: Bearer <token>\`.
 
-Tokens are issued by WorkOS (issuer \`https://api.workos.com\`) and validated by
-nhimbe against the WorkOS JWKS at
-\`https://api.workos.com/sso/jwks/client_01KQBBSMQTSMTBN7HEC9KQBJC0\`. The
-WorkOS custom auth domain for nhimbe is https://authenticate.nyuchi.com.
+Tokens are issued by WorkOS through nhimbe's custom auth domain (issuer
+\`https://identity.nyuchi.com\`) and validated by nhimbe against the WorkOS JWKS
+at \`https://identity.nyuchi.com/sso/jwks/client_01KQBBSMQTSMTBN7HEC9KQBJC0\`. The
+WorkOS custom auth domain for nhimbe is https://identity.nyuchi.com.
 
 ## agent_auth
 
@@ -50,12 +50,12 @@ authorization flow.
 \`\`\`yaml
 resource: https://nhimbe.com
 authorization_servers:
-  - https://api.workos.com
+  - https://identity.nyuchi.com
 scopes_supported: [openid, profile, email, offline_access]
 bearer_methods_supported: [header]
 agent_auth:
   skill: "Discover and register for community events on nhimbe"
-  register_uri: https://authenticate.nyuchi.com/oauth2/register
+  register_uri: https://identity.nyuchi.com/oauth2/register
   identity_types_supported: [identity_assertion]
   identity_assertion:
     assertion_types_supported: [urn:ietf:params:oauth:token-type:id-jag]

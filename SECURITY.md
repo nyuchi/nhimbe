@@ -52,7 +52,7 @@ Concrete detail behind the baseline above, for reviewers and future contributors
     `base-uri 'self'`, `frame-ancestors 'none'` and `form-action 'self'`. The
     `script-`/`style-`/`img-`/`font-`/`connect-`/`frame-src` directives allow-list
     only Google Maps, Cloudflare R2 assets (`*.mukoko.com`) and WorkOS
-    (`api.workos.com`, `authenticate.nyuchi.com`). `script-src` still permits
+    (`api.workos.com`, `identity.nyuchi.com`). `script-src` still permits
     `'unsafe-inline'`/`'unsafe-eval'` for Next.js's inline hydration bootstrap and
     the Maps SDK — tightening this to a per-request nonce / `strict-dynamic`
     policy is the main outstanding CSP hardening item.

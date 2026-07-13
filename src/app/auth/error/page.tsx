@@ -22,7 +22,7 @@ function AuthErrorContent() {
           <Link href="/">
             <Button variant="secondary">Go Home</Button>
           </Link>
-          <Link href="/auth/signin">
+          <Link href="/auth/hosted">
             <Button>Try Again</Button>
           </Link>
         </div>

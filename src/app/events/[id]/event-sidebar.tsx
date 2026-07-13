@@ -100,7 +100,7 @@ function WaitlistControl({ eventId }: { eventId: string }) {
               : "Join waitlist"}
         </Button>
       ) : (
-        <Link href={`/auth/signin?return_to=${encodeURIComponent(`/events/${eventId}`)}`}>
+        <Link href={`/auth/hosted?return_to=${encodeURIComponent(`/events/${eventId}`)}`}>
           <Button variant="default" className="w-full py-4 text-base">
             Sign in to join the waitlist
           </Button>

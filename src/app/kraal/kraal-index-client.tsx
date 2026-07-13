@@ -66,7 +66,7 @@ export default function KraalIndexClient() {
               Kraals are private to the people in them. Sign in and we&apos;ll bring you back here.
             </p>
             <Link
-              href="/auth/signin"
+              href="/auth/hosted?return_to=%2Fkraal"
               className="inline-flex items-center gap-2 px-5 h-[var(--touch-target)] rounded-full bg-primary text-primary-foreground font-semibold"
             >
               Sign in <ArrowRight className="w-4 h-4" aria-hidden />

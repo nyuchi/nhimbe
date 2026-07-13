@@ -25,7 +25,6 @@ const pageTitles: Record<string, string> = {
   "/events/create": "Create Event",
   "/search": "Search",
   "/profile": "Profile",
-  "/auth/signin": "Sign In",
 };
 
 // Create a subscription for H1 element changes
@@ -229,7 +228,7 @@ export function Header() {
             </Link>
           ) : (
             <Link
-              href={`/auth/signin?return_to=${encodeURIComponent(pathname)}`}
+              href={`/auth/hosted?return_to=${encodeURIComponent(pathname)}`}
               className="flex items-center justify-center w-11 h-11 rounded-full bg-background/20 hover:bg-background/30 transition-colors"
               aria-label="Sign in"
             >

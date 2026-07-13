@@ -240,7 +240,7 @@ describe("AuthContext", () => {
     expect(screen.getByTestId("profile-interests").textContent).toBe("no");
   });
 
-  it("signIn redirects to /auth/signin and stores return URL", async () => {
+  it("signIn redirects to the hosted AuthKit entry with the return_to deep-link", async () => {
     render(
       <AuthProvider>
         <TestConsumer />
@@ -256,8 +256,7 @@ describe("AuthContext", () => {
       signInButton.click();
     });
 
-    expect(localStorage.setItem).toHaveBeenCalledWith("auth_redirect", "/dashboard");
-    expect(mockPush).toHaveBeenCalledWith("/auth/signin");
+    expect(mockPush).toHaveBeenCalledWith("/auth/hosted?return_to=%2Fdashboard");
   });
 
   it("signOut calls AuthKit signOut and clears local state", async () => {

@@ -11,6 +11,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useAuth as useAuthKit, useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { syncCurrentUser } from "@/app/actions/auth";
+import { safeReturnTo } from "@/lib/auth/return-to";
 
 export type UserRole = "user" | "moderator" | "admin" | "super_admin";
 
@@ -146,13 +147,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     (returnUrl?: string) => {
-      if (returnUrl && typeof window !== "undefined") {
-        const isRelativePath = returnUrl.startsWith("/") && !returnUrl.startsWith("//");
-        if (isRelativePath) {
-          localStorage.setItem("auth_redirect", returnUrl);
-        }
-      }
-      router.push("/auth/signin");
+      // Hand the deep-link straight to the hosted AuthKit entry as a query
+      // param — the route re-clamps it and WorkOS round-trips it back through
+      // /callback. safeReturnTo guards against open redirects.
+      const returnTo = safeReturnTo(returnUrl);
+      router.push(`/auth/hosted?return_to=${encodeURIComponent(returnTo)}`);
     },
     [router],
   );
@@ -177,8 +176,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Stay "loading" until the first identity sync resolves when a user is
   // expected (WorkOS session or dev bypass). Without this, there's a tick
   // where authKitLoading is already false but the sync hasn't set nhimbeUser
-  // yet — AuthGuard would briefly see "not authenticated" and redirect a
-  // genuinely signed-in user to /auth/signin.
+  // yet — AuthGuard would briefly see "not authenticated" and bounce a
+  // genuinely signed-in user out to the hosted AuthKit UI.
   const isLoading =
     authKitLoading || syncing || ((!!workosUser || devBypass) && !hasSynced);
   const isAuthenticated = (!!workosUser || devBypass) && !!nhimbeUser;
