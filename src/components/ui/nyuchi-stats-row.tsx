@@ -62,6 +62,26 @@ const gridColsMap = {
   4: "grid-cols-2 sm:grid-cols-4",
 } as const;
 
+/** A stat block wrapper: a Next.js Link when `href` is set, else a div. */
+function StatShell({
+  href,
+  className,
+  children,
+}: {
+  href?: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  return <div className={className}>{children}</div>;
+}
+
 function NyuchiStatsRow({
   loading = false,
   stats,
@@ -109,11 +129,10 @@ function NyuchiStatsRow({
         const isNegativeTrend = stat.trend?.startsWith("-");
 
         if (isGrid) {
-          const GridTag = stat.href ? Link : "div";
           return (
-            <GridTag
+            <StatShell
               key={i}
-              {...(stat.href ? { href: stat.href } : {})}
+              href={stat.href}
               className={cn(
                 "flex flex-col gap-2 rounded-[var(--radius-card,14px)] bg-card p-4 ring-1 ring-foreground/10",
                 stat.href && "transition-colors hover:ring-primary/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]",
@@ -141,15 +160,14 @@ function NyuchiStatsRow({
               </div>
               <div className="text-2xl font-bold text-foreground">{stat.value}</div>
               <div className="text-xs text-muted-foreground">{stat.label}</div>
-            </GridTag>
+            </StatShell>
           );
         }
 
-        const InlineTag = stat.href ? Link : "div";
         return (
-          <InlineTag
+          <StatShell
             key={i}
-            {...(stat.href ? { href: stat.href } : {})}
+            href={stat.href}
             className={cn(
               "flex min-w-[120px] items-center gap-2",
               stat.href &&
@@ -179,7 +197,7 @@ function NyuchiStatsRow({
                 )}
               </div>
             </div>
-          </InlineTag>
+          </StatShell>
         );
       })}
     </div>

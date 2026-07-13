@@ -20,7 +20,7 @@ type FactCheckStatus = "verified" | "disputed" | "unverified" | "false" | "pendi
 
 const factCheckConfig: Record<
   FactCheckStatus,
-  { label: string; color: string; icon: React.ComponentType<{ className?: string }> }
+  { label: string; color: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }
 > = {
   verified: { label: "Verified", color: "var(--color-malachite)", icon: CheckCircle },
   disputed: { label: "Disputed", color: "var(--color-gold)", icon: AlertTriangle },
