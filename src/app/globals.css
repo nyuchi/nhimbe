@@ -128,11 +128,15 @@
   --lh-body:    1.6;
   --lh-small:   1.5;
 
-  /* ─── Radius — ecosystem numbers 7/12/14/17 + pill ────────────────── */
+  /* ─── Radius — ecosystem numbers 7/12/14/17 + pill ──────────────────
+   * mzizi doctrine 4.1.0: --radius-base (14) and --radius-2xl (17) are
+   * aliases for --radius-lg / --radius-xl. Buttons and inputs are pill. */
   --radius-sm:     7px;
   --radius-md:     12px;
+  --radius-base:   14px;
   --radius-lg:     14px;
   --radius-xl:     17px;
+  --radius-2xl:    17px;
   --radius-full:   9999px;
   --radius-circle: 50%;
 
@@ -455,15 +459,19 @@
   --font-sans: "Noto Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: "Noto Serif", ui-serif, Georgia, serif;
 
-  /* Radii — ecosystem numbers + legacy aliases */
+  /* Radii — ecosystem numbers + legacy aliases.
+   * mzizi doctrine 4.1.0: buttons AND inputs are pill-shaped (radius-full).
+   * --radius-base / --radius-2xl are doctrine aliases for --radius-lg / --radius-xl. */
   --radius-sm: 7px;
   --radius-md: 12px;
+  --radius-base: 14px;
   --radius-lg: 14px;
   --radius-xl: 17px;
+  --radius-2xl: 17px;
   --radius-full: 9999px;
-  --radius-button: 12px;
-  --radius-card: 16px;
-  --radius-input: 8px;
+  --radius-button: 9999px;
+  --radius-card: 14px;
+  --radius-input: 9999px;
   --radius-badge: 9999px;
 }
 
