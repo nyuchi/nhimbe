@@ -16,7 +16,8 @@ import type { NextConfig } from "next";
  *     fetch; listed in connect-src for defence in depth.
  *   - Mukoko weather embed (weather.mukoko.com) — framed weather widget.
  *   - Cloudflare R2 assets (assets-s001.mukoko.com and the *.mukoko.com zone)
- *   - WorkOS AuthKit (api.workos.com + the identity.nyuchi.com custom domain)
+ *   - WorkOS AuthKit (api.workos.com + the authenticate.nyuchi.com custom API
+ *     domain + the identity.nyuchi.com AuthKit domain — hosted UI / OAuth)
  *
  * `script-src` still needs `'unsafe-inline'`/`'unsafe-eval'` because the app
  * does not yet emit per-request nonces; tightening to a nonce/`strict-dynamic`
@@ -34,7 +35,7 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: blob: https: https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://*.tile-cyclosm.openstreetmap.fr https://*.tile.opentopomap.org",
   "font-src 'self' data: https://fonts.gstatic.com",
-  "connect-src 'self' https://api.workos.com https://identity.nyuchi.com https://nominatim.openstreetmap.org https://weather.mukoko.com https://*.mukoko.com",
+  "connect-src 'self' https://api.workos.com https://authenticate.nyuchi.com https://identity.nyuchi.com https://nominatim.openstreetmap.org https://weather.mukoko.com https://*.mukoko.com",
   "frame-src 'self' https://weather.mukoko.com",
   "worker-src 'self' blob:",
   "manifest-src 'self'",
