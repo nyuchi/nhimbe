@@ -79,3 +79,26 @@ describe("mzizi doctrine 4.1.0 tokens", () => {
     expect(css).toContain("--h-input:");
   });
 });
+
+describe("mzizi doctrine 4.2.0 washed refresh", () => {
+  it("defines the --wash cover-ground token as a surface + accent mix", () => {
+    // The wash mixes the active surface with the event accent (~7% / ~12%).
+    expect(css).toMatch(/--wash:/);
+    expect(css).toMatch(/--wash:\s*color-mix\(in srgb, var\(--event-primary\) 12%, var\(--surface\)\)/);
+    expect(css).toMatch(/--wash:\s*color-mix\(in srgb, var\(--event-primary\) 7%, var\(--surface\)\)/);
+  });
+
+  it("paints the event-themed page ground with the wash", () => {
+    expect(css).toMatch(/\.event-themed-page\s*\{[^}]*background:\s*var\(--wash\)/s);
+  });
+
+  it("selects the active event palette from the wrapper's light/dark vars", () => {
+    expect(css).toMatch(/--event-primary:\s*var\(--ev-accent-d/);
+    expect(css).toMatch(/\.light \.event-themed-page[^}]*--event-primary:\s*var\(--ev-accent-l/s);
+  });
+
+  it("still keeps tanzanite as the brand primary after the refresh", () => {
+    expect(css).toMatch(/--primary:\s*var\(--tanzanite\)/);
+    expect(css).not.toMatch(/--primary:\s*var\(--cobalt\)/);
+  });
+});
