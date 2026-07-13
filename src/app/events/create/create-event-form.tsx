@@ -29,6 +29,7 @@ import { ThemeSelector } from "./theme-selector";
 import { EventOptionsCard } from "./event-options-card";
 import { FormFieldRow } from "./form-field-row";
 import { PublishBar } from "@/components/ui/nyuchi-create-listing";
+import { NyuchiSuccessScreen } from "@/components/ui/nyuchi-success-screen";
 import { WizardStepIndicator } from "./wizard-step-indicator";
 import { HostModePicker, type HostMode } from "./host-mode-picker";
 
@@ -149,6 +150,7 @@ export default function CreateEventForm() {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
 
   // Hosting (step 3)
   const [hostMode, setHostMode] = useState<HostMode>("person");
@@ -381,7 +383,7 @@ export default function CreateEventForm() {
       });
 
       setFormTouched(false);
-      router.push(`/events/${result.id}`);
+      setCreated({ id: result.id, name: eventName.trim() || "Your event" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create event. Please try again.");
     } finally {
@@ -391,6 +393,22 @@ export default function CreateEventForm() {
   };
 
   const publishLabel = uploading ? "Uploading image…" : step < 3 ? "Continue" : "Publish nhimbe";
+
+  if (created) {
+    return (
+      <div className="max-w-150 mx-auto px-4 py-12">
+        <NyuchiSuccessScreen
+          title="Event published!"
+          message={`${created.name} is live. Share it with your community to start getting RSVPs.`}
+          primaryAction={{
+            label: "View event",
+            onClick: () => router.push(`/events/${created.id}`),
+          }}
+          secondaryAction={{ label: "My events", onClick: () => router.push("/my-events") }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-150 mx-auto px-4">
