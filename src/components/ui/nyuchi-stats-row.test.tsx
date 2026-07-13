@@ -40,6 +40,13 @@ describe("NyuchiStatsRow", () => {
     expect(el?.className).toContain("grid-cols-3");
   });
 
+  it("renders a stat block as a link when href is set", () => {
+    render(<NyuchiStatsRow stats={[{ icon: Users, label: "Members", value: 10, href: "/admin/users" }]} layout="grid" />);
+    const link = document.querySelector('a[href="/admin/users"]');
+    expect(link).toBeTruthy();
+    expect(link?.textContent).toContain("Members");
+  });
+
   it("renders a loading skeleton", () => {
     render(<NyuchiStatsRow stats={stats} loading />);
     const el = row();

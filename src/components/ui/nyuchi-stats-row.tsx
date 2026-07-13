@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 import { useNyuchiHarness } from "@/components/ui/harness";
@@ -43,6 +44,8 @@ interface StatItem {
   color?: string;
   /** Trend string (e.g. "+12%", "-3%") — auto-coloured green/red. */
   trend?: string;
+  /** Optional destination — renders the stat block as a Next.js Link. */
+  href?: string;
 }
 
 interface NyuchiStatsRowProps extends VariantProps<typeof layoutVariants> {
@@ -106,10 +109,15 @@ function NyuchiStatsRow({
         const isNegativeTrend = stat.trend?.startsWith("-");
 
         if (isGrid) {
+          const GridTag = stat.href ? Link : "div";
           return (
-            <div
+            <GridTag
               key={i}
-              className="flex flex-col gap-2 rounded-[var(--radius-card,14px)] bg-card p-4 ring-1 ring-foreground/10"
+              {...(stat.href ? { href: stat.href } : {})}
+              className={cn(
+                "flex flex-col gap-2 rounded-[var(--radius-card,14px)] bg-card p-4 ring-1 ring-foreground/10",
+                stat.href && "transition-colors hover:ring-primary/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]",
+              )}
             >
               <div className="flex items-start justify-between">
                 <div
@@ -133,12 +141,21 @@ function NyuchiStatsRow({
               </div>
               <div className="text-2xl font-bold text-foreground">{stat.value}</div>
               <div className="text-xs text-muted-foreground">{stat.label}</div>
-            </div>
+            </GridTag>
           );
         }
 
+        const InlineTag = stat.href ? Link : "div";
         return (
-          <div key={i} className="flex min-w-[120px] items-center gap-2">
+          <InlineTag
+            key={i}
+            {...(stat.href ? { href: stat.href } : {})}
+            className={cn(
+              "flex min-w-[120px] items-center gap-2",
+              stat.href &&
+                "rounded-full transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]",
+            )}
+          >
             <div
               className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-inner,7px)]"
               style={{ backgroundColor: `color-mix(in srgb, ${iconColor} 20%, transparent)` }}
@@ -162,7 +179,7 @@ function NyuchiStatsRow({
                 )}
               </div>
             </div>
-          </div>
+          </InlineTag>
         );
       })}
     </div>
