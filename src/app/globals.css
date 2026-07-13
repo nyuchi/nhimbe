@@ -631,27 +631,42 @@ a {
   background-color: var(--primary-foreground);
 }
 
-/* Event Page Theme System - defaults on :root so vars always resolve,
-   even if a component renders outside EventThemeWrapper context.
-   EventThemeWrapper overrides these via inline styles. */
+/* ─── Event Page Theme System — mzizi 4.2.0 washed themes ──────────────────
+ * EventThemeWrapper emits the theme's light + dark palette values as inline
+ * CSS vars (--ev-*-l / --ev-*-d, deterministic → no hydration mismatch); here
+ * we pick the active mode. The `--wash` page ground is the active surface
+ * mixed with the theme accent (~7% light / ~12% dark) — subtle + AAA-safe.
+ * Defaults on :root keep the vars resolving outside the wrapper. */
 :root {
-  --event-primary: #B388FF;
-  --event-secondary: #7C4DFF;
-  --event-accent: #4B0082;
-  --event-surface: rgba(75, 0, 130, 0.18);
-  --event-surface-hover: rgba(75, 0, 130, 0.28);
-  --event-gradient: linear-gradient(135deg, #4B0082, #7C4DFF);
-  --event-border: rgba(179, 136, 255, 0.22);
+  --event-primary:       #B388FF;
+  --event-on-wash:       #E1BEE7;
+  --event-secondary:     #7C4DFF;
+  --event-accent:        #4B0082;
+  --event-gradient:      linear-gradient(135deg, #4B0082, #B388FF);
+  --event-surface:       color-mix(in srgb, var(--event-primary) 16%, transparent);
+  --event-surface-hover: color-mix(in srgb, var(--event-primary) 26%, transparent);
+  --event-border:        color-mix(in srgb, var(--event-primary) 24%, transparent);
+  --wash:                var(--surface);
 }
 
-.light {
-  --event-primary: #4B0082;
-  --event-secondary: #5E35B1;
-  --event-accent: #3A0068;
-  --event-surface: rgba(75, 0, 130, 0.08);
-  --event-surface-hover: rgba(75, 0, 130, 0.15);
-  --event-gradient: linear-gradient(135deg, #3A0068, #4B0082);
-  --event-border: rgba(75, 0, 130, 0.14);
+/* Active mode = dark by default (matches the dark-first theme snapshot). */
+.event-themed-page {
+  --event-primary:  var(--ev-accent-d, #B388FF);
+  --event-on-wash:  var(--ev-onwash-d, #E1BEE7);
+  --event-secondary: var(--ev-onwash-d, #7C4DFF);
+  --event-accent:   var(--ev-accent-d, #4B0082);
+  --event-gradient: var(--ev-grad-d, linear-gradient(135deg, #4B0082, #B388FF));
+  --wash: color-mix(in srgb, var(--event-primary) 12%, var(--surface));
+  background: var(--wash);
+}
+
+.light .event-themed-page {
+  --event-primary:  var(--ev-accent-l, #4B0082);
+  --event-on-wash:  var(--ev-onwash-l, #2E004D);
+  --event-secondary: var(--ev-onwash-l, #5E35B1);
+  --event-accent:   var(--ev-accent-l, #3A0068);
+  --event-gradient: var(--ev-grad-l, linear-gradient(135deg, #3A0068, #4B0082));
+  --wash: color-mix(in srgb, var(--event-primary) 7%, var(--surface));
 }
 
 /* Event theme utilities */
