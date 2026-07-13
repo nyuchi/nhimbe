@@ -228,6 +228,11 @@ Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/se
 - **`"use client"`** directive required for interactive components.
 - **WCAG AAA** — 7:1+ contrast for primary/secondary text, 44px touch targets.
 - **Dark/light modes** via `.dark`/`.light` classes, design tokens in `globals.css`.
+- **Design tokens follow the mzizi doctrine 4.1.0** (`src/app/globals.css`, guarded by `src/__tests__/design-tokens.test.ts`), applied **additively** with deliberate nhimbe divergences:
+  - **Pill inputs (the 4.1.0 headline):** `--radius-button` and `--radius-input` are `9999px` — Button, Input and the Select trigger render as **pills** (`rounded-full`); Textarea uses `rounded-2xl` (17px) to avoid a growing-stadium artifact. Per-component radii: card 14px (`--radius-lg`), dialog/tabs 17px (`--radius-xl`), checkbox 7px (`--radius-sm`). `--radius-base` (14) / `--radius-2xl` (17) are doctrine aliases.
+  - **tanzanite stays the brand `--primary`** in every theme (cobalt is the "exceptional" mineral for links/info only — `--nh-secondary`/`--info`). Do **not** switch `--primary` to cobalt.
+  - **Compact touch-target scale is intentional** (`--touch-target-lg: 48px` / `40px` / `34px`); blanket min-heights are deliberately **not** enforced (see the comment in `globals.css`). Control heights are token-driven (`--h-button-default`/`--h-button-sm`/`--h-input`, currently 36/32/36) — the single knob to adopt the doctrine's 56/48 later without touching components.
+  - Extended spacing ladder (`*-plus` half-steps, `--space-4xl/5xl/6xl`), type tokens (`--fs-display-sm/h6/code`), the `--font-mono` (JetBrains Mono, loaded via `next/font` in `layout.tsx`), shadow rungs (`--shadow-none/xs/inner/focus-ring`), and motion aliases (`--motion-duration-*`, `--motion-ease-spring`, `--motion-stagger-*`) are all present.
 - **Schema.org alignment** — events and users modeled after schema.org specs.
 - **Structured logging** — `[mukoko]` prefix on all log output.
 - **Path alias** — `@/*` maps to `./src/*`.

@@ -52,25 +52,46 @@
   --color-sunset:   var(--heritage-sunset);
   --color-river:    var(--heritage-river);
 
-  /* Spacing scale */
-  --space-xs:  0.25rem;
-  --space-sm:  0.5rem;
-  --space-md:  0.75rem;
-  --space-base: 1rem;
-  --space-lg:  1.5rem;
-  --space-xl:  2rem;
-  --space-2xl: 3rem;
-  --space-3xl: 4rem;
+  /* Spacing scale — mzizi doctrine 4.1.0 extended ladder.
+   * The *-plus half-steps and 4xl/5xl/6xl are 4.1.0 additions; the base rungs
+   * are unchanged. */
+  --space-xxs:       0.125rem;
+  --space-xs:        0.25rem;
+  --space-xs-plus:   0.375rem;
+  --space-sm:        0.5rem;
+  --space-sm-plus:   0.625rem;
+  --space-md:        0.75rem;
+  --space-base:      1rem;
+  --space-base-plus: 1.25rem;
+  --space-lg:        1.5rem;
+  --space-xl:        2rem;
+  --space-xl-plus:   2.5rem;
+  --space-2xl:       3rem;
+  --space-2xl-plus:  3.5rem;
+  --space-3xl:       4rem;
+  --space-4xl:       5rem;
+  --space-5xl:       6rem;
+  --space-6xl:       8rem;
 
-  /* Motion */
+  /* Motion — nhimbe's --motion-* durations, plus mzizi doctrine 4.1.0
+   * --motion-duration-* aliases, a spring ease, and stagger steps so both
+   * naming schemes resolve. */
   --motion-quick:    100ms;
   --motion-standard: 200ms;
   --motion-emphasis: 350ms;
   --motion-dramatic: 500ms;
+  --motion-duration-quick:    var(--motion-quick);
+  --motion-duration-standard: var(--motion-standard);
+  --motion-duration-emphasis: var(--motion-emphasis);
+  --motion-duration-dramatic: var(--motion-dramatic);
   --easing-entrance: cubic-bezier(0.0, 0.0, 0.2, 1);
   --easing-exit:     cubic-bezier(0.4, 0.0, 1, 1);
   --easing-standard: cubic-bezier(0.4, 0.0, 0.2, 1);
   --easing-spring:   cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --motion-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-stagger-tight: 30ms;
+  --motion-stagger-base:  50ms;
+  --motion-stagger-loose: 80ms;
 
   /* Touch targets / component sizing — compact 3-tier scale.
    * lg  48px  primary mobile CTA (hero, FAB, bottom action bar)
@@ -81,6 +102,16 @@
   --touch-target:    40px;
   --touch-target-sm: 34px;
   --min-touch:       40px;
+
+  /* Control heights — single knob for the deliberate nhimbe divergence from
+   * mzizi doctrine 4.1.0. The doctrine specifies default 56px / min 48px for
+   * buttons and inputs; nhimbe keeps its compact scale (36/32) for now. To
+   * adopt the doctrine sizing later, bump these three values in one place —
+   * Button (default/sm) and Input read their height from these tokens.
+   *   doctrine: --h-button-default: 3.5rem; --h-button-sm: 3rem; --h-input: 3.5rem; */
+  --h-button-default: 2.25rem;  /* 36px — nhimbe compact (doctrine 56px) */
+  --h-button-sm:      2rem;     /* 32px — nhimbe compact (doctrine 48px) */
+  --h-input:          2.25rem;  /* 36px — nhimbe compact (doctrine 56px) */
   --header-height:    52px;
   --bottom-nav-height: 80px;
   --page-max-width:    1280px;
@@ -108,40 +139,55 @@
    * --nh-* is set per-theme block below so dark/light values flow.
    */
 
-  /* ─── Typography scale (design system canonical) ───────────────────── */
-  --fs-display: 4.5rem;   /* 72 — serif 700 */
-  --fs-h1:      3rem;     /* 48 — serif 700 */
-  --fs-h2:      2.25rem;  /* 36 — serif 600 */
-  --fs-h3:      1.875rem; /* 30 — serif 600 */
-  --fs-h4:      1.5rem;   /* 24 — sans 600 */
-  --fs-h5:      1.25rem;  /* 20 — sans 600 */
-  --fs-body-lg: 1.125rem; /* 18 — sans 400 */
-  --fs-body:    1rem;     /* 16 — sans 400 */
-  --fs-small:   0.875rem; /* 14 — sans 400 */
-  --fs-caption: 0.75rem;  /* 12 — sans 400 */
+  /* ─── Typography scale (design system canonical) ─────────────────────
+   * mzizi doctrine 4.1.0 adds --fs-display-sm, --fs-h6, --fs-code (+ --lh-h6). */
+  --fs-display:    4.5rem;   /* 72 — serif 700 */
+  --fs-display-sm: 3.75rem;  /* 60 — serif 700 */
+  --fs-h1:         3rem;     /* 48 — serif 700 */
+  --fs-h2:         2.25rem;  /* 36 — serif 600 */
+  --fs-h3:         1.875rem; /* 30 — serif 600 */
+  --fs-h4:         1.5rem;   /* 24 — sans 600 */
+  --fs-h5:         1.25rem;  /* 20 — sans 600 */
+  --fs-h6:         1rem;     /* 16 — sans 600 */
+  --fs-body-lg:    1.125rem; /* 18 — sans 400 */
+  --fs-body:       1rem;     /* 16 — sans 400 */
+  --fs-small:      0.875rem; /* 14 — sans 400 */
+  --fs-caption:    0.75rem;  /* 12 — sans 400 */
+  --fs-code:       0.875rem; /* 14 — mono 400 */
   --lh-display: 1.1;
   --lh-h1:      1.15;
   --lh-h2:      1.2;
   --lh-h3:      1.25;
   --lh-h4:      1.3;
   --lh-h5:      1.4;
+  --lh-h6:      1.4;
   --lh-body:    1.6;
   --lh-small:   1.5;
 
-  /* ─── Radius — ecosystem numbers 7/12/14/17 + pill ────────────────── */
+  /* ─── Radius — ecosystem numbers 7/12/14/17 + pill ──────────────────
+   * mzizi doctrine 4.1.0: --radius-base (14) and --radius-2xl (17) are
+   * aliases for --radius-lg / --radius-xl. Buttons and inputs are pill. */
   --radius-sm:     7px;
   --radius-md:     12px;
+  --radius-base:   14px;
   --radius-lg:     14px;
   --radius-xl:     17px;
+  --radius-2xl:    17px;
   --radius-full:   9999px;
   --radius-circle: 50%;
 
-  /* ─── Shadows / rings ─────────────────────────────────────────────── */
+  /* ─── Shadows / rings ───────────────────────────────────────────────
+   * mzizi doctrine 4.1.0 elevation rungs: none / xs / sm / md / lg / xl,
+   * plus inner (inset) and a focus-ring token (2px bg gap + 4px primary). */
   --ring-1:      0 0 0 1px rgba(10,10,10,0.06);
+  --shadow-none: none;
+  --shadow-xs:   0 1px 2px rgba(20,20,19,0.04);
   --shadow-sm:   0 1px 2px rgba(0,0,0,0.15);
   --shadow-md:   0 4px 12px rgba(0,0,0,0.2);
   --shadow-lg:   0 8px 24px rgba(0,0,0,0.25);
   --shadow-xl:   0 20px 60px rgba(0,0,0,0.4);
+  --shadow-inner: inset 0 2px 4px rgba(20,20,19,0.06);
+  --shadow-focus-ring: 0 0 0 2px var(--background), 0 0 0 4px var(--primary);
   --shadow-glow: 0 4px 20px rgba(179,136,255,0.30);  /* tanzanite FAB glow */
 
   /* ─────────────────────────────────────────────────────────────────
@@ -451,19 +497,24 @@
   --color-nh-accent: var(--nh-accent);
   --color-nh-secondary: var(--nh-secondary);
 
-  /* Typography */
+  /* Typography — sans (body), serif (headings), mono (code/kiosk codes) */
   --font-sans: "Noto Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-serif: "Noto Serif", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
 
-  /* Radii — ecosystem numbers + legacy aliases */
+  /* Radii — ecosystem numbers + legacy aliases.
+   * mzizi doctrine 4.1.0: buttons AND inputs are pill-shaped (radius-full).
+   * --radius-base / --radius-2xl are doctrine aliases for --radius-lg / --radius-xl. */
   --radius-sm: 7px;
   --radius-md: 12px;
+  --radius-base: 14px;
   --radius-lg: 14px;
   --radius-xl: 17px;
+  --radius-2xl: 17px;
   --radius-full: 9999px;
-  --radius-button: 12px;
-  --radius-card: 16px;
-  --radius-input: 8px;
+  --radius-button: 9999px;
+  --radius-card: 14px;
+  --radius-input: 9999px;
   --radius-badge: 9999px;
 }
 
