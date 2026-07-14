@@ -42,6 +42,7 @@ Drive the browser with `playwright-core` + the pre-installed Chromium at
   `sed 's/<!-- -->//g'` before grepping page HTML.
 - AuthKit's `getAuthAction` POSTs 500 on every page load without WorkOS env —
   pre-existing sandbox noise, not a finding.
-- `npm run build` with a reachable Mongo containing a published upcoming event
-  fails prerendering `/` ("Functions cannot be passed to Client Components") —
-  pre-existing on main; build without `MONGODB_URI` to avoid it.
+- `npm run build` against a reachable Mongo with a published upcoming event now
+  renders `/` cleanly (issue #71 fixed — `home-landing.tsx` no longer passes a
+  Lucide icon function into the client `NyuchiListingCard`). When adding props to
+  a `"use client"` component from an RSC, keep them plain/serializable.
