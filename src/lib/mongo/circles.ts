@@ -34,6 +34,21 @@ function isDiscoverable(t: CircleDoc["circleType"]): t is CircleJoinPolicy {
 }
 
 /**
+ * Tiny id→name resolve for provenance links (e.g. a calendar's
+ * "from <circle>" line). Secret circles are never named to outsiders.
+ */
+export async function getCircleSummary(
+  circleId: string,
+): Promise<{ id: string; name: string } | null> {
+  const col = await circlesCollection();
+  const doc = await col.findOne(
+    { _id: circleId, isActive: true, circleType: { $in: ["public", "private", "broadcast"] } },
+    { projection: { name: 1 } },
+  );
+  return doc ? { id: doc._id, name: doc.name } : null;
+}
+
+/**
  * The most active discoverable circles (by members, then posts). Secret
  * circles are excluded at the query, never just at the mapper.
  */
