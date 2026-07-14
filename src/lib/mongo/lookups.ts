@@ -9,9 +9,16 @@
 
 import "server-only";
 import { eventsCollection, getCollection, DB } from "./databases";
+import {
+  PUBLISHED_STATUSES,
+  publishedVisibleMatch,
+  cityLocalityExpr,
+  cityCountryExpr,
+  cityLocalityFilter,
+} from "./event-filters";
 import type { Category, CommunityStats } from "@/lib/api";
 
-const PUBLISHED = ["published", "live"];
+const PUBLISHED = [...PUBLISHED_STATUSES];
 
 interface InterestCategoryDoc {
   slug: string;
@@ -43,7 +50,9 @@ export async function listCategoriesWithCounts(): Promise<CategoryWithCount[]> {
   const [categories, col] = await Promise.all([listCategories(), eventsCollection()]);
   const rows = await col
     .aggregate<{ _id: string; count: number }>([
-      { $match: { status: { $in: PUBLISHED }, startDate: { $gte: new Date() } } },
+      // Same published-AND-visible gate the /events drill-down applies, so a
+      // tile's count excludes private events exactly as its drill-down does (L1).
+      { $match: publishedVisibleMatch() },
       { $unwind: "$tags" },
       { $group: { _id: "$tags", count: { $sum: 1 } } },
     ])
@@ -67,13 +76,12 @@ export async function listCitiesWithCounts(limit = 12): Promise<CityWithCount[]>
   const col = await eventsCollection();
   const rows = await col
     .aggregate<{ _id: { city: string | null; country: string | null }; count: number }>([
-      { $match: { status: { $in: PUBLISHED }, startDate: { $gte: new Date() } } },
+      // Published-AND-visible gate (L1) + the canonical-first city path (M3), so
+      // each city card's count matches its `/events?city=` drill-down exactly.
+      { $match: publishedVisibleMatch() },
       {
         $group: {
-          _id: {
-            city: { $ifNull: ["$location.addressLocality", "$location.address.addressLocality"] },
-            country: { $ifNull: ["$location.addressCountry", "$location.address.addressCountry"] },
-          },
+          _id: { city: cityLocalityExpr, country: cityCountryExpr },
           count: { $sum: 1 },
         },
       },
@@ -123,8 +131,14 @@ export async function getCommunityStats(city?: string): Promise<CommunityStats> 
     popularVenues: [],
   };
   const col = await eventsCollection();
-  const filter: Record<string, unknown> = { status: { $in: PUBLISHED } };
-  if (city) filter["location.address.addressLocality"] = city;
+  const filter: Record<string, unknown> = {
+    status: { $in: PUBLISHED },
+    // Exclude private events, matching the discovery counts and drill-downs.
+    "mukoko.visibility": { $ne: "private" },
+  };
+  // Canonical-first city path (M3): the same either-path match the `/events`
+  // city drill-down uses, so community totals agree with the listing.
+  if (city) Object.assign(filter, cityLocalityFilter(city));
   const totalEvents = await col.countDocuments(filter);
   return { ...empty, totalEvents };
 }
