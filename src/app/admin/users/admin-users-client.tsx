@@ -19,19 +19,9 @@ import {
 } from "lucide-react";
 import { fetchAdminUsers, suspendUser, activateUser } from "@/app/actions/admin";
 
-export interface AdminUser {
-  id: string;
-  email: string;
-  name: string;
-  alternateName?: string;
-  image?: string;
-  addressLocality?: string;
-  addressCountry?: string;
-  eventsAttended: number;
-  eventsHosted: number;
-  dateCreated: string;
-  status: "active" | "suspended" | "pending";
-}
+import type { AdminUser } from "@/lib/mongo/admin-types";
+
+export type { AdminUser };
 
 export interface AdminUsersClientProps {
   /** Pre-fetched first page rendered by the RSC shell. */

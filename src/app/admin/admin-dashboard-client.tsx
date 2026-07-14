@@ -15,38 +15,14 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-export interface DashboardStats {
-  totalUsers: number;
-  totalEvents: number;
-  totalRegistrations: number;
-  activeEvents: number;
-  userGrowth: number;
-  eventGrowth: number;
-  recentViews: number;
-  viewsGrowth: number;
-}
+import type {
+  DashboardStats,
+  RecentEvent,
+  RecentUser,
+  SupportTicket,
+} from "@/lib/mongo/admin-types";
 
-export interface RecentEvent {
-  id: string;
-  title: string;
-  date: string;
-  attendeeCount: number;
-  status: "upcoming" | "ongoing" | "past";
-}
-
-export interface RecentUser {
-  id: string;
-  name: string;
-  email: string;
-  createdAt: string;
-}
-
-export interface SupportTicket {
-  id: string;
-  subject: string;
-  status: "open" | "pending" | "resolved";
-  createdAt: string;
-}
+export type { DashboardStats, RecentEvent, RecentUser, SupportTicket };
 
 export interface AdminDashboardClientProps {
   stats: DashboardStats;

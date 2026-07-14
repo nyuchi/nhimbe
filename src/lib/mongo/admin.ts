@@ -1,36 +1,66 @@
 /**
- * Server-side admin read paths (Vercel server runtime → MongoDB).
+ * Server-side admin read paths (server runtime → MongoDB).
  *
- * These back the four /admin/* pages after the dead Cloudflare worker
- * (`${API_URL}/api/admin/*`) was retired: the dashboard counts, the paged
- * user/event tables, and the (not-yet-modelled) support queue. Everything runs
+ * These back the standalone admin app (admin/ — its own Vercel project): the
+ * overview counts, the paged people/event tables, the entity/circle/calendar
+ * tables, and the (not-yet-modelled) support queue. Everything runs
  * server-side — `import "server-only"` keeps the Mongo accessors out of any
- * client bundle. The role gate itself lives in `requireAdmin()` and in the
- * server actions that wrap these reads (`src/app/actions/admin.ts`).
+ * client bundle. The role gate itself lives in the admin app's
+ * `requireAdmin()` (admin/src/lib/require-admin.ts) and in the server actions
+ * that wrap these reads (admin/src/app/actions/*).
  *
- * The return shapes intentionally reuse the client components' exported types
- * (AdminUser, AdminEvent, dashboard tiles) so the RSC shells can hand the data
- * straight to the client without a translation layer.
+ * The return shapes live in `./admin-types` (client-safe, no server-only) so
+ * the admin app's RSC shells can hand the data straight to their client table
+ * components without a translation layer.
  */
 
 import "server-only";
 import type { Filter } from "mongodb";
 import {
+  calendarsCollection,
+  circlesCollection,
   entitiesCollection,
+  entityMembershipsCollection,
   eventsCollection,
   personsCollection,
   placesCollection,
   rsvpsCollection,
 } from "./databases";
 import { mapEventDocToApi, type EventRelations } from "./mappers";
-import type { EntityDoc, EventDoc, PersonDoc, PlaceDoc } from "./types";
-import type { AdminUser } from "@/app/admin/users/admin-users-client";
-import type { AdminEvent } from "@/app/admin/events/admin-events-client";
 import type {
+  CalendarDoc,
+  CircleDoc,
+  EntityDoc,
+  EntityMembershipDoc,
+  EventDoc,
+  PersonDoc,
+  PlaceDoc,
+} from "./types";
+import type {
+  AdminCalendar,
+  AdminCircle,
+  AdminEntity,
+  AdminEntityMember,
+  AdminEvent,
+  AdminUser,
   DashboardStats,
   RecentEvent,
   RecentUser,
-} from "@/app/admin/admin-dashboard-client";
+} from "./admin-types";
+
+// Re-export the view-model types so existing `from "./admin"` type imports
+// keep working server-side; client components import from "./admin-types".
+export type {
+  AdminCalendar,
+  AdminCircle,
+  AdminEntity,
+  AdminEntityMember,
+  AdminEvent,
+  AdminUser,
+  DashboardStats,
+  RecentEvent,
+  RecentUser,
+};
 
 /** A published, publicly-listable event is published or live. */
 const PUBLISHED_STATUSES = ["published", "live"] as const;
@@ -115,17 +145,31 @@ function toRecentUser(doc: PersonDoc): RecentUser {
  * the retired worker) so they're reported as 0.
  */
 export async function getAdminStats(): Promise<AdminDashboardData> {
-  const [persons, events, rsvps] = await Promise.all([
+  const [persons, events, rsvps, entities, circles, calendars] = await Promise.all([
     personsCollection(),
     eventsCollection(),
     rsvpsCollection(),
+    entitiesCollection(),
+    circlesCollection(),
+    calendarsCollection(),
   ]);
 
-  const [totalUsers, totalEvents, activeEvents, totalRegistrations] = await Promise.all([
+  const [
+    totalUsers,
+    totalEvents,
+    activeEvents,
+    totalRegistrations,
+    totalEntities,
+    totalCircles,
+    totalCalendars,
+  ] = await Promise.all([
     persons.countDocuments({}),
     events.countDocuments({}),
     events.countDocuments({ status: { $in: [...PUBLISHED_STATUSES] } }),
     rsvps.countDocuments({}),
+    entities.countDocuments({}),
+    circles.countDocuments({}),
+    calendars.countDocuments({}),
   ]);
 
   const [recentEventDocs, recentUserDocs] = await Promise.all([
@@ -139,6 +183,9 @@ export async function getAdminStats(): Promise<AdminDashboardData> {
       totalEvents,
       totalRegistrations,
       activeEvents,
+      totalEntities,
+      totalCircles,
+      totalCalendars,
       // No analytics source post-worker-retirement — report neutral deltas.
       userGrowth: 0,
       eventGrowth: 0,
@@ -187,6 +234,7 @@ function toAdminUser(doc: PersonDoc): AdminUser {
     image: doc.picture ?? undefined,
     addressLocality: doc.addressLocality ?? undefined,
     addressCountry: doc.addressCountry ?? undefined,
+    role: typeof doc.role === "string" && doc.role ? doc.role : "user",
     // Per-user hosted/attended counts would be an N+1 fan-out across events +
     // rsvps; the table doesn't sort on them, so leave them at 0 for now.
     eventsAttended: 0,
@@ -323,6 +371,8 @@ async function docsToAdminEvents(docs: EventDoc[]): Promise<AdminEvent[]> {
       maximumAttendeeCapacity: api.maximumAttendeeCapacity,
       organizer: { name: api.organizer.name },
       status: adminEventStatus(doc),
+      lifecycleStatus: doc.status,
+      featured: Boolean((doc.mukoko as { featured?: unknown } | null | undefined)?.featured),
       dateCreated: api.dateCreated ?? "",
     };
   });
@@ -352,6 +402,211 @@ export async function listAdminEvents(
   ]);
 
   return { events: await docsToAdminEvents(docs), total };
+}
+
+// ── entities ────────────────────────────────────────────────────────
+
+export interface ListAdminEntitiesParams {
+  limit?: number;
+  offset?: number;
+  /** Case-insensitive match against name or slug. */
+  search?: string;
+}
+
+export interface AdminEntitiesResult {
+  entities: AdminEntity[];
+  total: number;
+}
+
+/**
+ * Page `entity.entities` with active-membership counts (one grouped `$in`
+ * aggregation — no per-row fan-out) and founder names resolved in a single
+ * `$in` query.
+ */
+export async function listAdminEntities(
+  params: ListAdminEntitiesParams = {},
+): Promise<AdminEntitiesResult> {
+  const limit = clamp(params.limit ?? 20, 1, 100);
+  const offset = Math.max(params.offset ?? 0, 0);
+
+  const filter: Filter<EntityDoc> = {};
+  if (params.search) {
+    const rx = escapeRegex(params.search);
+    filter.$or = [
+      { name: { $regex: rx, $options: "i" } },
+      { slug: { $regex: rx, $options: "i" } },
+    ];
+  }
+
+  const col = await entitiesCollection();
+  const [docs, total] = await Promise.all([
+    col.find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).toArray(),
+    col.countDocuments(filter),
+  ]);
+  if (docs.length === 0) return { entities: [], total };
+
+  const entityIds = docs.map((d) => d._id);
+  const founderIds = unique(docs.map((d) => d.founderPersonId).filter((v): v is string => !!v));
+
+  const [memberCounts, founders] = await Promise.all([
+    (await entityMembershipsCollection())
+      .aggregate<{ _id: string; count: number }>([
+        { $match: { entityId: { $in: entityIds }, isActive: true } },
+        { $group: { _id: "$entityId", count: { $sum: 1 } } },
+      ])
+      .toArray(),
+    founderIds.length
+      ? (await personsCollection()).find({ _id: { $in: founderIds } }).toArray()
+      : Promise.resolve([] as PersonDoc[]),
+  ]);
+
+  const countByEntity = new Map(memberCounts.map((m) => [m._id, m.count]));
+  const founderById = new Map(founders.map((p) => [p._id, p]));
+
+  return {
+    entities: docs.map((doc) => {
+      const founder = doc.founderPersonId ? founderById.get(doc.founderPersonId) : undefined;
+      return {
+        id: doc._id,
+        name: doc.name,
+        slug: doc.slug,
+        entityType: doc.entityType,
+        founderName: founder?.name ?? founder?.email ?? "—",
+        memberCount: countByEntity.get(doc._id) ?? 0,
+        isActive: doc.isActive,
+        dateCreated: (toDate(doc.createdAt) ?? new Date(0)).toISOString(),
+      };
+    }),
+    total,
+  };
+}
+
+/** Members of one entity (for the admin entity drill-down). */
+export async function listAdminEntityMembers(entityId: string): Promise<AdminEntityMember[]> {
+  const memberships: EntityMembershipDoc[] = await (await entityMembershipsCollection())
+    .find({ entityId })
+    .sort({ joinedAt: 1 })
+    .limit(100)
+    .toArray();
+  if (memberships.length === 0) return [];
+
+  const personIds = unique(memberships.map((m) => m.personId));
+  const persons = await (await personsCollection()).find({ _id: { $in: personIds } }).toArray();
+  const personById = new Map(persons.map((p) => [p._id, p]));
+
+  return memberships.map((m) => {
+    const person = personById.get(m.personId);
+    return {
+      personId: m.personId,
+      name: person?.name ?? person?.email ?? "Unknown",
+      email: person?.email ?? "",
+      membershipRole: m.membershipRole,
+      isActive: m.isActive,
+      joinedAt: (toDate(m.joinedAt) ?? new Date(0)).toISOString(),
+    };
+  });
+}
+
+// ── circles ─────────────────────────────────────────────────────────
+
+export interface ListAdminCirclesParams {
+  limit?: number;
+  offset?: number;
+  /** Case-insensitive match against name or slug. */
+  search?: string;
+}
+
+export interface AdminCirclesResult {
+  circles: AdminCircle[];
+  total: number;
+}
+
+/** Page `circles.circles` — visibility (circleType) + denormalized counts. */
+export async function listAdminCircles(
+  params: ListAdminCirclesParams = {},
+): Promise<AdminCirclesResult> {
+  const limit = clamp(params.limit ?? 20, 1, 100);
+  const offset = Math.max(params.offset ?? 0, 0);
+
+  const filter: Filter<CircleDoc> = {};
+  if (params.search) {
+    const rx = escapeRegex(params.search);
+    filter.$or = [
+      { name: { $regex: rx, $options: "i" } },
+      { slug: { $regex: rx, $options: "i" } },
+    ];
+  }
+
+  const col = await circlesCollection();
+  const [docs, total] = await Promise.all([
+    col.find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).toArray(),
+    col.countDocuments(filter),
+  ]);
+
+  return {
+    circles: docs.map((doc) => ({
+      id: doc._id,
+      name: doc.name,
+      slug: doc.slug,
+      circleType: doc.circleType,
+      memberCount: doc.memberCount ?? 0,
+      postCount: doc.postCount ?? 0,
+      isActive: doc.isActive,
+      dateCreated: (toDate(doc.createdAt) ?? new Date(0)).toISOString(),
+    })),
+    total,
+  };
+}
+
+// ── calendars ───────────────────────────────────────────────────────
+
+export interface ListAdminCalendarsParams {
+  limit?: number;
+  offset?: number;
+  /** Case-insensitive match against name or slug. */
+  search?: string;
+}
+
+export interface AdminCalendarsResult {
+  calendars: AdminCalendar[];
+  total: number;
+}
+
+/** Page `events.calendars` — visibility + denormalized follower/event counts. */
+export async function listAdminCalendars(
+  params: ListAdminCalendarsParams = {},
+): Promise<AdminCalendarsResult> {
+  const limit = clamp(params.limit ?? 20, 1, 100);
+  const offset = Math.max(params.offset ?? 0, 0);
+
+  const filter: Filter<CalendarDoc> = {};
+  if (params.search) {
+    const rx = escapeRegex(params.search);
+    filter.$or = [
+      { name: { $regex: rx, $options: "i" } },
+      { slug: { $regex: rx, $options: "i" } },
+    ];
+  }
+
+  const col = await calendarsCollection();
+  const [docs, total] = await Promise.all([
+    col.find(filter).sort({ followerCount: -1, createdAt: -1 }).skip(offset).limit(limit).toArray(),
+    col.countDocuments(filter),
+  ]);
+
+  return {
+    calendars: docs.map((doc) => ({
+      id: doc._id,
+      name: doc.name,
+      slug: doc.slug,
+      visibility: doc.visibility,
+      followerCount: doc.followerCount ?? 0,
+      eventCount: doc.eventCount ?? 0,
+      isActive: doc.isActive,
+      dateCreated: (toDate(doc.createdAt) ?? new Date(0)).toISOString(),
+    })),
+    total,
+  };
 }
 
 // ── support ─────────────────────────────────────────────────────────

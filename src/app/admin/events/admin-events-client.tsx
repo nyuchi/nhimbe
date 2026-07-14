@@ -22,27 +22,9 @@ import {
 import Link from "next/link";
 import { fetchAdminEvents, cancelEvent } from "@/app/actions/admin";
 
-export interface AdminEvent {
-  id: string;
-  name: string;
-  description: string;
-  date: {
-    full: string;
-  };
-  startDate: string;
-  location: {
-    name: string;
-    addressLocality: string;
-  };
-  category: string;
-  attendeeCount: number;
-  maximumAttendeeCapacity?: number;
-  organizer: {
-    name: string;
-  };
-  status: "upcoming" | "ongoing" | "past" | "cancelled";
-  dateCreated: string;
-}
+import type { AdminEvent } from "@/lib/mongo/admin-types";
+
+export type { AdminEvent };
 
 export interface AdminEventsClientProps {
   initialEvents: AdminEvent[];
