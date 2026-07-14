@@ -41,6 +41,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# nhimbe-admin (standalone app; workspaces hoist deps to the root)
+admin/node_modules
+admin/.next
+admin/coverage
+
 # Cloudflare Workers
 worker/node_modules
 worker/.wrangler

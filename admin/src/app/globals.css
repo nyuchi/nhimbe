@@ -1,0 +1,18 @@
+/*
+ * nhimbe-admin stylesheet.
+ *
+ * The admin app does not define its own design system — it imports the root
+ * app's globals.css wholesale (which itself pulls in Tailwind v4), so every
+ * mzizi 4.1.0/4.2.0 token (--radius-*, --touch-target-*, minerals, washes,
+ * tanzanite --primary) resolves identically here.
+ */
+@import "../../../src/app/globals.css";
+
+/*
+ * Tailwind v4 detects sources from the build's working directory (admin/),
+ * so the shared component library outside this app dir must be registered
+ * explicitly. Paths are relative to this file.
+ */
+@source "../../../src/components";
+@source "../../../src/lib";
+@source "../../../src/app/globals.css";
