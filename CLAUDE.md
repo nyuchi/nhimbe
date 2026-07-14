@@ -63,6 +63,7 @@ Connection lives in `client.ts` — a cached `MongoClient` (no caching of reject
 | `admin.ts`              | Admin dashboard queries                                                 |
 | `entities.ts`           | Host entities and memberships                                           |
 | `users.ts`              | `identity.persons` (WorkOS user mirror)                                 |
+| `calendars.ts`          | Calendars (NYU-25): create/reads, idempotent follows, event attach (+ tests) |
 | `planner.ts`            | RSVP → `planner.reservations` write-through (+ `planner.test.ts`)       |
 | `campfire.ts`           | Event update → Campfire system-message write-through (+ tests)          |
 | `mappers.ts`            | Mongo doc → schema.org-aligned API shape (with `mappers.test.ts`)       |
@@ -82,13 +83,15 @@ nhimbe feeds the Mukoko super app — two best-effort mirrors run server-side **
 
 Hosting is **entity-centric**: `events.events.primaryHostEntityId` → `entity.entities` → `identity.persons` (via memberships / `founderPersonId`). Places live in `places.places`; circle **communities** (schema.org OnlineCommunityGroup — not calendars) in `circles.*`, with `events.events.circleId` marking events hosted within a circle.
 
+**Calendars (NYU-25)** are followable, curated **event streams** (the Luma "calendar" pattern) — distinct from circles: a circle is a community you *join* (members), a calendar is a stream you *follow* (followers). They live in `events.calendars` (owner person+entity, `visibility` public/unlisted/private, optional `circleId` when a circle owns the stream, optional washed `theme`, denormalized `followerCount`/`eventCount`) with `events.calendarFollows` (one row per calendar+person, `isActive` flipped in place — follows never double-count) and `events.events.calendarId` marking which calendar an event streams into. `src/lib/mongo/calendars.ts` owns the writes; surfaces: `/calendars/[slug]` (SSR page + `/ics` feed), a "Featured calendars" `/discover` section, and an optional attach select in the create-event wizard.
+
 ### Engagement (global cross-platform substrate)
 
 `engagement.*` collections (reviews, ratings, referrals, comments, reactions, trackedLinks, …) are **shared across all Mukoko products**, not owned by nhimbe. Event-scoped queries filter by `targetReferenceType: "event"` and `targetProductId: <eventId>`. Engagement primitives (reviews, likes/reactions, saves, comments) are universal across content types; **events additionally add RSVPs and check-ins**. **End-to-end encryption is disabled** — reviews/ratings carry plaintext bodies.
 
 ### Server Actions (`src/app/actions/`)
 
-Mutations and client-invoked reads: `auth`, `events`, `event-updates`, `discovery`, `my-events`, `registrations`, `host-registrations`, `host-entities`, `host-card`, `kiosk`, `admin`, `engagement`, `saves`, `waitlist`, `search`, `profile`, `circles`, `circle-detail`, `campfire`, `places`, `map-places`, `geocode`, `polls`, `programme`, `badges`, `ai`.
+Mutations and client-invoked reads: `auth`, `events`, `event-updates`, `discovery`, `my-events`, `registrations`, `host-registrations`, `host-entities`, `host-card`, `kiosk`, `admin`, `engagement`, `saves`, `waitlist`, `search`, `profile`, `circles`, `circle-detail`, `calendars`, `campfire`, `places`, `map-places`, `geocode`, `polls`, `programme`, `badges`, `ai`.
 
 ### Route Handlers (`src/app/api/`)
 
@@ -140,11 +143,12 @@ Cloudflare is otherwise used only for R2 storage and the Shamwari AI Gateway. Tr
 ### Pages (`src/app/`)
 
 - Home (`page.tsx`) — **split server-side on auth** (NYU-24 IA): logged out → a lean landing (`home-landing.tsx`: serif hero, one CTA into `/discover`, city chips, ≤1 featured event — no feed); signed in → "Your events" (`home-your-events.tsx`: Upcoming/Past segmented control over the member's RSVPs + hosted gatherings via `getMyEvents`).
-- Discover (`/discover`) — the **browse** surface: category tiles → featured circles → city cards (`discover-browse.tsx`), each linking into a scoped drill-down. Never a feed.
+- Discover (`/discover`) — the **browse** surface: category tiles → featured circles → featured calendars → city cards (`discover-browse.tsx`), each linking into a scoped drill-down. Never a feed.
 - Events (`/events`) — the **all-events drill-down timeline**, scopeable via `?category=<slug>` / `?city=<addressLocality>` query params (the drill-down routing choice — no parallel `/discover/[category]` tree); plus create/detail/manage. Also my-events, profile, map, admin.
 - Auth: `/auth/*`, `/callback` (WorkOS post-auth landing), `/authenticate` (legacy redirect → `/`).
 - Info: search, calendar, about, help, privacy, terms.
 - Short links: `/e/[shortCode]` (events), `/r/[code]` (referral tracking).
+- Calendars (NYU-25): `/calendars/[slug]` — SSR page for a followable curated event stream (washed-theme ground, Follow pill, NyuchiTimeline of its upcoming events, "from \<circle\>" provenance when circle-owned; private calendars 404 to non-owners, unlisted render but are noindexed and excluded from discover/sitemap), plus `/calendars/[slug]/ics` (route handler serving the `text/calendar` feed — public+unlisted only).
 - Circles (communities; renamed from "Kraal" — UI/route/i18n only, the DB was already `circles.*`): `/circles`, `/circles/[id]`. Permanent redirects `/kraal*` → `/circles*` live in `next.config.ts`. The circle page leads with an **Events tab** (timeline of the circle's upcoming events); the light posts stream is kept as-is — community features belong to the Circles/Campfire sibling products.
 - Signage/kiosk: `/signage`, plus event sub-pages `/events/[id]/kiosk` and `/events/[id]/signage`.
 - SEO: `robots.ts`, `sitemap.ts`; error boundaries `error.tsx`, `global-error.tsx`, `not-found.tsx`, `loading.tsx`.
