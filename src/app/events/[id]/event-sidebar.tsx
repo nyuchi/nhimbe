@@ -8,8 +8,9 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { EventQRCode } from "./event-qr-code";
 import { ShareButton } from "./event-actions";
-import { RSVPButton } from "./rsvp-button";
+import { RegistrationPanel } from "./registration-panel";
 import { HostReputation } from "@/components/ui/host-reputation";
+import { NyuchiAvatarStack } from "@/components/ui/nyuchi-avatar-stack";
 import { EventEntityHostCard } from "./event-entity-host-card";
 import { joinWaitlist, leaveWaitlist, getWaitlistStatus } from "@/app/actions/waitlist";
 import { useAuth } from "@/components/auth/auth-context";
@@ -126,20 +127,7 @@ export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
       {/* Ticket Card */}
       <Card className="border-0" style={{ backgroundColor: "var(--event-surface)" }}>
         <CardContent className="p-6">
-          <h3 className="text-sm text-foreground/60 mb-2">
-            {event.offers?.price ? "Tickets" : "Free Event"}
-          </h3>
-          <div className="text-[32px] font-extrabold mb-5" style={{ color: "var(--event-primary)" }}>
-            {event.offers?.price ? (
-              <>
-                ${event.offers.price}{" "}
-                <span className="text-sm font-medium text-foreground/60">{event.offers.priceCurrency}</span>
-              </>
-            ) : (
-              "Free"
-            )}
-          </div>
-          <RSVPButton eventId={event.id} price={event.offers} spotsRemaining={spotsLeft} />
+          <RegistrationPanel eventId={event.id} price={event.offers} spotsRemaining={spotsLeft} />
 
           {event.maximumAttendeeCapacity && (
             <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--event-border)" }}>
@@ -211,20 +199,11 @@ export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="flex gap-4">
-              {event.friends.map((friend, index) => (
-                <div key={index} className="flex flex-col items-center gap-2">
-                  <div
-                    className="w-13 h-[52px] rounded-full border-2"
-                    style={{
-                      background: `linear-gradient(135deg, var(--event-primary), var(--event-secondary))`,
-                      borderColor: "var(--event-primary)",
-                    }}
-                  />
-                  <span className="text-xs text-foreground/60">{friend.name}</span>
-                </div>
-              ))}
-            </div>
+            <NyuchiAvatarStack
+              people={event.friends.map((friend) => ({ name: friend.name }))}
+              max={6}
+              label=""
+            />
           </CardContent>
         </Card>
       )}

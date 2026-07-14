@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowLeft, MapPin, Video, Bookmark, Globe, ChevronRight } from "lucide-react";
+import { ArrowLeft, MapPin, Video, Bookmark, Globe, ChevronRight, Flame, Eye, Star } from "lucide-react";
 import { useTrackedLink } from "@/lib/use-tracked-link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ import { AddToCalendarButton, GetDirectionsButton } from "./event-actions";
 import { EventThemeWrapper } from "./event-theme-wrapper";
 import { EventMap } from "./event-map";
 import { EventWeather } from "./event-weather";
-import { EventCover } from "./event-cover";
+import { NyuchiCoverWashHeader } from "@/components/ui/nyuchi-cover-wash-header";
 import { EventSidebar } from "./event-sidebar";
 import { RSVPButton } from "./rsvp-button";
 import {
@@ -90,6 +90,11 @@ function eventStatusAlert(
     default:
       return null;
   }
+}
+
+function formatViews(count: number): string {
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+  return count.toString();
 }
 
 export function EventDetailContent({ event }: EventDetailContentProps) {
@@ -168,7 +173,40 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
           />
         )}
 
-        <EventCover event={event} stats={stats} reviewStats={reviewStats} />
+        {/* 4.2.0 washed hero — cover + title + category kicker + meta, in the
+            event's own theme (inheritWash consumes the page --event-primary /
+            --wash). Live stats (hot / views / rating) ride in the CTA slot. */}
+        <NyuchiCoverWashHeader
+          inheritWash
+          className="mb-6 sm:mb-8"
+          coverImage={event.image || undefined}
+          coverGradient={event.coverGradient}
+          kicker={event.category}
+          title={event.name}
+          date={event.date.full}
+          location={isOnline ? "Online" : event.location.name}
+          host={event.organizer.name}
+        >
+          {(stats?.isHot || (stats?.views ?? 0) > 0 || (reviewStats?.averageRating ?? 0) > 0) && (
+            <div className="flex flex-wrap items-center gap-2">
+              {stats?.isHot && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-sm">
+                  <Flame className="size-3.5" aria-hidden /> Hot
+                </span>
+              )}
+              {(stats?.views ?? 0) > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
+                  <Eye className="size-3.5" aria-hidden /> {formatViews(stats!.views!)}
+                </span>
+              )}
+              {reviewStats && reviewStats.averageRating > 0 && reviewStats.totalReviews > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
+                  <Star className="size-3.5 fill-current" aria-hidden /> {reviewStats.averageRating.toFixed(1)}
+                </span>
+              )}
+            </div>
+          )}
+        </NyuchiCoverWashHeader>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-8 lg:gap-12">
           {/* Main Content */}
@@ -185,8 +223,6 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
                 </Badge>
               </div>
             )}
-
-            <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold leading-tight mb-2">{event.name}</h1>
 
             {/* Live attendance pulse strip — signature visual from Nhimbe.html */}
             <EventPulseStrip event={event} />
