@@ -176,7 +176,7 @@ export function EventKraalCta({ event }: { event: Event }) {
   if (!event.eventCircleId) return null;
   return (
     <Link
-      href={`/kraal/${event.eventCircleId}`}
+      href={`/circles/${event.eventCircleId}`}
       data-slot="event-kraal-cta"
       className="inline-flex items-center gap-2 mt-3 px-4 h-10 rounded-full text-sm font-semibold transition-colors"
       style={{ background: "var(--nh-lead-soft)", color: "var(--nh-lead)" }}

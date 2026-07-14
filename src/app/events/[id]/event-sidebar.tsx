@@ -272,7 +272,7 @@ export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
             </div>
           </div>
           <Link
-            href={event.eventCircleId ? `/kraal/${event.eventCircleId}` : "/kraal"}
+            href={event.eventCircleId ? `/circles/${event.eventCircleId}` : "/circles"}
             className="inline-flex items-center justify-center gap-1.5 w-full h-[var(--touch-target)] rounded-full bg-primary text-primary-foreground text-sm font-semibold transition-transform duration-[var(--motion-quick)] hover:-translate-y-px"
           >
             {t("kraal.viewKraal")}

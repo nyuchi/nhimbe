@@ -23,7 +23,7 @@ import {
 } from "@/app/actions/circle-detail";
 import { useT } from "@/lib/i18n";
 
-interface KraalDetailClientProps {
+interface CircleDetailClientProps {
   circleId: string;
 }
 
@@ -36,7 +36,7 @@ function authorInitial(label: string): string {
   return label.trim().slice(0, 1).toUpperCase() || "•";
 }
 
-export default function KraalDetailClient({ circleId }: KraalDetailClientProps) {
+export default function CircleDetailClient({ circleId }: CircleDetailClientProps) {
   const { t } = useT();
   const { user, isAuthenticated } = useAuth();
   const personId = user?.personId ?? null;
@@ -161,7 +161,7 @@ export default function KraalDetailClient({ circleId }: KraalDetailClientProps) 
   return (
     <div className="max-w-300 mx-auto px-6 py-6">
       <Link
-        href="/kraal"
+        href="/circles"
         className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-foreground mb-4"
       >
         <ArrowLeft className="w-4 h-4" aria-hidden />

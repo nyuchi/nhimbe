@@ -47,6 +47,15 @@ const nextConfig: NextConfig = {
   // header — it's free reconnaissance for an attacker and offers no value to
   // legitimate clients.
   poweredByHeader: false,
+  // Kraal → Circles rename (NYU-24): the user-facing routes moved to
+  // /circles; the database was already `circles.*`. Permanent (308) so
+  // search engines and old links transfer.
+  async redirects() {
+    return [
+      { source: "/kraal", destination: "/circles", permanent: true },
+      { source: "/kraal/:id", destination: "/circles/:id", permanent: true },
+    ];
+  },
   images: {
     remotePatterns: [
       {

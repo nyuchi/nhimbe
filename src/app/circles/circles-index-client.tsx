@@ -11,7 +11,7 @@ import { useAuth } from "@/components/auth/auth-context";
 import { getMyCircles, type KraalSummary } from "@/app/actions/circles";
 import { useT } from "@/lib/i18n";
 
-export default function KraalIndexClient() {
+export default function CirclesIndexClient() {
   const { t } = useT();
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
@@ -69,7 +69,7 @@ export default function KraalIndexClient() {
               Kraals are private to the people in them. Sign in and we&apos;ll bring you back here.
             </p>
             <Link
-              href="/auth/hosted?return_to=%2Fkraal"
+              href="/auth/hosted?return_to=%2Fcircles"
               className="inline-flex items-center gap-2 px-5 h-[var(--touch-target)] rounded-full bg-primary text-primary-foreground font-semibold"
             >
               Sign in <ArrowRight className="w-4 h-4" aria-hidden />
@@ -107,7 +107,7 @@ export default function KraalIndexClient() {
       {isAuthenticated && !loading && circles.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {circles.map((c) => (
-            <Link key={c.id} href={`/kraal/${c.id}`} className="block">
+            <Link key={c.id} href={`/circles/${c.id}`} className="block">
               <NyuchiGroupCard
                 name={c.name}
                 description={c.description || c.circle_purpose}

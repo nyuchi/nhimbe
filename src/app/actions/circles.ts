@@ -4,7 +4,7 @@
  * Kraal (circles) read server actions (Vercel server runtime → MongoDB).
  *
  * `getMyCircles` replaces the browser-side Supabase read
- * (`getCirclesForPerson`) on the /kraal index. Kraals are private to their
+ * (`getCirclesForPerson`) on the /circles index. Kraals are private to their
  * members, so the acting person is resolved server-side from the WorkOS
  * session (via AuthKit's `withAuth()`) or the local dev bypass — the browser
  * never passes a person id and never touches MongoDB directly.
