@@ -1,10 +1,10 @@
 "use server";
 
 /**
- * Kraal (circles) read server actions (Vercel server runtime → MongoDB).
+ * Circles read server actions (Vercel server runtime → MongoDB).
  *
  * `getMyCircles` replaces the browser-side Supabase read
- * (`getCirclesForPerson`) on the /circles index. Kraals are private to their
+ * (`getCirclesForPerson`) on the /circles index. Circles are private to their
  * members, so the acting person is resolved server-side from the WorkOS
  * session (via AuthKit's `withAuth()`) or the local dev bypass — the browser
  * never passes a person id and never touches MongoDB directly.
@@ -21,8 +21,8 @@ import { getPersonByWorkosId } from "@/lib/mongo/users";
 import { isDevBypass, DEV_WORKOS_ID } from "@/lib/auth/dev";
 import type { CircleDoc } from "@/lib/mongo/types";
 
-/** Minimal kraal shape the index list renders. */
-export interface KraalSummary {
+/** Minimal circle shape the index list renders. */
+export interface CircleSummary {
   id: string;
   name: string;
   description: string | null;
@@ -31,7 +31,7 @@ export interface KraalSummary {
   linked_event_id: string | null;
 }
 
-function mapCircleDocToSummary(doc: CircleDoc): KraalSummary {
+function mapCircleDocToSummary(doc: CircleDoc): CircleSummary {
   return {
     id: doc._id,
     name: doc.name,
@@ -46,11 +46,11 @@ function mapCircleDocToSummary(doc: CircleDoc): KraalSummary {
 }
 
 /**
- * Return the kraals the signed-in person actively belongs to. Returns an empty
+ * Return the circles the signed-in person actively belongs to. Returns an empty
  * array when there's no session (the index treats this as "sign in to see your
- * kraals") or when the person isn't a member of any circle yet.
+ * circles") or when the person isn't a member of any circle yet.
  */
-export async function getMyCircles(): Promise<KraalSummary[]> {
+export async function getMyCircles(): Promise<CircleSummary[]> {
   // Resolve the acting WorkOS id: live session, or the local dev bypass.
   let workosUserId: string | null = null;
   if (isDevBypass()) {

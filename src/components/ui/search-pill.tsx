@@ -29,7 +29,7 @@ interface SearchPillProps {
  */
 function SearchPill({
   href = "/search",
-  placeholder = "Search gatherings, kraals, places…",
+  placeholder = "Search gatherings, circles, places…",
   "aria-label": ariaLabel = "Ask Shamwari (AI) to find a gathering",
   layout = "inline",
   className,

@@ -13,7 +13,7 @@ import {
 /**
  * EventCampfire — surfaces the campfire conversation thread attached to an
  * event when events.event.campfireConversationId is set. The campfire is
- * "live chat around the gathering" — distinct from the Kraal stream (which is
+ * "live chat around the gathering" — distinct from the circle stream (which is
  * the event's persistent community).
  *
  * Data path: the browser never touches Mongo. Reads and writes go through the

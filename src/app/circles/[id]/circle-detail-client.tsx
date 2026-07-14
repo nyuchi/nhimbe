@@ -20,10 +20,10 @@ import {
   getCirclePosts,
   joinCircle,
   togglePostReaction,
-  type KraalCircle,
-  type KraalMember,
-  type KraalPerson,
-  type KraalPost,
+  type CircleDetail,
+  type CircleMember,
+  type CirclePerson,
+  type CirclePost,
 } from "@/app/actions/circle-detail";
 import { useT } from "@/lib/i18n";
 
@@ -31,7 +31,7 @@ interface CircleDetailClientProps {
   circleId: string;
 }
 
-function authorLabel(p: KraalPerson | null): string {
+function authorLabel(p: CirclePerson | null): string {
   if (!p) return "Member";
   return p.name || [p.givenname, p.familyname].filter(Boolean).join(" ") || "Member";
 }
@@ -46,11 +46,11 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
   const personId = user?.personId ?? null;
 
   const [loading, setLoading] = useState(true);
-  const [circle, setCircle] = useState<KraalCircle | null>(null);
+  const [circle, setCircle] = useState<CircleDetail | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
-  const [posts, setPosts] = useState<KraalPost[]>([]);
-  const [members, setMembers] = useState<KraalMember[]>([]);
-  const [archived, setArchived] = useState<KraalPost[]>([]);
+  const [posts, setPosts] = useState<CirclePost[]>([]);
+  const [members, setMembers] = useState<CircleMember[]>([]);
+  const [archived, setArchived] = useState<CirclePost[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"events" | "stream" | "members" | "archive">("events");
@@ -78,7 +78,7 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
         setMembers(m);
       })
       .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load this kraal");
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load this circle");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -142,7 +142,7 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
       const m = await getCircleMembers(circleId, 100);
       setMembers(m);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to join kraal");
+      setError(e instanceof Error ? e.message : "Failed to join circle");
     } finally {
       setSubmitting(false);
     }
@@ -160,7 +160,7 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
         ),
       );
     } catch (e) {
-      console.warn("[mukoko] kraal reaction failed", e);
+      console.warn("[mukoko] circle reaction failed", e);
       setError("Couldn't save your reaction. Tap again to retry.");
     }
   };
@@ -172,7 +172,7 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
         className="inline-flex items-center gap-1 text-sm text-text-secondary hover:text-foreground mb-4"
       >
         <ArrowLeft className="w-4 h-4" aria-hidden />
-        All kraals
+        All circles
       </Link>
 
       {loading ? (
@@ -180,7 +180,7 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
       ) : !circle ? (
         <Card className="border-0 bg-surface">
           <CardContent className="p-8 text-center">
-            <p className="text-text-secondary">This kraal isn&apos;t available, or you don&apos;t have access to it.</p>
+            <p className="text-text-secondary">This circle isn&apos;t available, or you don&apos;t have access to it.</p>
           </CardContent>
         </Card>
       ) : (
@@ -221,7 +221,7 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
                   {circle.linked_event_id && (
                     <span className="inline-flex items-center gap-1.5">
                       <Flame className="w-4 h-4" aria-hidden />
-                      Event kraal
+                      Event circle
                     </span>
                   )}
                 </div>
@@ -233,7 +233,7 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
                   disabled={submitting}
                   className="rounded-full"
                 >
-                  {t("kraal.join")}
+                  {t("circle.join")}
                 </Button>
               )}
             </div>
@@ -247,10 +247,10 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
 
           <Tabs value={tab} onValueChange={(v) => onTabChange(v as "events" | "stream" | "members" | "archive")}>
             <TabsList className="mb-4">
-              <TabsTrigger value="events">Events</TabsTrigger>
-              <TabsTrigger value="stream">{t("kraal.tabs.stream")}</TabsTrigger>
-              <TabsTrigger value="members">{t("kraal.tabs.members")}</TabsTrigger>
-              <TabsTrigger value="archive">{t("kraal.tabs.archive")}</TabsTrigger>
+              <TabsTrigger value="events">{t("circle.tabs.events")}</TabsTrigger>
+              <TabsTrigger value="stream">{t("circle.tabs.stream")}</TabsTrigger>
+              <TabsTrigger value="members">{t("circle.tabs.members")}</TabsTrigger>
+              <TabsTrigger value="archive">{t("circle.tabs.archive")}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="events">
@@ -286,7 +286,7 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
               {isAuthenticated && isMember && (
                 <NyuchiContentComposer
                   className="mb-4"
-                  placeholder={t("kraal.compose.placeholder")}
+                  placeholder={t("circle.compose.placeholder")}
                   userName={user?.name ?? undefined}
                   submitLabel="Post"
                   submitting={submitting}
@@ -298,7 +298,7 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
               {posts.length === 0 ? (
                 <Card className="border-0 bg-surface">
                   <CardContent className="p-8 text-center text-text-secondary text-sm">
-                    {t("kraal.empty")}
+                    {t("circle.empty")}
                   </CardContent>
                 </Card>
               ) : (

@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { NyuchiGroupCard } from "@/components/ui/nyuchi-group-card";
 import { NyuchiEmptyState } from "@/components/ui/nyuchi-empty-state";
 import { useAuth } from "@/components/auth/auth-context";
-import { getMyCircles, type KraalSummary } from "@/app/actions/circles";
+import { getMyCircles, type CircleSummary } from "@/app/actions/circles";
 import { useT } from "@/lib/i18n";
 
 export default function CirclesIndexClient() {
@@ -20,7 +20,7 @@ export default function CirclesIndexClient() {
   // off a fetch in the effect's async callback, which keeps the React 19
   // `set-state-in-effect` rule happy.
   const [loading, setLoading] = useState<boolean>(Boolean(personId));
-  const [circles, setCircles] = useState<KraalSummary[]>([]);
+  const [circles, setCircles] = useState<CircleSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -31,7 +31,7 @@ export default function CirclesIndexClient() {
         if (!cancelled) setCircles(rows);
       })
       .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load your kraals");
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load your circles");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -55,18 +55,18 @@ export default function CirclesIndexClient() {
         />
         <p className="font-serif italic text-text-secondary mb-2">{t("brand.tagline")}</p>
         <h1 className="font-serif text-4xl md:text-5xl font-bold tracking-tight mb-3">
-          {t("kraal.title")}
+          {t("circle.title")}
         </h1>
-        <p className="text-text-secondary max-w-150">{t("kraal.subtitle")}</p>
+        <p className="text-text-secondary max-w-150">{t("circle.subtitle")}</p>
       </header>
 
       {!isAuthenticated && (
         <Card className="border-0 bg-surface">
           <CardContent className="p-8 text-center">
             <Flame className="w-10 h-10 mx-auto mb-3 text-primary" aria-hidden />
-            <h2 className="font-serif text-xl font-semibold mb-2">Sign in to see your kraals</h2>
+            <h2 className="font-serif text-xl font-semibold mb-2">Sign in to see your circles</h2>
             <p className="text-text-secondary mb-5">
-              Kraals are private to the people in them. Sign in and we&apos;ll bring you back here.
+              Your circles are private to the people in them. Sign in and we&apos;ll bring you back here.
             </p>
             <Link
               href="/auth/hosted?return_to=%2Fcircles"
@@ -97,8 +97,8 @@ export default function CirclesIndexClient() {
       {isAuthenticated && !loading && !error && circles.length === 0 && (
         <NyuchiEmptyState
           icon={<Users />}
-          title="No kraals yet"
-          description="Hosts open a kraal alongside their event so attendees can keep the conversation going. Once you join one, it appears here."
+          title="No circles yet"
+          description="Hosts open a circle alongside their event so attendees can keep the conversation going. Once you join one, it appears here."
           actionLabel="Find an event"
           onAction={() => router.push("/events")}
         />
@@ -112,9 +112,9 @@ export default function CirclesIndexClient() {
                 name={c.name}
                 description={c.description || c.circle_purpose}
                 memberCount={c.member_count ?? 0}
-                // Kraals are private to the people in them.
+                // Circles are private to the people in them.
                 privacy="closed"
-                topics={c.linked_event_id ? ["Event kraal"] : []}
+                topics={c.linked_event_id ? ["Event circle"] : []}
               />
             </Link>
           ))}

@@ -74,8 +74,8 @@ export interface Event {
   dateCreated?: string;
   dateModified?: string;
   /**
-   * UUID of the linked Kraal circle (events.event.event_circle_id in the
-   * platform DB). When present, EventDetail surfaces a "View kraal" CTA.
+   * UUID of the linked circle (events.events.circleId in the
+   * platform DB). When present, EventDetail surfaces a "View circle" CTA.
    */
   eventCircleId?: string;
   /** FK to places.places.id — drives the design's Where tile + Weather. */

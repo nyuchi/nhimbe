@@ -175,12 +175,12 @@ describe("NyuchiContentComposer", () => {
     const onSubmit = vi.fn();
     render(<NyuchiContentComposer onSubmit={onSubmit} submitLabel="Post" showToolbar={false} />);
     const textarea = document.querySelector("textarea")!;
-    fireEvent.change(textarea, { target: { value: "  hello kraal  " } });
+    fireEvent.change(textarea, { target: { value: "  hello circle  " } });
     const post = Array.from(document.querySelectorAll("button")).find(
       (b) => b.textContent === "Post",
     )!;
     fireEvent.click(post);
-    expect(onSubmit).toHaveBeenCalledWith("hello kraal");
+    expect(onSubmit).toHaveBeenCalledWith("hello circle");
     expect((textarea as HTMLTextAreaElement).value).toBe("");
   });
 
