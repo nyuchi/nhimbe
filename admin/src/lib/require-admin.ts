@@ -37,18 +37,26 @@ export interface GatePerson {
   personId: string;
   role?: string | null;
   suspended?: boolean;
+  /** Underlying activation flag — `false` is a hard deny, independent of role. */
+  isActive?: boolean;
 }
 
 /**
  * Pure gate decision — exported separately so the deny semantics are unit
  * testable without AuthKit. Returns the resolved role when the person may
  * pass, or null when they must be denied.
+ *
+ * Suspension is keyed on activation, NOT on a role literal: a denied account
+ * is one where `suspended` is set OR `isActive === false`. Suspension is
+ * decoupled from `role` (the admin suspend action flips `isActive` and leaves
+ * `role` intact), so the gate must reject an inactive account whatever role it
+ * still carries.
  */
 export function resolveAdminGate(
   person: GatePerson | null,
   requiredRole: UserRole,
 ): UserRole | null {
-  if (!person || person.suspended) return null;
+  if (!person || person.suspended || person.isActive === false) return null;
   const role = normaliseRole(person.role);
   return hasRole(role, requiredRole) ? role : null;
 }
