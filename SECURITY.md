@@ -51,11 +51,14 @@ Concrete detail behind the baseline above, for reviewers and future contributors
   - A **Content-Security-Policy** with `default-src 'self'`, `object-src 'none'`,
     `base-uri 'self'`, `frame-ancestors 'none'` and `form-action 'self'`. The
     `script-`/`style-`/`img-`/`font-`/`connect-`/`frame-src` directives allow-list
-    only Google Maps, Cloudflare R2 assets (`*.mukoko.com`) and WorkOS
-    (`api.workos.com`, `authenticate.nyuchi.com`, `identity.nyuchi.com`). `script-src` still permits
-    `'unsafe-inline'`/`'unsafe-eval'` for Next.js's inline hydration bootstrap and
-    the Maps SDK — tightening this to a per-request nonce / `strict-dynamic`
-    policy is the main outstanding CSP hardening item.
+    only OpenStreetMap tiles (`*.tile.openstreetmap.org`, CyclOSM, OpenTopoMap),
+    OSM Nominatim geocoding (`nominatim.openstreetmap.org`), the Mukoko weather
+    embed (`weather.mukoko.com`), Cloudflare R2 assets (`*.mukoko.com`), WorkOS
+    (`api.workos.com`, `authenticate.nyuchi.com`, `identity.nyuchi.com`) and
+    Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`). `script-src`
+    still permits `'unsafe-inline'`/`'unsafe-eval'` for Next.js's inline
+    hydration bootstrap — tightening this to a per-request nonce /
+    `strict-dynamic` policy is the main outstanding CSP hardening item.
   - `Strict-Transport-Security` (2-year `max-age`, `includeSubDomains`, `preload`),
     `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
     `Referrer-Policy: strict-origin-when-cross-origin`,
