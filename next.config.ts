@@ -42,6 +42,14 @@ const CONTENT_SECURITY_POLICY = [
   "upgrade-insecure-requests",
 ].join("; ");
 
+/**
+ * The admin dashboard is its own app + Vercel project now (admin/ in this
+ * repo). /admin on the public app forwards there. Env-configurable per
+ * environment (build-time, like all next.config redirects); temporary (307)
+ * so the destination can move without poisoning browser caches.
+ */
+const ADMIN_URL = (process.env.ADMIN_URL || "https://admin.nhimbe.com").replace(/\/+$/, "");
+
 const nextConfig: NextConfig = {
   // Don't advertise the framework via the `X-Powered-By: Next.js` response
   // header — it's free reconnaissance for an attacker and offers no value to
@@ -54,6 +62,12 @@ const nextConfig: NextConfig = {
     return [
       { source: "/kraal", destination: "/circles", permanent: true },
       { source: "/kraal/:id", destination: "/circles/:id", permanent: true },
+      // Admin extraction (#69): the dashboard lives in its own app/project.
+      // Old in-app paths map onto the standalone app's routes (/admin/users
+      // moved to /people there, so path passthrough is deliberately not used).
+      { source: "/admin", destination: ADMIN_URL, permanent: false },
+      { source: "/admin/users", destination: `${ADMIN_URL}/people`, permanent: false },
+      { source: "/admin/:path*", destination: `${ADMIN_URL}/:path*`, permanent: false },
     ];
   },
   images: {

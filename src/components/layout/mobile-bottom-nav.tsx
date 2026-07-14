@@ -20,7 +20,8 @@ export function MobileBottomNav() {
   const { isAuthenticated } = useAuth();
 
   // Hide on pages that have their own fixed bottom bars or are full-screen
-  const hiddenPaths = ["/events/create", "/signage", "/kiosk", "/admin"];
+  // (/admin no longer renders here — it redirects to the standalone admin app.)
+  const hiddenPaths = ["/events/create", "/signage", "/kiosk"];
   const shouldHide = hiddenPaths.some((p) => pathname.startsWith(p))
     || pathname.includes("/manage");
 
