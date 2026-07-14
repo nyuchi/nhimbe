@@ -2,16 +2,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Heart, MessageCircle, Users, Flame, Archive } from "lucide-react";
+import { ArrowLeft, CalendarDays, Heart, MessageCircle, Users, Flame, Archive } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { NyuchiContentComposer } from "@/components/ui/nyuchi-content-composer";
+import { NyuchiTimeline, type TimelineItem } from "@/components/ui/nyuchi-timeline";
+import { categoryToMineral } from "@/lib/category-mineral";
+import { getMediaUrl, type Event } from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/components/auth/auth-context";
 import {
   createCirclePost,
   getCircle,
+  getCircleEvents,
   getCircleMembers,
   getCirclePosts,
   joinCircle,
@@ -43,12 +47,13 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
 
   const [loading, setLoading] = useState(true);
   const [circle, setCircle] = useState<KraalCircle | null>(null);
+  const [events, setEvents] = useState<Event[]>([]);
   const [posts, setPosts] = useState<KraalPost[]>([]);
   const [members, setMembers] = useState<KraalMember[]>([]);
   const [archived, setArchived] = useState<KraalPost[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"stream" | "members" | "archive">("stream");
+  const [tab, setTab] = useState<"events" | "stream" | "members" | "archive">("events");
 
   const isMember = personId
     ? members.some((m) => m.person_id === personId)
@@ -61,12 +66,14 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
     let cancelled = false;
     Promise.all([
       getCircle(circleId),
+      getCircleEvents(circleId, 50),
       getCirclePosts(circleId, 30, false),
       getCircleMembers(circleId, 100),
     ])
-      .then(([c, p, m]) => {
+      .then(([c, ev, p, m]) => {
         if (cancelled) return;
         setCircle(c);
+        setEvents(ev);
         setPosts(p);
         setMembers(m);
       })
@@ -94,7 +101,7 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
   // Lazy-load the archive on tab change. We invoke from the tab handler
   // rather than a useEffect-on-tab so we don't trigger setState in an
   // effect body when nothing has actually changed.
-  const onTabChange = (next: "stream" | "members" | "archive") => {
+  const onTabChange = (next: "events" | "stream" | "members" | "archive") => {
     setTab(next);
     if (next === "archive") void loadArchive();
   };
@@ -238,12 +245,42 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
             </div>
           )}
 
-          <Tabs value={tab} onValueChange={(v) => onTabChange(v as "stream" | "members" | "archive")}>
+          <Tabs value={tab} onValueChange={(v) => onTabChange(v as "events" | "stream" | "members" | "archive")}>
             <TabsList className="mb-4">
+              <TabsTrigger value="events">Events</TabsTrigger>
               <TabsTrigger value="stream">{t("kraal.tabs.stream")}</TabsTrigger>
               <TabsTrigger value="members">{t("kraal.tabs.members")}</TabsTrigger>
               <TabsTrigger value="archive">{t("kraal.tabs.archive")}</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="events">
+              {events.length === 0 ? (
+                <Card className="border-0 bg-surface">
+                  <CardContent className="p-8 text-center text-text-secondary text-sm">
+                    <CalendarDays className="w-8 h-8 mx-auto mb-2 text-text-tertiary" aria-hidden />
+                    No upcoming gatherings from this circle yet.
+                  </CardContent>
+                </Card>
+              ) : (
+                <NyuchiTimeline
+                  items={events.map(
+                    (event): TimelineItem => ({
+                      id: event.id,
+                      date: event.startDate,
+                      time: event.date.time,
+                      title: event.name,
+                      host: event.organizer?.name,
+                      location: event.location.name || event.location.addressLocality,
+                      attendeeCount: event.attendeeCount,
+                      thumbnail: event.image ? getMediaUrl(event.image) : undefined,
+                      href: `/events/${event.id}`,
+                      mineral: categoryToMineral(event.category),
+                      category: event.category,
+                    }),
+                  )}
+                />
+              )}
+            </TabsContent>
 
             <TabsContent value="stream">
               {isAuthenticated && isMember && (

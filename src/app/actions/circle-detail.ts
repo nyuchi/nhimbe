@@ -27,6 +27,8 @@ import { stampNew } from "@/lib/mongo/ids";
 import { ensureHostEntityForPerson } from "@/lib/mongo/entities";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { isDevBypass, DEV_WORKOS_ID, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
+import { listEvents } from "@/lib/mongo/events";
+import type { Event } from "@/lib/api";
 import type {
   CircleDoc,
   CircleMembershipDoc,
@@ -174,6 +176,21 @@ export async function getCircle(circleId: string): Promise<KraalCircle | null> {
   } catch (err) {
     console.warn("[mukoko] getCircle failed:", err);
     return null;
+  }
+}
+
+/**
+ * The circle's upcoming events (events.events.circleId) — the primary lens
+ * nhimbe presents a circle through. Public listing rules apply (published,
+ * non-private, upcoming), so this is safe to show pre-join.
+ */
+export async function getCircleEvents(circleId: string, limit = 50): Promise<Event[]> {
+  try {
+    const { events } = await listEvents({ circleId, limit });
+    return events;
+  } catch (err) {
+    console.warn("[mukoko] getCircleEvents failed:", err);
+    return [];
   }
 }
 
