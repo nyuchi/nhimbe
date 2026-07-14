@@ -15,7 +15,7 @@ Run all four from the repo root:
 ```bash
 npm run lint       # ESLint (+ markdownlint/prettier/etc. in CI's lint.yml)
 npm run build      # Next.js production build (see the DB note below)
-npm run test:run   # Vitest, run once (~212 tests)
+npm run test:run   # Vitest, run once (~682 tests)
 ```
 
 - **Design-token guard.** `src/__tests__/design-tokens.test.ts` runs as part of

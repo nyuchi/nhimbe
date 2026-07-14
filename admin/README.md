@@ -46,9 +46,14 @@ project's own redirect URI**:
 - Every route is **server-gated** by `requireAdmin()`
   (`src/lib/require-admin.ts` — the contract extracted from the old
   `src/app/admin/require-admin.ts`): `identity.persons.role` decides access,
-  suspended accounts and lookup failures are denied, and denials land on the
-  clear `/denied` screen. The shell layout gates at `moderator` (locked nav
-  affordances), data pages at `admin`, settings at `super_admin`.
+  and denials land on the clear `/denied` screen. **Suspension is keyed on
+  activation, not a role literal** — `resolveAdminGate` denies when
+  `isActive === false` (the derived `suspended` flag) whatever role the
+  account still holds; lookup failures are denied too. The shell layout **and**
+  every data page gate at `admin` (there is no moderator-accessible surface —
+  gating the shell lower only showed moderators nav that denied on click);
+  settings gates at `super_admin`. The shell's role prop only drives
+  locked-nav affordances.
 - **nyuchi WorkOS organization scoping** (`src/lib/workos-org.ts`) — layered
   **on top of** the role gate: every requester must be an **active member of
   the nyuchi WorkOS organization**. Anyone who authenticates but isn't in that
