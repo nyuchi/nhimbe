@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   CalendarDays,
+  CalendarRange,
   Landmark,
   Leaf,
   MapIcon,
@@ -13,19 +14,26 @@ import {
   Zap,
 } from "lucide-react";
 import { categoryToMineral, type Mineral } from "@/lib/category-mineral";
+import { getTheme } from "@/lib/themes";
 import type { CategoryWithCount, CityWithCount } from "@/lib/mongo/lookups";
 import type { FeaturedCircle } from "@/lib/mongo/circles";
+import type { FeaturedCalendar } from "@/lib/mongo/calendars";
 
 /**
  * /discover browse sections (NYU-24 IA refresh) — a BROWSE surface, not a
- * feed: category tiles → featured circles → cities. Every tile/card links
- * into a scoped drill-down (the /events timeline, or a circle page); the
- * timeline itself never renders here. Pure presentational server component.
+ * feed: category tiles → featured circles → featured calendars (NYU-25) →
+ * cities. Every tile/card links into a scoped drill-down (the /events
+ * timeline, a circle page, or a calendar page); the timeline itself never
+ * renders here. Pure presentational server component.
+ *
+ * Circles vs calendars, kept distinct on purpose: a circle is a COMMUNITY
+ * you join; a calendar is an EVENT STREAM you follow.
  */
 
 interface DiscoverBrowseProps {
   categories: CategoryWithCount[];
   circles: FeaturedCircle[];
+  calendars: FeaturedCalendar[];
   cities: CityWithCount[];
 }
 
@@ -87,7 +95,7 @@ function SectionHeader({
   );
 }
 
-export function DiscoverBrowse({ categories, circles, cities }: DiscoverBrowseProps) {
+export function DiscoverBrowse({ categories, circles, calendars, cities }: DiscoverBrowseProps) {
   return (
     <div className="max-w-300 mx-auto px-6 py-8 md:py-10">
       {/* Page header */}
@@ -219,7 +227,62 @@ export function DiscoverBrowse({ categories, circles, cities }: DiscoverBrowsePr
         )}
       </section>
 
-      {/* 3 — Explore by city */}
+      {/* 3 — Featured calendars (followable event streams — NOT communities) */}
+      <section aria-labelledby="discover-calendars" className="mb-12">
+        <SectionHeader
+          title="Featured calendars"
+          subtitle="Curated event streams — follow one and every gathering lands on your radar."
+        />
+        <span id="discover-calendars" className="sr-only">
+          Featured calendars
+        </span>
+        {calendars.length > 0 ? (
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {calendars.map((c) => (
+              <li key={c.id}>
+                <Link
+                  href={`/calendars/${c.slug}`}
+                  className="group flex items-center gap-4 rounded-[var(--radius-card,14px)] border border-border bg-card px-4 py-3.5 transition-shadow hover:shadow-md"
+                >
+                  {/* Cover thumb — the calendar's washed theme gradient. */}
+                  <span
+                    className="flex size-12 shrink-0 items-center justify-center rounded-xl text-primary-foreground"
+                    style={{ background: getTheme(c.theme ?? undefined).gradient }}
+                    aria-hidden
+                  >
+                    <CalendarRange className="w-5 h-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                      {c.name}
+                    </span>
+                    {c.description && (
+                      <span className="block text-[13px] text-muted-foreground line-clamp-2">
+                        {c.description}
+                      </span>
+                    )}
+                    <span className="mt-1 inline-flex items-center gap-1 text-xs text-text-tertiary">
+                      <Users className="w-3 h-3" aria-hidden />
+                      {c.followerCount} {c.followerCount === 1 ? "follower" : "followers"}
+                    </span>
+                  </span>
+                  {/* Follow is a cue, not a mutation — following happens on
+                      the calendar page (auth-gated there). */}
+                  <span className="shrink-0 inline-flex items-center h-8 px-3.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                    Follow
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-text-secondary">
+            No calendars to follow yet — hosts curate them from their events.
+          </p>
+        )}
+      </section>
+
+      {/* 4 — Explore by city */}
       <section aria-labelledby="discover-cities" className="mb-4">
         <SectionHeader
           title="Explore by city"

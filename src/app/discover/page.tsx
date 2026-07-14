@@ -7,6 +7,7 @@ import {
   type CityWithCount,
 } from "@/lib/mongo/lookups";
 import { listFeaturedCircles, type FeaturedCircle } from "@/lib/mongo/circles";
+import { listFeaturedCalendars, type FeaturedCalendar } from "@/lib/mongo/calendars";
 
 export const metadata: Metadata = {
   title: "Discover",
@@ -34,6 +35,14 @@ async function fetchCircles(): Promise<FeaturedCircle[]> {
   }
 }
 
+async function fetchCalendars(): Promise<FeaturedCalendar[]> {
+  try {
+    return await listFeaturedCalendars(6);
+  } catch {
+    return [];
+  }
+}
+
 async function fetchCities(): Promise<CityWithCount[]> {
   try {
     return await listCitiesWithCounts(8);
@@ -44,17 +53,26 @@ async function fetchCities(): Promise<CityWithCount[]> {
 
 /**
  * /discover — the browse surface of the NYU-24 IA: category tiles →
- * featured circles → cities. Not a feed; every card links into a scoped
- * drill-down (/events?category=…, /events?city=…, /circles/[id]) where the
- * timeline renders. True SSR: direct Mongo reads, no HTTP hop, each section
+ * featured circles → featured calendars (NYU-25) → cities. Not a feed;
+ * every card links into a scoped drill-down (/events?category=…,
+ * /events?city=…, /circles/[id], /calendars/[slug]) where the timeline
+ * renders. True SSR: direct Mongo reads, no HTTP hop, each section
  * degrading independently to an empty list if the cluster is unreachable.
  */
 export default async function DiscoverPage() {
-  const [categories, circles, cities] = await Promise.all([
+  const [categories, circles, calendars, cities] = await Promise.all([
     fetchCategories(),
     fetchCircles(),
+    fetchCalendars(),
     fetchCities(),
   ]);
 
-  return <DiscoverBrowse categories={categories} circles={circles} cities={cities} />;
+  return (
+    <DiscoverBrowse
+      categories={categories}
+      circles={circles}
+      calendars={calendars}
+      cities={cities}
+    />
+  );
 }
