@@ -20,7 +20,9 @@ const statusDisplay: Record<
   RSVPStatus,
   { label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number }>; bg: string; fg: string }
 > = {
-  none: { label: "RSVP", icon: Ticket, bg: "var(--color-tanzanite)", fg: "var(--primary-foreground, #fff)" },
+  // Idle CTA derives from the active event theme when present (event detail),
+  // falling back to the brand tanzanite primary everywhere else.
+  none: { label: "RSVP", icon: Ticket, bg: "var(--event-primary, var(--color-tanzanite))", fg: "var(--primary-foreground, #fff)" },
   pending: { label: "Pending", icon: Clock, bg: "rgba(251,191,36,0.15)", fg: "#B45309" },
   confirmed: { label: "Confirmed", icon: Check, bg: "rgba(74,222,128,0.15)", fg: "#15803D" },
   waitlisted: { label: "Waitlisted", icon: Users, bg: "rgba(179,136,255,0.15)", fg: "var(--color-tanzanite,#B388FF)" },

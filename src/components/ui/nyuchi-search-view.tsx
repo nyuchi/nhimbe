@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useNyuchiHarness } from "@/components/ui/harness";
 import { FilterBar, type FilterOption } from "@/components/ui/filter-bar";
 import { NyuchiListingCard, type NyuchiListingMeta } from "@/components/ui/nyuchi-listing-card";
+import { NyuchiTimeline, type TimelineItem } from "@/components/ui/nyuchi-timeline";
 import { NyuchiPlaceCard, type PlaceVerification } from "@/components/ui/nyuchi-place-card";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import type { Mineral } from "@/lib/category-mineral";
@@ -35,6 +36,12 @@ interface SearchListingResult {
   meta?: NyuchiListingMeta[];
   price?: string | number;
   onClick?: () => void;
+  /** Timeline fields — used when the view renders as a date-railed timeline. */
+  date?: string | Date;
+  time?: string;
+  host?: string;
+  location?: string;
+  attendeeCount?: number;
 }
 
 interface SearchPlaceResult {
@@ -78,6 +85,8 @@ interface NyuchiSearchViewProps {
   onTrendingSelect?: (query: string) => void;
   /** Rendered under the results (e.g. a "view all" link). */
   footer?: React.ReactNode;
+  /** Render event results as the 4.2.0 date-railed timeline (listings only). */
+  timeline?: boolean;
   className?: string;
 }
 
@@ -102,6 +111,7 @@ export function NyuchiSearchView({
   trending = [],
   onTrendingSelect,
   footer,
+  timeline = false,
   className,
 }: NyuchiSearchViewProps) {
   const { animStyle } = useNyuchiHarness("search-view");
@@ -170,7 +180,25 @@ export function NyuchiSearchView({
             {results.length} result{results.length !== 1 ? "s" : ""}
             {hasQuery ? <> for &ldquo;{query}&rdquo;</> : null}
           </p>
-          {results.length > 0 ? (
+          {results.length > 0 && timeline && !results.some(isPlace) ? (
+            <NyuchiTimeline
+              items={(results as SearchListingResult[]).map(
+                (r): TimelineItem => ({
+                  id: r.id,
+                  date: r.date ?? new Date(),
+                  time: r.time,
+                  title: r.title,
+                  host: r.host,
+                  location: r.location,
+                  attendeeCount: r.attendeeCount,
+                  thumbnail: r.image,
+                  href: r.href,
+                  mineral: r.mineral,
+                  category: r.category,
+                }),
+              )}
+            />
+          ) : results.length > 0 ? (
             <div className="space-y-2">
               {results.map((r, i) =>
                 isPlace(r) ? (

@@ -1,96 +1,155 @@
 /**
- * Mineral theme definitions — single source of truth
+ * Washed theme definitions — single source of truth (mzizi doctrine 4.2.0).
  *
- * Used by: event-theme-wrapper, create event page, gradient-background
- * These map to the Five African Minerals brand palette.
+ * The 4.2.0 refresh replaces the old Five-Minerals theme list with the mzizi
+ * **heritage** + **experimental** washed palettes as the selectable theme
+ * options. Each palette is a fully-solved washed theme carrying, per light /
+ * dark mode:
+ *   • accent  (ui)           — the saturated mark colour
+ *   • wash    (container)     — the surface tint used as the event page ground
+ *   • onWash  (on_container)  — AAA-safe foreground on the wash
+ *   • gradient                — the cover gradient
+ *
+ * IMPORTANT: these are per-event *theme options*. The app brand `--primary`
+ * stays **tanzanite** in every theme (globals.css); the per-theme wash only
+ * tints event surfaces/accents — it never replaces the brand lead. `tanzanite`
+ * is the default option and mirrors the brand mineral.
+ *
+ * Used by: event-theme-wrapper, create-event theme picker, gradient-background.
+ * (category-mineral maps categories → per-card accent minerals — a separate,
+ * intentionally unchanged categorisation cue.)
  */
 
-export interface MineralTheme {
-  name: string;
-  gradient: string;
-  primary: string;
-  secondary: string;
+export interface ModeColors {
+  /** accent (ui) — saturated mark colour. */
   accent: string;
-  surface: string;
-  surfaceHover: string;
+  /** wash (container) — surface tint / page ground. */
+  wash: string;
+  /** foreground on the wash (on_container) — AAA-safe. */
+  onWash: string;
+  /** cover gradient for this mode. */
+  gradient: string;
 }
 
-export const mineralThemes: Record<string, MineralTheme> = {
-  malachite: {
-    name: "Malachite",
-    gradient: "linear-gradient(135deg, #004D40 0%, #00796B 50%, #64FFDA 100%)",
-    primary: "#64FFDA",
-    secondary: "#00796B",
-    accent: "#004D40",
-    surface: "rgba(0, 77, 64, 0.15)",
-    surfaceHover: "rgba(0, 77, 64, 0.25)",
+export interface WashedTheme {
+  name: string;
+  /** Canonical cover gradient persisted to events.coverGradient (light framing). */
+  gradient: string;
+  light: ModeColors;
+  dark: ModeColors;
+}
+
+/** Build a washed theme from mzizi's fully-solved experimental palette values. */
+function experimental(
+  name: string,
+  uiL: string,
+  uiD: string,
+  contL: string,
+  contD: string,
+  onL: string,
+  onD: string,
+): WashedTheme {
+  const light: ModeColors = {
+    accent: uiL,
+    wash: contL,
+    onWash: onL,
+    gradient: `linear-gradient(135deg, ${onL}, ${uiL})`,
+  };
+  const dark: ModeColors = {
+    accent: uiD,
+    wash: contD,
+    onWash: onD,
+    gradient: `linear-gradient(135deg, ${uiD}, ${onD})`,
+  };
+  return { name, gradient: light.gradient, light, dark };
+}
+
+/**
+ * Build a washed theme from a single heritage hex. mzizi's heritage records
+ * ship only the hex, so we derive the container (wash) by mixing the hex into
+ * the active surface (~8% light / ~14% dark) and pick an AAA on-container.
+ * color-mix keeps the wash surface-relative so it adapts to light/dark.
+ */
+function heritage(name: string, hex: string): WashedTheme {
+  const light: ModeColors = {
+    accent: hex,
+    wash: `color-mix(in srgb, ${hex} 8%, var(--surface))`,
+    onWash: `color-mix(in srgb, ${hex} 82%, black)`,
+    gradient: `linear-gradient(135deg, color-mix(in srgb, ${hex} 82%, black), ${hex})`,
+  };
+  const dark: ModeColors = {
+    accent: `color-mix(in srgb, ${hex} 62%, white)`,
+    wash: `color-mix(in srgb, ${hex} 14%, var(--surface))`,
+    onWash: `color-mix(in srgb, ${hex} 48%, white)`,
+    gradient: `linear-gradient(135deg, ${hex}, color-mix(in srgb, ${hex} 55%, white))`,
+  };
+  return { name, gradient: light.gradient, light, dark };
+}
+
+/** tanzanite — the nhimbe brand default option (mirrors the brand mineral). */
+const tanzanite: WashedTheme = {
+  name: "Tanzanite",
+  gradient: "linear-gradient(135deg, #2E004D, #B388FF)",
+  light: {
+    accent: "#4B0082",
+    wash: "color-mix(in srgb, #4B0082 8%, var(--surface))",
+    onWash: "#2E004D",
+    gradient: "linear-gradient(135deg, #2E004D, #4B0082)",
   },
-  tanzanite: {
-    name: "Tanzanite",
-    gradient: "linear-gradient(135deg, #1A0A2E 0%, #4B0082 50%, #B388FF 100%)",
-    primary: "#B388FF",
-    secondary: "#4B0082",
-    accent: "#1A0A2E",
-    surface: "rgba(75, 0, 130, 0.15)",
-    surfaceHover: "rgba(75, 0, 130, 0.25)",
-  },
-  gold: {
-    name: "Gold",
-    gradient: "linear-gradient(135deg, #5D4037 0%, #8B5A00 50%, #FFD740 100%)",
-    primary: "#FFD740",
-    secondary: "#8B5A00",
-    accent: "#5D4037",
-    surface: "rgba(139, 90, 0, 0.15)",
-    surfaceHover: "rgba(139, 90, 0, 0.25)",
-  },
-  cobalt: {
-    name: "Cobalt",
-    gradient: "linear-gradient(135deg, #001F3F 0%, #0047AB 50%, #00B0FF 100%)",
-    primary: "#00B0FF",
-    secondary: "#0047AB",
-    accent: "#001F3F",
-    surface: "rgba(0, 71, 171, 0.15)",
-    surfaceHover: "rgba(0, 71, 171, 0.25)",
-  },
-  sodalite: {
-    name: "Sodalite",
-    gradient: "linear-gradient(135deg, #0D1442 0%, #283593 50%, #3D5AFE 100%)",
-    primary: "#3D5AFE",
-    secondary: "#283593",
-    accent: "#0D1442",
-    surface: "rgba(40, 53, 147, 0.15)",
-    surfaceHover: "rgba(40, 53, 147, 0.25)",
-  },
-  "tigers-eye": {
-    name: "Tiger's Eye",
-    gradient: "linear-gradient(135deg, #4A2C00 0%, #8B4513 50%, #D4A574 100%)",
-    primary: "#D4A574",
-    secondary: "#8B4513",
-    accent: "#4A2C00",
-    surface: "rgba(139, 69, 19, 0.15)",
-    surfaceHover: "rgba(139, 69, 19, 0.25)",
-  },
-  obsidian: {
-    name: "Obsidian",
-    gradient: "linear-gradient(135deg, #0A0A0A 0%, #1E1E1E 50%, #3A3A3A 100%)",
-    primary: "#9CA3AF",
-    secondary: "#3A3A3A",
-    accent: "#1E1E1E",
-    surface: "rgba(58, 58, 58, 0.15)",
-    surfaceHover: "rgba(58, 58, 58, 0.25)",
+  dark: {
+    accent: "#B388FF",
+    wash: "color-mix(in srgb, #B388FF 14%, var(--surface))",
+    onWash: "#E1BEE7",
+    gradient: "linear-gradient(135deg, #4B0082, #B388FF)",
   },
 };
 
-/** Theme IDs for iteration */
-export const mineralThemeIds = Object.keys(mineralThemes) as (keyof typeof mineralThemes)[];
+export const themes: Record<string, WashedTheme> = {
+  // Brand default.
+  tanzanite,
 
-/** Extract [accent, secondary, primary] color tuple from a theme */
-export function getThemeColors(themeId: string): [string, string, string] {
-  const theme = mineralThemes[themeId] || mineralThemes.tanzanite;
-  return [theme.accent, theme.secondary, theme.primary];
+  // Heritage palette (mzizi styling-heritage-colors).
+  baobab: heritage("Baobab", "#6D4C41"),
+  hematite: heritage("Hematite", "#607D8B"),
+  indigo: heritage("Indigo", "#3F51B5"),
+  kalahari: heritage("Kalahari", "#D9C7A0"),
+  river: heritage("River", "#0097A7"),
+  savanna: heritage("Savanna", "#C9A227"),
+  sunset: heritage("Sunset", "#FF7043"),
+
+  // Experimental palette (mzizi styling-experimental) — fully solved washes.
+  acacia: experimental("Acacia", "#7E8C22", "#768420", "#E9EBDB", "#333521", "#48510E", "#B6CE23"),
+  dusk: experimental("Dusk", "#A35DD8", "#9749D3", "#E4DBEB", "#2D2135", "#661B9E", "#CC9FEF"),
+  ember: experimental("Ember", "#CD5F33", "#BB562D", "#EBDFDB", "#352721", "#7A3115", "#EBA68A"),
+  fern: experimental("Fern", "#259725", "#228D22", "#DBEBDB", "#213521", "#0F570F", "#28DB28"),
+  lagoon: experimental("Lagoon", "#249383", "#218A7A", "#DBEBE9", "#213532", "#0E554B", "#24D6BC"),
+  protea: experimental("Protea", "#D34998", "#CA3188", "#EBDBE4", "#35212D", "#841656", "#ED98C9"),
+  storm: experimental("Storm", "#577BD6", "#426CD1", "#DBE0EB", "#212735", "#1A409B", "#99B2EE"),
+};
+
+/** Theme IDs for iteration (tanzanite first). */
+export const themeIds = Object.keys(themes) as (keyof typeof themes)[];
+
+/** @deprecated legacy alias — use `themes`. Kept so older imports resolve. */
+export const mineralThemes = themes;
+/** @deprecated legacy alias — use `themeIds`. */
+export const mineralThemeIds = themeIds;
+
+/** Resolve a theme by id, falling back to the tanzanite default. */
+export function getTheme(themeId?: string): WashedTheme {
+  return (themeId && themes[themeId]) || tanzanite;
 }
 
-/** Brand colors for background animations — tanzanite is the nhimbe lead. */
+/**
+ * Extract an [onWash, accent, wash] colour tuple (dark mode) for a theme.
+ * Retained for backward-compatible consumers that expect a 3-colour tuple.
+ */
+export function getThemeColors(themeId: string): [string, string, string] {
+  const t = getTheme(themeId);
+  return [t.dark.onWash, t.dark.accent, t.dark.wash];
+}
+
+/** Brand colors for background animations — tanzanite stays the nhimbe lead. */
 export const brandColors = {
   light: {
     primary: "#4B0082",

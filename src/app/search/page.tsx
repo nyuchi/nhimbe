@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { ArrowRight, Clock, MapPin } from "lucide-react";
-import { type Event, type Category } from "@/lib/api";
+import { type Event, type Category, getMediaUrl } from "@/lib/api";
 import { getEventsAction, getCategoriesAction } from "@/app/actions/discovery";
 import { searchEventsAction } from "@/app/actions/search";
 import { NyuchiSearchView, type SearchResultItem } from "@/components/ui/nyuchi-search-view";
@@ -130,8 +130,13 @@ export default function SearchPage() {
         description: event.description,
         category: event.category,
         mineral: categoryToMineral(event.category),
-        image: event.image,
+        image: event.image ? getMediaUrl(event.image) : undefined,
         href: `/events/${event.id}`,
+        date: event.startDate,
+        time: event.date.time,
+        host: event.organizer?.name,
+        location: event.location.name || event.location.addressLocality,
+        attendeeCount: event.attendeeCount,
         meta: [
           { icon: Clock, label: "date", value: event.date.full },
           { icon: MapPin, label: "venue", value: event.location.addressLocality },
@@ -165,6 +170,7 @@ export default function SearchPage() {
         onClearRecent={clearRecentSearches}
         trending={trending}
         onTrendingSelect={(t) => setSearchQuery(t)}
+        timeline
       />
 
       {/* Persist a recent search once the query settles with matches. */}

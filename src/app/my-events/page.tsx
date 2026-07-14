@@ -67,7 +67,7 @@ function MyEventsContent() {
   }[activeTab];
 
   return (
-    <div className="max-w-300 mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <div className="max-w-300 mx-auto px-4 sm:px-6 py-8 sm:py-10">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 sm:mb-8">
         <div>

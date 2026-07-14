@@ -101,7 +101,7 @@ function NyuchiCalendar({
         </div>
         <div className="grid grid-cols-7 gap-1">
           {Array.from({ length: 35 }).map((_, i) => (
-            <div key={i} className="h-8 rounded bg-muted" />
+            <div key={i} className="aspect-square rounded bg-muted" />
           ))}
         </div>
       </div>
@@ -176,7 +176,7 @@ function NyuchiCalendar({
       <div className="rounded-[var(--radius-card,14px)] bg-card p-2 ring-1 ring-foreground/10">
         <div className="grid grid-cols-7 gap-[2px]">
           {Array.from({ length: firstDay }).map((_, i) => (
-            <div key={`empty-${i}`} className="h-11" />
+            <div key={`empty-${i}`} className="aspect-square" />
           ))}
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const day = i + 1;
@@ -197,7 +197,8 @@ function NyuchiCalendar({
                 aria-pressed={isSelected}
                 aria-label={`${monthLabel} ${day}${hasEvents ? `, ${dayEvents.length} event${dayEvents.length === 1 ? "" : "s"}` : ""}`}
                 className={cn(
-                  "flex h-11 flex-col items-center justify-center rounded-[var(--radius-inner,7px)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]",
+                  // 4.2.0: compact square cells (aspect-ratio:1).
+                  "flex aspect-square flex-col items-center justify-center rounded-[var(--radius-sm,7px)] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]",
                   isSelected && "bg-[var(--color-tanzanite)]",
                   isToday && !isSelected && "bg-[var(--color-tanzanite)]/20",
                 )}

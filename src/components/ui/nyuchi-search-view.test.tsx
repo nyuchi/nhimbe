@@ -49,6 +49,19 @@ describe("NyuchiSearchView", () => {
     expect(onQueryChange).toHaveBeenCalledWith("");
   });
 
+  it("renders results as a timeline when timeline mode is on (listings only)", () => {
+    const listings: SearchResultItem[] = [
+      { id: "e1", title: "Sunday Run", href: "/events/e1", date: "2026-08-02", time: "9:00 AM" },
+      { id: "e2", title: "Book Club", href: "/events/e2", date: "2026-08-03" },
+    ];
+    const { getByText } = render(
+      <NyuchiSearchView query="run" onQueryChange={() => {}} results={listings} timeline />,
+    );
+    expect(document.querySelector('[data-slot="nyuchi-timeline"]')).toBeTruthy();
+    expect(getByText("Sunday Run")).toBeTruthy();
+    expect(getByText("Book Club")).toBeTruthy();
+  });
+
   it("renders category filter chips and an AI summary", () => {
     const { getByText } = render(
       <NyuchiSearchView

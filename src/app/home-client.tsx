@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { Loader2, ArrowRight, Globe, TrendingUp, Flame, Clock, Users, Plus, CalendarDays, Compass, MapPin } from "lucide-react";
 import dynamic from "next/dynamic";
-import { NyuchiListingCard } from "@/components/ui/nyuchi-listing-card";
+import { NyuchiTimeline, type TimelineItem } from "@/components/ui/nyuchi-timeline";
 import { categoryToMineral } from "@/lib/category-mineral";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CityDropdown } from "@/components/ui/city-dropdown";
@@ -159,28 +159,22 @@ function CommunityStatsBar({ eventCount, stats }: { eventCount: number; stats: C
   );
 }
 
-// A single discovery row, rendered with the branded nyuchi-listing-card.
-// Category drives the mineral accent (tanzanite is the nhimbe default).
-function EventRow({ event, index }: { event: Event; index: number }) {
-  const meta = [
-    { label: "date", value: `${event.date.month} ${event.date.day}`, icon: CalendarDays },
-    { label: "venue", value: event.location.name || event.location.addressLocality, icon: MapPin },
-  ];
-  if (event.attendeeCount > 0) {
-    meta.push({ label: "going", value: `${event.attendeeCount} going`, icon: Users });
-  }
-  return (
-    <NyuchiListingCard
-      variant="row"
-      index={index}
-      href={`/events/${event.id}`}
-      title={event.name}
-      category={event.category}
-      mineral={categoryToMineral(event.category)}
-      image={event.image ? getMediaUrl(event.image) : undefined}
-      meta={meta}
-    />
-  );
+// Map an event onto a timeline row. Category drives the mineral accent
+// (tanzanite is the nhimbe default).
+function eventToTimelineItem(event: Event): TimelineItem {
+  return {
+    id: event.id,
+    date: event.startDate,
+    time: event.date.time,
+    title: event.name,
+    host: event.organizer?.name,
+    location: event.location.name || event.location.addressLocality,
+    attendeeCount: event.attendeeCount,
+    thumbnail: event.image ? getMediaUrl(event.image) : undefined,
+    href: `/events/${event.id}`,
+    mineral: categoryToMineral(event.category),
+    category: event.category,
+  };
 }
 
 interface HomeClientProps {
@@ -275,9 +269,8 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
     });
   }, [events, activeCategory, activeCity]);
 
-  // Split events into two columns for display
-  const leftColumnEvents = filteredEvents.filter((_, i) => i % 2 === 0).slice(0, 3);
-  const rightColumnEvents = filteredEvents.filter((_, i) => i % 2 === 1).slice(0, 3);
+  // Timeline feed — the 4.2.0 date-railed discover list.
+  const feedItems = filteredEvents.slice(0, 12).map(eventToTimelineItem);
 
   return (
     <div className="min-h-screen">
@@ -360,7 +353,7 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
 
       {/* Hero Section — public only */}
       {!isAuthenticated && (
-        <section className="py-16 md:py-24 relative overflow-hidden">
+        <section className="py-10 md:py-16 relative overflow-hidden">
           {/* Mineral wash backdrop — malachite → tanzanite */}
           <div
             aria-hidden
@@ -454,22 +447,8 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
             </div>
           ) : filteredEvents.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
-              {/* Main Events Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-2">
-                {/* Left Column */}
-                <div className="space-y-2">
-                  {leftColumnEvents.map((event, i) => (
-                    <EventRow key={event.id} event={event} index={i * 2} />
-                  ))}
-                </div>
-
-                {/* Right Column */}
-                <div className="space-y-2">
-                  {rightColumnEvents.map((event, i) => (
-                    <EventRow key={event.id} event={event} index={i * 2 + 1} />
-                  ))}
-                </div>
-              </div>
+              {/* Main feed — 4.2.0 timeline discover list */}
+              <NyuchiTimeline items={feedItems} />
 
               {/* Sidebar - Community Insights */}
               <aside className="hidden lg:block">
@@ -559,7 +538,7 @@ export function HomeClient({ initialEvents, initialCategories }: HomeClientProps
 
       {/* CTA Section — public only */}
       {!isAuthenticated && (
-        <section className="py-16 border-t border-elevated">
+        <section className="py-10 border-t border-elevated">
           <div className="max-w-300 mx-auto px-6 text-center">
             <p className="font-serif italic text-lg text-text-secondary mb-4">
               &ldquo;Together we gather, together we grow&rdquo;

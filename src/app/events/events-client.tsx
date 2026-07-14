@@ -2,12 +2,12 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { Search, Loader2, SlidersHorizontal, X, MapPin, CalendarClock } from "lucide-react";
+import { Search, Loader2, SlidersHorizontal, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { Badge } from "@/components/ui/badge";
-import { NyuchiListingCard } from "@/components/ui/nyuchi-listing-card";
+import { NyuchiTimeline, type TimelineItem } from "@/components/ui/nyuchi-timeline";
 import { NyuchiEmptyState } from "@/components/ui/nyuchi-empty-state";
 import { CityDropdown } from "@/components/ui/city-dropdown";
 import { categoryToMineral } from "@/lib/category-mineral";
@@ -195,25 +195,23 @@ export function EventsClient({ initialEvents, initialCategories, initialCities }
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
         </div>
       ) : filteredEvents.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEvents.map((event, i) => (
-            <NyuchiListingCard
-              key={event.id}
-              variant="compact"
-              index={i}
-              href={`/events/${event.id}`}
-              title={event.name}
-              description={event.description}
-              category={event.category}
-              mineral={categoryToMineral(event.category)}
-              image={event.image ? getMediaUrl(event.image) : undefined}
-              meta={[
-                { label: "date", value: `${event.date.month} ${event.date.day}`, icon: CalendarClock },
-                { label: "venue", value: event.location.name || event.location.addressLocality, icon: MapPin },
-              ]}
-            />
-          ))}
-        </div>
+        <NyuchiTimeline
+          items={filteredEvents.map(
+            (event): TimelineItem => ({
+              id: event.id,
+              date: event.startDate,
+              time: event.date.time,
+              title: event.name,
+              host: event.organizer?.name,
+              location: event.location.name || event.location.addressLocality,
+              attendeeCount: event.attendeeCount,
+              thumbnail: event.image ? getMediaUrl(event.image) : undefined,
+              href: `/events/${event.id}`,
+              mineral: categoryToMineral(event.category),
+              category: event.category,
+            }),
+          )}
+        />
       ) : (
         <NyuchiEmptyState
           icon={<Search />}
