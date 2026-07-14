@@ -15,9 +15,17 @@ import {
 import { uploadMedia, getMediaUrl, type Category } from "@/lib/api";
 import { getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
 import { createEvent as createEventAction } from "@/app/actions/events";
+import { getMyCalendarsAction, type MyCalendarSummary } from "@/app/actions/calendars";
 import { mineralThemes, mineralThemeIds, getThemeColors } from "@/lib/themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DateTimeModal } from "@/components/modals/date-time-modal";
 import { LocationModal } from "@/components/modals/location-modal";
 import { CategoryModal } from "@/components/modals/category-modal";
@@ -156,6 +164,11 @@ export default function CreateEventForm() {
   const [hostMode, setHostMode] = useState<HostMode>("person");
   const [hostEntityId, setHostEntityId] = useState<string | null>(null);
 
+  // Optional calendar attach (NYU-25) — stream the event into one of the
+  // host's own calendars. The select only renders when they have any.
+  const [calendarId, setCalendarId] = useState<string | null>(null);
+  const [myCalendars, setMyCalendars] = useState<MyCalendarSummary[]>([]);
+
   // Cover image
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
@@ -202,10 +215,15 @@ export default function CreateEventForm() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [cats, cityList] = await Promise.allSettled([getCategoriesAction(), getCitiesAction()]);
+      const [cats, cityList, calendarList] = await Promise.allSettled([
+        getCategoriesAction(),
+        getCitiesAction(),
+        getMyCalendarsAction(),
+      ]);
       if (cancelled) return;
       if (cats.status === "fulfilled" && cats.value.length > 0) setCategories(cats.value);
       if (cityList.status === "fulfilled" && cityList.value.length > 0) setCities(cityList.value);
+      if (calendarList.status === "fulfilled") setMyCalendars(calendarList.value);
     })();
     return () => {
       cancelled = true;
@@ -380,6 +398,7 @@ export default function CreateEventForm() {
         requiresApproval: requireApproval,
         hostMode,
         hostEntityId,
+        calendarId,
       });
 
       setFormTouched(false);
@@ -507,6 +526,38 @@ export default function CreateEventForm() {
             hostEntityId={hostEntityId}
             onChange={(mode, entityId) => { setHostMode(mode); setHostEntityId(entityId); touchForm(); }}
           />
+
+          {/* Optional calendar attach (NYU-25) — only when the host curates
+              any calendars; additive to the wizard state/action pattern. */}
+          {myCalendars.length > 0 && (
+            <div className="mb-4">
+              <label
+                htmlFor="create-event-calendar"
+                className="block text-sm font-medium text-foreground mb-1.5"
+              >
+                Add to calendar <span className="text-text-tertiary">(optional)</span>
+              </label>
+              <Select
+                value={calendarId ?? "none"}
+                onValueChange={(v) => { setCalendarId(v === "none" ? null : v); touchForm(); }}
+              >
+                <SelectTrigger id="create-event-calendar" className="w-full">
+                  <SelectValue placeholder="No calendar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No calendar</SelectItem>
+                  {myCalendars.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-text-tertiary">
+                Followers of that calendar will see this event in its stream.
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-2 mb-4">
             <Button

@@ -19,6 +19,7 @@ import { withAuth } from "@workos-inc/authkit-nextjs";
 import { eventsCollection, personsCollection } from "@/lib/mongo/databases";
 import { newId, slugify, stampNew } from "@/lib/mongo/ids";
 import { ensureHostEntityForPerson, getEntityById, listHostEntitiesForPerson } from "@/lib/mongo/entities";
+import { attachEventToCalendar, getCalendarById } from "@/lib/mongo/calendars";
 import { indexEventEmbedding } from "@/lib/ai/event-index";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { mapEventDocToApi } from "@/lib/mongo/mappers";
@@ -66,6 +67,8 @@ export interface CreateEventActionInput {
   requiresApproval?: boolean;
   hostMode: "person" | "organization" | "family";
   hostEntityId?: string | null;
+  /** Stream the event into one of the HOST'S OWN calendars (NYU-25). */
+  calendarId?: string | null;
 }
 
 export interface CreateEventResult {
@@ -142,6 +145,16 @@ export async function createEventForPerson(
     throw new Error(`Pick which ${input.hostMode} is hosting, or switch back to a personal host.`);
   }
 
+  // Optional calendar attach (NYU-25): a host may only stream an event into
+  // one of THEIR OWN calendars. Validate before the insert so a bad id fails
+  // early instead of leaving a half-attached event.
+  if (input.calendarId) {
+    const calendar = await getCalendarById(input.calendarId);
+    if (!calendar || calendar.ownerPersonId !== person._id) {
+      throw new Error("You can only add events to your own calendars.");
+    }
+  }
+
   // Resolve the host entity: an explicitly picked org/family, else the
   // person's (lazily created) default host entity.
   const primaryHostEntityId =
@@ -208,6 +221,7 @@ export async function createEventForPerson(
     location,
     placeId: null,
     circleId: null,
+    calendarId: null,
     offers,
     image: input.image ? [input.image] : [],
     tags,
@@ -224,6 +238,14 @@ export async function createEventForPerson(
 
   const col = await eventsCollection();
   await col.insertOne(doc);
+
+  // Attach to the chosen calendar (sets events.events.calendarId and keeps
+  // the calendar's denormalized eventCount honest). Ownership was validated
+  // above, before the insert.
+  if (input.calendarId) {
+    await attachEventToCalendar(id, input.calendarId);
+    doc.calendarId = input.calendarId;
+  }
 
   // Index the event for semantic search (Atlas Vector Search). Best-effort and
   // awaited so the embedding exists by the time the create flow returns, but a
