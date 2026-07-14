@@ -9,7 +9,7 @@
 
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { ShieldX } from "lucide-react";
-import { signOutAction } from "@admin/app/actions/auth";
+import { signInAction, signOutAction } from "@admin/app/actions/auth";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +58,15 @@ export default async function DeniedPage() {
                 Sign out
               </Button>
             </form>
-          ) : null}
+          ) : (
+            // Anonymous (e.g. after sign-out): offer an org-scoped hosted
+            // sign-in so the WorkOS screen is scoped to the nyuchi org.
+            <form action={signInAction}>
+              <Button type="submit" variant="ghost">
+                Sign in
+              </Button>
+            </form>
+          )}
         </div>
       </div>
     </div>
