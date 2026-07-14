@@ -19,8 +19,14 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://nhimbe.com";
 export default async function DeniedPage() {
   // Best-effort: show which account was denied so admins spot a wrong-account
   // sign-in immediately. Anonymous visitors can see this page too (no gate
-  // needed — it contains nothing sensitive).
-  const { user } = await withAuth();
+  // needed — it contains nothing sensitive). Session resolution failures
+  // (e.g. local dev bypass without WorkOS env) render the anonymous copy.
+  let user: Awaited<ReturnType<typeof withAuth>>["user"] = null;
+  try {
+    ({ user } = await withAuth());
+  } catch {
+    user = null;
+  }
 
   return (
     <div className="min-h-dvh flex items-center justify-center px-6">

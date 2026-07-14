@@ -20,6 +20,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { getPersonByWorkosId } from "@/lib/mongo/users";
+import { isDevBypass, DEV_WORKOS_ID } from "@/lib/auth/dev";
 import { hasRole, normaliseRole, type UserRole } from "./roles";
 
 export { hasRole, normaliseRole };
@@ -65,6 +66,28 @@ export type AdminRequester = {
 export async function requireAdmin(
   requiredRole: UserRole = "admin",
 ): Promise<AdminRequester> {
+  // Local-only dev bypass — same double gate as the public app
+  // (NODE_ENV !== "production" AND DEV_AUTH_BYPASS=1), impossible on any
+  // Vercel deployment. The synthetic dev person still flows through the REAL
+  // gate decision so the deny path is exercisable locally via DEV_AUTH_ROLE
+  // (defaults to super_admin).
+  if (isDevBypass()) {
+    const devRole = normaliseRole(process.env.DEV_AUTH_ROLE ?? "super_admin");
+    const role = resolveAdminGate(
+      { personId: DEV_WORKOS_ID, role: devRole, suspended: false },
+      requiredRole,
+    );
+    if (role === null) {
+      redirect("/denied");
+    }
+    return {
+      workosUserId: DEV_WORKOS_ID,
+      personId: DEV_WORKOS_ID,
+      role,
+      accessToken: "",
+    };
+  }
+
   const { user, accessToken } = await withAuth({ ensureSignedIn: true });
   // ensureSignedIn:true redirects unauthenticated users to the AuthKit flow,
   // so by the time we reach here both user and accessToken are present.

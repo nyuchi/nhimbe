@@ -10,6 +10,7 @@
  */
 
 import { withAuth } from "@workos-inc/authkit-nextjs";
+import { isDevBypass, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
 import { AdminShell } from "@admin/components/admin-shell";
 import { requireAdmin } from "@admin/lib/require-admin";
 
@@ -21,18 +22,23 @@ export default async function GatedAdminLayout({
   children: React.ReactNode;
 }) {
   const requester = await requireAdmin("moderator");
-  const { user } = await withAuth();
 
-  const name =
-    [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
-    user?.email ||
-    "Admin";
+  let name = DEV_NAME;
+  let email = DEV_EMAIL;
+  if (!isDevBypass()) {
+    const { user } = await withAuth();
+    name =
+      [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+      user?.email ||
+      "Admin";
+    email = user?.email ?? "";
+  }
 
   return (
     <AdminShell
       user={{
         name,
-        email: user?.email ?? "",
+        email,
         role: requester.role,
       }}
     >

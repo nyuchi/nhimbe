@@ -31,11 +31,22 @@ const AUTH_READY =
   typeof WORKOS_REDIRECT_URI === "string" &&
   WORKOS_REDIRECT_URI.length > 0;
 
+// Local-only dev bypass (mirrors src/lib/auth/dev.ts in the public app —
+// inlined because the proxy runtime can't import the server-only module).
+// Vercel builds every environment as production, so this is impossible on
+// any deployment.
+const DEV_BYPASS =
+  process.env.NODE_ENV !== "production" && process.env.DEV_AUTH_BYPASS === "1";
+
 const upstream = AUTH_READY ? authkitProxy() : null;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function proxy(request: NextRequest, ctx: any) {
   if (!AUTH_READY) {
+    if (DEV_BYPASS) {
+      // requireAdmin() resolves the synthetic dev person itself.
+      return NextResponse.next();
+    }
     return new NextResponse(
       "WorkOS environment is not configured on this admin deployment.",
       { status: 503 },

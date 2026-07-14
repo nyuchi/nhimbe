@@ -116,3 +116,29 @@ describe("requireAdmin", () => {
     expect(hasRole("super_admin", "admin")).toBe(true);
   });
 });
+
+describe("requireAdmin local dev bypass", () => {
+  it("grants the synthetic dev super_admin without AuthKit when enabled", async () => {
+    vi.stubEnv("DEV_AUTH_BYPASS", "1");
+    try {
+      await expect(requireAdmin()).resolves.toMatchObject({
+        workosUserId: "dev-local-bypass",
+        role: "super_admin",
+      });
+      expect(withAuth).not.toHaveBeenCalled();
+      expect(getPersonByWorkosId).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("still runs the real deny path — DEV_AUTH_ROLE=user is bounced to /denied", async () => {
+    vi.stubEnv("DEV_AUTH_BYPASS", "1");
+    vi.stubEnv("DEV_AUTH_ROLE", "user");
+    try {
+      await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/denied");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
