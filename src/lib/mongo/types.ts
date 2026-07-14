@@ -507,6 +507,78 @@ export interface LinkClickDoc extends Omit<BaseDoc, "updatedAt"> {
   userAgent?: string | null;
 }
 
+// ───────────────────────── planner database ─────────────────────────
+
+/** schema.org reservation lifecycle statuses used by the Mukoko Planner. */
+export type ReservationStatus =
+  | "ReservationConfirmed"
+  | "ReservationHold"
+  | "ReservationCancelled"
+  | "ReservationPending";
+
+/**
+ * `planner.reservations` — the Mukoko super app's personal Planner substrate.
+ * nhimbe write-throughs mirror each RSVP here (correlated to the event via the
+ * shared `iCalUid`) so a gathering someone said yes to shows up in their
+ * cross-product Planner without the Planner ever reading `events.rsvps`.
+ */
+export interface PlannerReservationDoc extends BaseDoc {
+  /** Reuses the event's `iCalUid` so reservation and event correlate. */
+  iCalUid: string;
+  schemaOrgType: "EventReservation";
+  reservationStatus: ReservationStatus;
+  reservedPersonId: string;
+  reservedEntityId: string;
+  /** Which Mukoko product originated the reservation ("events" for nhimbe). */
+  originatingApp: string;
+  bookingTime: Date;
+  /** schema.org Event snapshot (@type/name/startDate/location). */
+  reservationFor?: Record<string, unknown> | null;
+  /** Attendee plus additional guests. */
+  partySize?: number | null;
+  /** schema.org Person the reservation is held under. */
+  underName?: Record<string, unknown> | null;
+  mukoko?: Record<string, unknown>;
+}
+
+// ───────────────────────── campfire database ─────────────────────────
+
+/**
+ * `campfire.conversations` — cross-product messaging. nhimbe pairs each event
+ * with at most one conversation (looked up by `eventId`) that carries host
+ * announcements as server-readable system messages (`encryptionMode: "none"`).
+ */
+export interface CampfireConversationDoc extends BaseDoc {
+  conversationType: string;
+  createdByPersonId: string;
+  encryptionMode: string;
+  visibility: string;
+  isActive: boolean;
+  messageCount: number;
+  participantCount: number;
+  eventId?: string | null;
+  circleId?: string | null;
+  name?: string | null;
+  lastMessageAt?: Date | null;
+  mukoko?: Record<string, unknown>;
+}
+
+/** `campfire.messages` — one message row hanging off a conversation. */
+export interface CampfireMessageDoc extends BaseDoc {
+  conversationId: string;
+  senderPersonId: string;
+  senderEntityId: string;
+  matrixEventType: string;
+  messageType: string;
+  /** Monotonic per-conversation ordinal (the conversation's messageCount). */
+  sequence: number;
+  sentAt: Date;
+  /** Plaintext body — nhimbe system conversations use `encryptionMode: "none"`. */
+  content?: string | null;
+  deletedAt?: Date | null;
+  mukoko?: Record<string, unknown>;
+}
+
 // ───────────────────────── device database ─────────────────────────
 
 export interface PairingDoc extends BaseDoc {
