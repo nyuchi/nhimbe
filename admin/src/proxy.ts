@@ -38,7 +38,21 @@ const AUTH_READY =
 const DEV_BYPASS =
   process.env.NODE_ENV !== "production" && process.env.DEV_AUTH_BYPASS === "1";
 
-const upstream = AUTH_READY ? authkitProxy() : null;
+// Middleware-auth mode: this app has NO anonymous surface, so unauthenticated
+// page requests are redirected to the hosted sign-in AT THE PROXY — the only
+// layer that can set the PKCE/state cookies (an RSC render cannot; a bare
+// withAuth({ ensureSignedIn }) from a server component 500s for anonymous
+// visitors). requireAdmin() stays on every route as the role gate and
+// defence-in-depth. /denied stays reachable anonymously (it's the deny
+// screen) and /callback is exempted automatically via the redirect URI.
+const upstream = AUTH_READY
+  ? authkitProxy({
+      middlewareAuth: {
+        enabled: true,
+        unauthenticatedPaths: ["/denied"],
+      },
+    })
+  : null;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default async function proxy(request: NextRequest, ctx: any) {

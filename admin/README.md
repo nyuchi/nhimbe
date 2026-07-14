@@ -37,9 +37,12 @@ generated when the build runs from `admin/`.
 WorkOS hosted AuthKit, same environment as the public app but with **this
 project's own redirect URI**:
 
-- Anonymous → `withAuth({ ensureSignedIn: true })` sends the visitor to the
-  hosted sign-in with a return path back to the requested admin page; WorkOS
-  returns to **this app's `/callback`**.
+- Anonymous → the **proxy's middleware-auth mode** (`authkitProxy({
+  middlewareAuth: { enabled: true } })`) redirects every unauthenticated page
+  request to the hosted sign-in with a return path back to the requested
+  admin page (the proxy is the only layer that can set the PKCE/state
+  cookies); WorkOS returns to **this app's `/callback`**. Only `/denied` and
+  `/callback` are reachable anonymously.
 - Every route is **server-gated** by `requireAdmin()`
   (`src/lib/require-admin.ts` — the contract extracted from the old
   `src/app/admin/require-admin.ts`): `identity.persons.role` decides access,
@@ -81,6 +84,12 @@ npm run test:run   # vitest (gate, shell, section renders)
 Set the env vars below in `admin/.env.local`. Without `MONGODB_URI` the
 pages render with empty degradation; without the WorkOS vars every request
 answers 503 (this app has no anonymous surface).
+
+**Local dev without WorkOS:** `DEV_AUTH_BYPASS=1 npm run dev` signs you in as
+the synthetic dev super admin (same `NODE_ENV !== "production"` double gate
+as the public app — impossible on deployments). `DEV_AUTH_ROLE=user` (or
+`moderator`/`admin`) exercises the real deny paths, e.g. the `/denied`
+bounce.
 
 ## Vercel project setup
 
