@@ -94,17 +94,64 @@ const ASSIGNABLE_ROLES = ["user", "moderator", "admin", "super_admin"] as const;
 type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 
 /**
- * Set `identity.persons.role`. Suspension/deletion are role-based in the
- * Mukoko model ("suspended" / "deleted"); we mirror `isActive` so the
- * requireAdmin() suspended gate also holds. Uses a loosely-typed `$set`
- * because "suspended"/"deleted" live outside the canonical PersonDoc.role
- * union.
+ * Assert an id arriving from a client action is a plain non-empty string.
+ * Runtime types are erased, so without this a crafted client could pass an
+ * operator object (e.g. `{ $ne: null }`) straight into a Mongo `_id` filter.
+ */
+function assertId(value: unknown, field: string): asserts value is string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`[mukoko] admin action: ${field} must be a non-empty string`);
+  }
+}
+
+/** The elevated roles that only a super_admin may grant or act upon. */
+function isElevatedRole(role: string): boolean {
+  return role === "admin" || role === "super_admin";
+}
+
+/** Read the target person's current canonical role (defaults to "user"). */
+async function currentPersonRole(userId: string): Promise<string> {
+  const persons = await personsCollection();
+  const target = await persons.findOne({ _id: userId });
+  return typeof target?.role === "string" ? target.role : "user";
+}
+
+/**
+ * Escalate the gate to super_admin when the operation touches an elevated
+ * account. Called after the base `requireAdmin()` so a plain admin acting on
+ * a plain user/moderator still passes, but acting on (or minting) an
+ * admin/super_admin is denied unless the caller is themselves super_admin.
+ */
+async function ensureCanTouchElevated(
+  requester: { role: string },
+  touchesElevated: boolean,
+): Promise<void> {
+  if (touchesElevated && requester.role !== "super_admin") {
+    await requireAdmin("super_admin"); // redirects to /denied
+  }
+}
+
+/**
+ * Set `identity.persons.role` only — suspension state is decoupled (isActive).
+ * Loosely-typed `$set` because the caller validates `role` against
+ * ASSIGNABLE_ROLES rather than the narrower compile-time PersonDoc.role union.
  */
 async function writePersonRole(userId: string, role: string): Promise<{ message: string }> {
   const persons = await personsCollection();
   const set: Record<string, unknown> = { role, updatedAt: new Date() };
-  set.isActive = !(role === "suspended" || role === "deleted");
   await persons.updateOne({ _id: userId }, { $set: set });
+  return { message: "ok" };
+}
+
+/**
+ * Set `identity.persons.isActive` only — the suspension flag. Leaves `role`
+ * intact so suspending never clobbers (and reactivating never loses) the
+ * account's real role. The requireAdmin() gate treats isActive===false as
+ * denied, so a suspended account can't reach any admin surface.
+ */
+async function writePersonActive(userId: string, isActive: boolean): Promise<{ message: string }> {
+  const persons = await personsCollection();
+  await persons.updateOne({ _id: userId }, { $set: { isActive, updatedAt: new Date() } });
   return { message: "ok" };
 }
 
@@ -117,36 +164,45 @@ export async function setUserRole(
   userId: string,
   role: string,
 ): Promise<{ message: string }> {
+  assertId(userId, "userId");
   if (!ASSIGNABLE_ROLES.includes(role as AssignableRole)) {
     throw new Error(`[mukoko] setUserRole: unknown role "${role}"`);
   }
 
   const requester = await requireAdmin();
+  const targetRole = await currentPersonRole(userId);
 
-  const persons = await personsCollection();
-  const target = await persons.findOne({ _id: userId });
-  const targetRole = typeof target?.role === "string" ? target.role : "user";
-
-  const touchesElevated =
-    role === "admin" ||
-    role === "super_admin" ||
-    targetRole === "admin" ||
-    targetRole === "super_admin";
-  if (touchesElevated && requester.role !== "super_admin") {
-    await requireAdmin("super_admin"); // redirects to /denied
-  }
+  // Elevated if we're granting an elevated role OR touching an account that
+  // already holds one.
+  await ensureCanTouchElevated(requester, isElevatedRole(role) || isElevatedRole(targetRole));
 
   return writePersonRole(userId, role);
 }
 
+/**
+ * Suspend an account (set isActive=false). Acting on an elevated account
+ * (admin/super_admin) requires super_admin — a plain admin cannot suspend or
+ * demote a super_admin. Leaves `role` intact.
+ */
 export async function suspendUser(userId: string): Promise<{ message: string }> {
-  await requireAdmin();
-  return writePersonRole(userId, "suspended");
+  assertId(userId, "userId");
+  const requester = await requireAdmin();
+  const targetRole = await currentPersonRole(userId);
+  await ensureCanTouchElevated(requester, isElevatedRole(targetRole));
+  return writePersonActive(userId, false);
 }
 
+/**
+ * Reactivate an account (set isActive=true). Same super_admin guard as
+ * suspend — reactivating an elevated account requires super_admin. Leaves
+ * `role` intact so the account keeps the role it held before suspension.
+ */
 export async function activateUser(userId: string): Promise<{ message: string }> {
-  await requireAdmin();
-  return writePersonRole(userId, "user");
+  assertId(userId, "userId");
+  const requester = await requireAdmin();
+  const targetRole = await currentPersonRole(userId);
+  await ensureCanTouchElevated(requester, isElevatedRole(targetRole));
+  return writePersonActive(userId, true);
 }
 
 // ── event mutations (lifecycle transitions + feature toggle) ────────
@@ -162,6 +218,7 @@ async function writeEventStatus(
 
 /** Publish (or re-publish) an event: lifecycle + schema.org eventStatus. */
 export async function publishEvent(eventId: string): Promise<{ message: string }> {
+  assertId(eventId, "eventId");
   await requireAdmin();
   return writeEventStatus(eventId, {
     status: "published",
@@ -171,6 +228,7 @@ export async function publishEvent(eventId: string): Promise<{ message: string }
 
 /** Cancel an event (never hard-deleted so RSVP history stays intact). */
 export async function cancelEvent(eventId: string): Promise<{ message: string }> {
+  assertId(eventId, "eventId");
   await requireAdmin();
   return writeEventStatus(eventId, {
     status: "cancelled",
@@ -180,12 +238,14 @@ export async function cancelEvent(eventId: string): Promise<{ message: string }>
 
 /** Archive an event — takes it off every public surface without cancelling. */
 export async function archiveEvent(eventId: string): Promise<{ message: string }> {
+  assertId(eventId, "eventId");
   await requireAdmin();
   return writeEventStatus(eventId, { status: "archived" });
 }
 
 /** Moderator action — currently just cancels the event (takes it offline). */
 export async function moderateEvent(eventId: string): Promise<{ message: string }> {
+  assertId(eventId, "eventId");
   await requireAdmin();
   return writeEventStatus(eventId, {
     status: "cancelled",
@@ -198,6 +258,10 @@ export async function setEventFeatured(
   eventId: string,
   featured: boolean,
 ): Promise<{ message: string }> {
+  assertId(eventId, "eventId");
+  if (typeof featured !== "boolean") {
+    throw new Error("[mukoko] setEventFeatured: featured must be a boolean");
+  }
   await requireAdmin();
   return writeEventStatus(eventId, { "mukoko.featured": featured });
 }
