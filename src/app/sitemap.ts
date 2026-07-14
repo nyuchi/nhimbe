@@ -1,5 +1,6 @@
 import { MetadataRoute } from "next";
 import { listEvents } from "@/lib/mongo/events";
+import { listPublicCalendars } from "@/lib/mongo/calendars";
 
 const BASE_URL = "https://nhimbe.com";
 
@@ -110,5 +111,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error("Failed to fetch events for sitemap:", error);
   }
 
-  return [...staticPages, ...eventPages];
+  // Public calendars (NYU-25). Unlisted and private calendars are never
+  // listed — unlisted render by link only, private 404 to non-owners.
+  let calendarPages: MetadataRoute.Sitemap = [];
+  try {
+    const calendars = await listPublicCalendars(200);
+    calendarPages = calendars.map((calendar) => ({
+      url: `${BASE_URL}/calendars/${calendar.slug}`,
+      lastModified: calendar.updatedAt ?? new Date(),
+      changeFrequency: "daily" as const,
+      priority: 0.6,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch calendars for sitemap:", error);
+  }
+
+  return [...staticPages, ...eventPages, ...calendarPages];
 }

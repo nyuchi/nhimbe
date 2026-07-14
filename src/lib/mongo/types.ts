@@ -75,6 +75,8 @@ export interface EventDoc extends BaseDoc {
   location?: Record<string, unknown> | null;
   placeId?: string | null;
   circleId?: string | null;
+  /** Curated calendar the event streams into (`events.calendars._id`, NYU-25). */
+  calendarId?: string | null;
   organizer?: Record<string, unknown> | null;
   offers?: unknown[];
   image?: unknown[];
@@ -103,6 +105,59 @@ export interface EventEmbeddingDoc extends BaseDoc {
   city?: string | null;
   category?: string | null;
   startDate?: Date | null;
+}
+
+/**
+ * `events.calendars` — followable, curated event streams (NYU-25, the Luma
+ * "calendar" pattern). A calendar is NOT a Circle: Circles are communities
+ * (members, posts); a calendar is a stream of events someone curates. A
+ * calendar MAY belong to a circle via `circleId`, or stand alone. Events point
+ * back at their calendar through `events.events.calendarId`.
+ */
+export type CalendarVisibility = "public" | "unlisted" | "private";
+
+export interface CalendarDoc extends BaseDoc {
+  slug: string;
+  name: string;
+  schemaOrgType: "EventSeries" | "Collection";
+  ownerPersonId: string;
+  /** Entity the owner curates through (Rule 10: entity-centric). */
+  ownerEntityId: string;
+  visibility: CalendarVisibility;
+  isActive: boolean;
+  /** Denormalized active-follow count (kept by follow/unfollow). */
+  followerCount: number;
+  /** Denormalized attached-event count (kept by attachEventToCalendar). */
+  eventCount: number;
+  iCalUid: string;
+  surfaceContext: string;
+  description?: string | null;
+  /** Optional owning circle — a calendar MAY belong to a community. */
+  circleId?: string | null;
+  /** Washed palette id from `src/lib/themes.ts` (tints the calendar page). */
+  theme?: string | null;
+  coverImage?: Record<string, unknown> | null;
+  image?: unknown[];
+  inLanguage?: string | null;
+  tags?: unknown[];
+  translations?: Record<string, unknown>;
+  url?: string | null;
+}
+
+/**
+ * `events.calendarFollows` — one row per (calendar, person), unique-indexed.
+ * Follow/unfollow flips `isActive` in place (never duplicates rows) so the
+ * calendar's `followerCount` can be kept exactly.
+ */
+export interface CalendarFollowDoc extends BaseDoc {
+  calendarId: string;
+  followerPersonId: string;
+  followerEntityId: string;
+  isActive: boolean;
+  /** When the current follow began (refreshed on re-follow). */
+  followedAt: Date;
+  notificationPreferences?: Record<string, unknown>;
+  unfollowedAt?: Date | null;
 }
 
 export type RsvpResponse = "RsvpResponseYes" | "RsvpResponseNo" | "RsvpResponseMaybe";

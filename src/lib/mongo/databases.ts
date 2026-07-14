@@ -14,6 +14,8 @@ import type { Collection, Db, Document } from "mongodb";
 import { getMongoClient } from "./client";
 import type {
   AttendanceHistoryDoc,
+  CalendarDoc,
+  CalendarFollowDoc,
   CampfireConversationDoc,
   CampfireMessageDoc,
   CheckInDoc,
@@ -86,6 +88,10 @@ export const eventUpdatesCollection = () => getCollection<EventUpdateDoc>(DB.eve
 /** Per-event RAG embeddings (Atlas Vector Search source collection). */
 export const eventEmbeddingsCollection = () =>
   getCollection<EventEmbeddingDoc>(DB.events, "eventEmbeddings");
+/** Followable curated event streams (NYU-25). */
+export const calendarsCollection = () => getCollection<CalendarDoc>(DB.events, "calendars");
+export const calendarFollowsCollection = () =>
+  getCollection<CalendarFollowDoc>(DB.events, "calendarFollows");
 
 // ── identity ────────────────────────────────────────────────────────
 export const personsCollection = () => getCollection<PersonDoc>(DB.identity, "persons");

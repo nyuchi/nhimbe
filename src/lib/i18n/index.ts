@@ -75,6 +75,20 @@ const translations: Record<Locale, TranslationMap> = {
     "circle.tabs.archive": "Archive",
     "circle.compose.placeholder": "Share something with the circle…",
     "circle.empty": "No posts yet — be the first to spark the fire.",
+
+    // Calendars (followable curated event streams — NOT circles/communities)
+    "calendars.follow": "Follow",
+    "calendars.following": "Following",
+    "calendars.followers": "{count} followers",
+    "calendars.follower": "1 follower",
+    "calendars.signInToFollow": "Sign in to follow",
+    "calendars.subscribe": "Subscribe (.ics)",
+    "calendars.fromCircle": "from {name}",
+    "calendars.events": "{count} events",
+    "calendars.event": "1 event",
+    "calendars.empty": "No upcoming events on this calendar yet.",
+    "calendars.featuredTitle": "Featured calendars",
+    "calendars.addToCalendar": "Add to calendar",
   },
   sn: {
     // Navigation
@@ -129,6 +143,20 @@ const translations: Record<Locale, TranslationMap> = {
     "circle.tabs.archive": "Zvakachengetwa",
     "circle.compose.placeholder": "Govera neDariro…",
     "circle.empty": "Hapana zvakanyorwa — iva wekutanga kubatidza moto.",
+
+    // Calendars (Shona: karenda — the followable event stream)
+    "calendars.follow": "Tevera",
+    "calendars.following": "Uri kutevera",
+    "calendars.followers": "Vateveri {count}",
+    "calendars.follower": "Muteveri 1",
+    "calendars.signInToFollow": "Pinda kuti utevere",
+    "calendars.subscribe": "Nyoresa (.ics)",
+    "calendars.fromCircle": "kubva kuDariro re{name}",
+    "calendars.events": "Zviitiko {count}",
+    "calendars.event": "Chiitiko 1",
+    "calendars.empty": "Hapana zviitiko zvinouya pakarenda iyi parizvino.",
+    "calendars.featuredTitle": "Makarenda akasarudzwa",
+    "calendars.addToCalendar": "Wedzera kukarenda",
   },
 };
 
