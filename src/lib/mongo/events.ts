@@ -39,6 +39,8 @@ export interface ListEventsParams {
   category?: string;
   /** Filter by hosting circle (events.events.circleId). */
   circleId?: string;
+  /** Filter by curated calendar (events.events.calendarId, NYU-25). */
+  calendarId?: string;
   /** Only events starting on/after this instant. Defaults to now (upcoming). */
   from?: Date;
   /** Include past events too (overrides the default upcoming-only filter). */
@@ -65,6 +67,7 @@ function publishedFilter(params: ListEventsParams): Filter<EventDoc> {
   }
   if (params.category) filter.tags = params.category;
   if (params.circleId) filter.circleId = params.circleId;
+  if (params.calendarId) filter.calendarId = params.calendarId;
   if (params.city) {
     // The city lives in the embedded schema.org location object.
     (filter as Record<string, unknown>)["location.addressLocality"] = params.city;
