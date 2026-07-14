@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, CalendarDays, Map as MapIcon, Ticket, User } from "lucide-react";
+import { Home, CalendarDays, Compass, Ticket, User } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
 
+// Discover replaces Map in the bottom bar (NYU-24 IA) — the map stays one
+// tap away via /discover's "Near me" entry.
 const mobileNavItems = [
-  { href: "/", label: "Discover", icon: Home },
-  { href: "/map", label: "Map", icon: MapIcon },
+  { href: "/", label: "Home", icon: Home },
+  { href: "/discover", label: "Discover", icon: Compass },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/my-events", label: "My Events", icon: Ticket },
   { href: "/profile", label: "Profile", icon: User },
