@@ -20,33 +20,10 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { getPersonByWorkosId } from "@/lib/mongo/users";
+import { hasRole, normaliseRole, type UserRole } from "./roles";
 
-// Server-side mirror of the UserRole hierarchy from the public app's
-// auth-context. The hierarchy MUST match; widen here if you widen there.
-export type UserRole = "user" | "moderator" | "admin" | "super_admin";
-
-const ROLE_RANK: Record<UserRole, number> = {
-  user: 0,
-  moderator: 1,
-  admin: 2,
-  super_admin: 3,
-};
-
-export function hasRole(actual: UserRole, required: UserRole): boolean {
-  return ROLE_RANK[actual] >= ROLE_RANK[required];
-}
-
-export function normaliseRole(value: string | null | undefined): UserRole {
-  switch (value) {
-    case "super_admin":
-    case "admin":
-    case "moderator":
-    case "user":
-      return value;
-    default:
-      return "user";
-  }
-}
+export { hasRole, normaliseRole };
+export type { UserRole };
 
 /** The person shape the gate decision needs (subset of AppUser). */
 export interface GatePerson {

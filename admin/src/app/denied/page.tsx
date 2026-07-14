@@ -25,8 +25,8 @@ export default async function DeniedPage() {
   return (
     <div className="min-h-dvh flex items-center justify-center px-6">
       <div className="max-w-md w-full text-center space-y-6">
-        <div className="mx-auto w-14 h-14 rounded-2xl bg-destructive/10 flex items-center justify-center">
-          <ShieldX className="w-7 h-7 text-destructive" aria-hidden="true" />
+        <div className="mx-auto w-14 h-14 rounded-2xl bg-error/10 flex items-center justify-center">
+          <ShieldX className="w-7 h-7 text-error" aria-hidden="true" />
         </div>
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">Access denied</h1>
