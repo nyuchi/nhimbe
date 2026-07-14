@@ -22,6 +22,7 @@ import {
   rsvpsCollection,
 } from "./databases";
 import { WRITE_SCHEMA_VERSION, newId } from "./ids";
+import { writeThroughReservationCancellation } from "./planner";
 import type { RsvpDoc } from "./types";
 import type { CheckinStats, Registration } from "@/lib/api";
 
@@ -96,10 +97,20 @@ export async function setRegistrationApproval(
 /** Cancel a registration by flipping the rsvp response to "No". */
 export async function cancelRegistration(rsvpId: string): Promise<void> {
   const rsvps = await rsvpsCollection();
-  await rsvps.updateOne(
+  const cancelled = await rsvps.findOneAndUpdate(
     { _id: rsvpId },
     { $set: { rsvpResponse: "RsvpResponseNo", updatedAt: new Date() } },
+    { returnDocument: "after" },
   );
+  if (!cancelled) return;
+
+  // Cross-product write-through (NYU-26): flip the attendee's Planner
+  // reservation to ReservationCancelled so the super app stops showing the
+  // event as planned. Best-effort after the primary write — never throws.
+  await writeThroughReservationCancellation({
+    reservedPersonId: cancelled.attendeePersonId,
+    eventId: cancelled.eventId,
+  });
 }
 
 /**
