@@ -10,6 +10,7 @@ import { EventQRCode } from "./event-qr-code";
 import { ShareButton } from "./event-actions";
 import { RSVPButton } from "./rsvp-button";
 import { HostReputation } from "@/components/ui/host-reputation";
+import { NyuchiAvatarStack } from "@/components/ui/nyuchi-avatar-stack";
 import { EventEntityHostCard } from "./event-entity-host-card";
 import { joinWaitlist, leaveWaitlist, getWaitlistStatus } from "@/app/actions/waitlist";
 import { useAuth } from "@/components/auth/auth-context";
@@ -211,20 +212,11 @@ export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="flex gap-4">
-              {event.friends.map((friend, index) => (
-                <div key={index} className="flex flex-col items-center gap-2">
-                  <div
-                    className="w-13 h-[52px] rounded-full border-2"
-                    style={{
-                      background: `linear-gradient(135deg, var(--event-primary), var(--event-secondary))`,
-                      borderColor: "var(--event-primary)",
-                    }}
-                  />
-                  <span className="text-xs text-foreground/60">{friend.name}</span>
-                </div>
-              ))}
-            </div>
+            <NyuchiAvatarStack
+              people={event.friends.map((friend) => ({ name: friend.name }))}
+              max={6}
+              label=""
+            />
           </CardContent>
         </Card>
       )}
