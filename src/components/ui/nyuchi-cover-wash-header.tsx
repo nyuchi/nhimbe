@@ -46,6 +46,11 @@ interface NyuchiCoverWashHeaderProps {
   accent?: string;
   /** Mineral shortcut for the accent (ignored when `accent` is set). */
   mineral?: Mineral;
+  /** When the page already provides --event-primary / --wash (e.g. an event
+      themed by EventThemeWrapper), inherit them instead of re-emitting — this
+      avoids a self-referential custom-property cycle and keeps the hero in the
+      event's own washed theme. */
+  inheritWash?: boolean;
   date?: string;
   location?: string;
   host?: string;
@@ -63,6 +68,7 @@ function NyuchiCoverWashHeader({
   coverGradient,
   accent,
   mineral,
+  inheritWash = false,
   date,
   location,
   host,
@@ -72,16 +78,22 @@ function NyuchiCoverWashHeader({
 }: NyuchiCoverWashHeaderProps) {
   const { animStyle } = useNyuchiHarness("cover-wash-header");
 
-  const accentColor = accent ?? (mineral ? mineralColors[mineral] : "var(--primary)");
+  // When inheriting, use the page-provided --event-primary and don't re-emit
+  // it (a self-reference would be a CSS cycle). Otherwise seed both vars.
+  const accentColor = inheritWash
+    ? "var(--event-primary)"
+    : (accent ?? (mineral ? mineralColors[mineral] : "var(--primary)"));
   const wash = `color-mix(in srgb, ${accentColor} 8%, var(--surface))`;
   const fallbackGradient = `linear-gradient(135deg, color-mix(in srgb, ${accentColor} 40%, transparent), color-mix(in srgb, ${accentColor} 12%, transparent))`;
 
-  const rootStyle = {
-    ...animStyle(),
-    "--event-primary": accentColor,
-    "--wash": wash,
-    background: wash,
-  } as React.CSSProperties;
+  const rootStyle = (inheritWash
+    ? { ...animStyle() }
+    : {
+        ...animStyle(),
+        "--event-primary": accentColor,
+        "--wash": wash,
+        background: wash,
+      }) as React.CSSProperties;
 
   if (loading) {
     return (
