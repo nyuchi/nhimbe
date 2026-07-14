@@ -5,7 +5,8 @@ import Image from "next/image";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const platformLinks = [
-  { href: "/events", label: "Discover Events" },
+  { href: "/discover", label: "Discover" },
+  { href: "/events", label: "All Events" },
   { href: "/calendar", label: "Calendar" },
   { href: "/search", label: "Search" },
   { href: "/events/create", label: "Create an Event" },

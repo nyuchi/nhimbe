@@ -17,8 +17,8 @@ function TestConsumer() {
     <div>
       <div data-testid="locale">{locale}</div>
       <div data-testid="nav-home">{t("nav.home")}</div>
-      <div data-testid="kraal-title">{t("kraal.title")}</div>
-      <div data-testid="kraal-empty">{t("kraal.empty")}</div>
+      <div data-testid="circle-title">{t("circle.title")}</div>
+      <div data-testid="circle-empty">{t("circle.empty")}</div>
       <button type="button" data-testid="to-sn" onClick={() => setLocale("sn")}>
         sn
       </button>
@@ -43,7 +43,7 @@ describe("I18nProvider", () => {
     );
     expect(screen.getByTestId("locale").textContent).toBe("en");
     expect(screen.getByTestId("nav-home").textContent).toBe("Home");
-    expect(screen.getByTestId("kraal-empty").textContent).toBe(
+    expect(screen.getByTestId("circle-empty").textContent).toBe(
       "No posts yet — be the first to spark the fire.",
     );
   });
@@ -69,7 +69,7 @@ describe("I18nProvider", () => {
       </I18nProvider>,
     );
     expect(screen.getByTestId("nav-home").textContent).toBe("Home");
-    expect(screen.getByTestId("kraal-title").textContent).toBe("Kraal");
+    expect(screen.getByTestId("circle-title").textContent).toBe("Circles");
 
     act(() => {
       screen.getByTestId("to-sn").click();
@@ -78,7 +78,7 @@ describe("I18nProvider", () => {
     expect(screen.getByTestId("locale").textContent).toBe("sn");
     expect(screen.getByTestId("nav-home").textContent).toBe("Kumba");
     // Same key, different string — proving the consumer actually re-rendered.
-    expect(screen.getByTestId("kraal-empty").textContent).toBe(
+    expect(screen.getByTestId("circle-empty").textContent).toBe(
       "Hapana zvakanyorwa — iva wekutanga kubatidza moto.",
     );
   });

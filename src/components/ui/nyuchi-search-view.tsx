@@ -97,7 +97,7 @@ function isPlace(r: SearchResultItem): r is SearchPlaceResult {
 export function NyuchiSearchView({
   query,
   onQueryChange,
-  placeholder = "Search gatherings, kraals, places…",
+  placeholder = "Search gatherings, circles, places…",
   categories,
   activeCategories = [],
   onCategoryChange,

@@ -246,7 +246,7 @@ export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
         />
       )}
 
-      {/* View Kraal */}
+      {/* View circle */}
       <Card
         className="border-0 overflow-hidden"
         style={{
@@ -267,15 +267,15 @@ export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
               <Flame className="w-4.5 h-4.5" />
             </div>
             <div className="flex-1">
-              <h4 className="font-semibold text-sm">{t("kraal.title")}</h4>
-              <p className="text-xs text-foreground/60">{t("kraal.subtitle")}</p>
+              <h4 className="font-semibold text-sm">{t("circle.title")}</h4>
+              <p className="text-xs text-foreground/60">{t("circle.subtitle")}</p>
             </div>
           </div>
           <Link
-            href={event.eventCircleId ? `/kraal/${event.eventCircleId}` : "/kraal"}
+            href={event.eventCircleId ? `/circles/${event.eventCircleId}` : "/circles"}
             className="inline-flex items-center justify-center gap-1.5 w-full h-[var(--touch-target)] rounded-full bg-primary text-primary-foreground text-sm font-semibold transition-transform duration-[var(--motion-quick)] hover:-translate-y-px"
           >
-            {t("kraal.viewKraal")}
+            {t("circle.view")}
             <ArrowRight className="w-4 h-4" aria-hidden />
           </Link>
         </CardContent>

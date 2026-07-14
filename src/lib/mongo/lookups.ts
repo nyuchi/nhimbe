@@ -28,6 +28,69 @@ export async function listCategories(): Promise<Category[]> {
   return docs.map((d) => ({ id: d.slug, name: d.name, group: d.groupName ?? "Categories" }));
 }
 
+/** A category plus how many upcoming published events currently carry it. */
+export interface CategoryWithCount extends Category {
+  eventCount: number;
+}
+
+/**
+ * Categories with live upcoming-event counts — powers the /discover
+ * "browse by category" tile grid. Counts come from a single aggregation over
+ * published upcoming events' tags (the same field `listEvents`' category
+ * filter matches, so a tile's count agrees with its drill-down).
+ */
+export async function listCategoriesWithCounts(): Promise<CategoryWithCount[]> {
+  const [categories, col] = await Promise.all([listCategories(), eventsCollection()]);
+  const rows = await col
+    .aggregate<{ _id: string; count: number }>([
+      { $match: { status: { $in: PUBLISHED }, startDate: { $gte: new Date() } } },
+      { $unwind: "$tags" },
+      { $group: { _id: "$tags", count: { $sum: 1 } } },
+    ])
+    .toArray();
+  const counts = new Map(rows.map((r) => [r._id, r.count]));
+  return categories.map((c) => ({ ...c, eventCount: counts.get(c.id) ?? 0 }));
+}
+
+/** A city plus how many upcoming published events are happening there. */
+export interface CityWithCount {
+  addressLocality: string;
+  addressCountry: string;
+  eventCount: number;
+}
+
+/**
+ * Cities with live upcoming-event counts, busiest first — powers the
+ * /discover "explore by city" cards and the home landing city chips.
+ */
+export async function listCitiesWithCounts(limit = 12): Promise<CityWithCount[]> {
+  const col = await eventsCollection();
+  const rows = await col
+    .aggregate<{ _id: { city: string | null; country: string | null }; count: number }>([
+      { $match: { status: { $in: PUBLISHED }, startDate: { $gte: new Date() } } },
+      {
+        $group: {
+          _id: {
+            city: { $ifNull: ["$location.addressLocality", "$location.address.addressLocality"] },
+            country: { $ifNull: ["$location.addressCountry", "$location.address.addressCountry"] },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { count: -1 } },
+      { $limit: limit * 2 },
+    ])
+    .toArray();
+  return rows
+    .filter((r) => typeof r._id.city === "string" && r._id.city.length > 0)
+    .slice(0, limit)
+    .map((r) => ({
+      addressLocality: r._id.city as string,
+      addressCountry: (r._id.country as string) ?? "",
+      eventCount: r.count,
+    }));
+}
+
 /** Distinct cities derived from published events' embedded location. */
 export async function listCities(): Promise<{ addressLocality: string; addressCountry: string }[]> {
   const col = await eventsCollection();

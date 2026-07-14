@@ -37,6 +37,8 @@ export interface ListEventsParams {
   city?: string;
   /** Filter by a tag/category string. */
   category?: string;
+  /** Filter by hosting circle (events.events.circleId). */
+  circleId?: string;
   /** Only events starting on/after this instant. Defaults to now (upcoming). */
   from?: Date;
   /** Include past events too (overrides the default upcoming-only filter). */
@@ -62,6 +64,7 @@ function publishedFilter(params: ListEventsParams): Filter<EventDoc> {
     filter.startDate = { $gte: params.from };
   }
   if (params.category) filter.tags = params.category;
+  if (params.circleId) filter.circleId = params.circleId;
   if (params.city) {
     // The city lives in the embedded schema.org location object.
     (filter as Record<string, unknown>)["location.addressLocality"] = params.city;

@@ -169,19 +169,19 @@ export function EventPulseStrip({ event }: { event: Event }) {
 }
 
 /**
- * Kraal CTA — surfaces when the event is linked to a circle via
+ * Circle CTA — surfaces when the event is linked to a circle via
  * events.event.event_circle_id. Renders nothing when the link is absent.
  */
-export function EventKraalCta({ event }: { event: Event }) {
+export function EventCircleCta({ event }: { event: Event }) {
   if (!event.eventCircleId) return null;
   return (
     <Link
-      href={`/kraal/${event.eventCircleId}`}
-      data-slot="event-kraal-cta"
+      href={`/circles/${event.eventCircleId}`}
+      data-slot="event-circle-cta"
       className="inline-flex items-center gap-2 mt-3 px-4 h-10 rounded-full text-sm font-semibold transition-colors"
       style={{ background: "var(--nh-lead-soft)", color: "var(--nh-lead)" }}
     >
-      View the kraal
+      View the circle
       <ArrowRight className="w-4 h-4" aria-hidden />
     </Link>
   );

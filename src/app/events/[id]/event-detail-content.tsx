@@ -22,7 +22,7 @@ import { RSVPButton } from "./rsvp-button";
 import {
   EventInfoTiles,
   EventPulseStrip,
-  EventKraalCta,
+  EventCircleCta,
   EventContributionsBoard,
 } from "./event-info-tiles";
 import { EventEntityHostCard } from "./event-entity-host-card";
@@ -206,8 +206,8 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
               }
             />
 
-            {/* "View kraal" CTA when events.event.event_circle_id is set */}
-            <EventKraalCta event={event} />
+            {/* "View circle" CTA when events.events.circleId is set */}
+            <EventCircleCta event={event} />
 
             {/* Compact host link under title */}
             <Link href="#hosted-by" className="flex items-center gap-2 mb-5 sm:mb-6 group">

@@ -1,9 +1,9 @@
 "use server";
 
 /**
- * Kraal (circle) detail server actions — Vercel server runtime → MongoDB.
+ * Circle detail server actions — Vercel server runtime → MongoDB.
  *
- * Replaces the browser-side Supabase helpers the kraal detail page used to call
+ * Replaces the browser-side Supabase helpers the circle detail page used to call
  * (`getCircle` / `getCirclePosts` / `getCircleMembers` / `createCirclePost` /
  * `joinCircle` / `togglePostReaction`). The browser can't talk to Mongo, so all
  * reads and writes now run here against the `circles` database via the shared
@@ -27,6 +27,8 @@ import { stampNew } from "@/lib/mongo/ids";
 import { ensureHostEntityForPerson } from "@/lib/mongo/entities";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { isDevBypass, DEV_WORKOS_ID, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
+import { listEvents } from "@/lib/mongo/events";
+import type { Event } from "@/lib/api";
 import type {
   CircleDoc,
   CircleMembershipDoc,
@@ -38,8 +40,8 @@ const MAX_POST_LENGTH = 5000;
 
 // ── API shapes (kept compatible with the old Supabase helpers) ──────────────
 
-/** Minimal person projection the kraal UI renders for authors and members. */
-export interface KraalPerson {
+/** Minimal person projection the circle UI renders for authors and members. */
+export interface CirclePerson {
   id: string;
   name: string | null;
   givenname: string | null;
@@ -48,7 +50,7 @@ export interface KraalPerson {
 }
 
 /** Circle shape the detail page consumes (snake_case, matching the old row). */
-export interface KraalCircle {
+export interface CircleDetail {
   id: string;
   name: string;
   description: string | null;
@@ -59,7 +61,7 @@ export interface KraalCircle {
 }
 
 /** Post shape the detail stream/archive renders. */
-export interface KraalPost {
+export interface CirclePost {
   id: string;
   circle_id: string;
   author_id: string;
@@ -69,22 +71,22 @@ export interface KraalPost {
   comment_count: number | null;
   moderation_status: string | null;
   created_at: string | null;
-  author: KraalPerson | null;
+  author: CirclePerson | null;
 }
 
 /** Membership shape the members tab renders. */
-export interface KraalMember {
+export interface CircleMember {
   circle_id: string;
   person_id: string;
   role: string;
   status: string;
   joined_at: string | null;
-  person: KraalPerson | null;
+  person: CirclePerson | null;
 }
 
 // ── Mappers ─────────────────────────────────────────────────────────────────
 
-function mapPerson(doc: PersonDoc): KraalPerson {
+function mapPerson(doc: PersonDoc): CirclePerson {
   return {
     id: doc._id,
     name: doc.name ?? null,
@@ -94,7 +96,7 @@ function mapPerson(doc: PersonDoc): KraalPerson {
   };
 }
 
-function mapCircle(doc: CircleDoc): KraalCircle {
+function mapCircle(doc: CircleDoc): CircleDetail {
   return {
     id: doc._id,
     name: doc.name,
@@ -108,7 +110,7 @@ function mapCircle(doc: CircleDoc): KraalCircle {
   };
 }
 
-function mapPost(doc: CirclePostDoc, author: KraalPerson | null): KraalPost {
+function mapPost(doc: CirclePostDoc, author: CirclePerson | null): CirclePost {
   return {
     id: doc._id,
     circle_id: doc.circleId,
@@ -124,7 +126,7 @@ function mapPost(doc: CirclePostDoc, author: KraalPerson | null): KraalPost {
 }
 
 /** Resolve a batch of persons keyed by `_id` for author/member hydration. */
-async function hydratePersons(ids: string[]): Promise<Map<string, KraalPerson>> {
+async function hydratePersons(ids: string[]): Promise<Map<string, CirclePerson>> {
   const unique = [...new Set(ids.filter(Boolean))];
   if (unique.length === 0) return new Map();
   const persons = await personsCollection();
@@ -166,7 +168,7 @@ async function resolveActingPerson(): Promise<PersonDoc> {
 
 // ── Reads ───────────────────────────────────────────────────────────────────
 
-export async function getCircle(circleId: string): Promise<KraalCircle | null> {
+export async function getCircle(circleId: string): Promise<CircleDetail | null> {
   try {
     const circles = await circlesCollection();
     const doc = await circles.findOne({ _id: circleId, isActive: true });
@@ -177,11 +179,26 @@ export async function getCircle(circleId: string): Promise<KraalCircle | null> {
   }
 }
 
+/**
+ * The circle's upcoming events (events.events.circleId) — the primary lens
+ * nhimbe presents a circle through. Public listing rules apply (published,
+ * non-private, upcoming), so this is safe to show pre-join.
+ */
+export async function getCircleEvents(circleId: string, limit = 50): Promise<Event[]> {
+  try {
+    const { events } = await listEvents({ circleId, limit });
+    return events;
+  } catch (err) {
+    console.warn("[mukoko] getCircleEvents failed:", err);
+    return [];
+  }
+}
+
 export async function getCirclePosts(
   circleId: string,
   limit = 20,
   archived = false,
-): Promise<KraalPost[]> {
+): Promise<CirclePost[]> {
   try {
     const posts = await circlePostsCollection();
     const moderationStatus: CirclePostDoc["moderationStatus"] | { $ne: CirclePostDoc["moderationStatus"] } =
@@ -199,7 +216,7 @@ export async function getCirclePosts(
   }
 }
 
-export async function getCircleMembers(circleId: string, limit = 50): Promise<KraalMember[]> {
+export async function getCircleMembers(circleId: string, limit = 50): Promise<CircleMember[]> {
   try {
     const memberships = await circleMembershipsCollection();
     const docs = await memberships
@@ -228,7 +245,7 @@ export async function createCirclePost(input: {
   circleId: string;
   text: string;
   postType?: string;
-}): Promise<KraalPost> {
+}): Promise<CirclePost> {
   const text = input.text?.trim() ?? "";
   if (!text) throw new Error("Write something before posting.");
   if (text.length > MAX_POST_LENGTH) {

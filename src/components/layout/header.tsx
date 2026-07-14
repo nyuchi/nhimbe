@@ -9,14 +9,17 @@ import { useAuth } from "@/components/auth/auth-context";
 import { NyuchiUserMenu, type UserMenuItem } from "@/components/ui/nyuchi-user-menu";
 
 const navLinks = [
-  { href: "/", label: "Discover" },
+  { href: "/discover", label: "Discover" },
   { href: "/my-events", label: "My Events" },
   { href: "/calendar", label: "Calendar" },
 ];
 
 // Static page titles mapping
 const pageTitles: Record<string, string> = {
-  "/": "Discover",
+  "/": "Home",
+  "/discover": "Discover",
+  "/events": "All Events",
+  "/circles": "Circles",
   "/my-events": "My Events",
   "/calendar": "Calendar",
   "/about": "About",

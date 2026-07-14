@@ -169,7 +169,7 @@ function MyEventsContent() {
                 : "Explore events and find gatherings that interest you"
           }
           actionLabel={activeTab === "hosting" ? "Create event" : "Explore events"}
-          onAction={() => router.push(activeTab === "hosting" ? "/events/create" : "/")}
+          onAction={() => router.push(activeTab === "hosting" ? "/events/create" : "/discover")}
         />
       )}
     </div>

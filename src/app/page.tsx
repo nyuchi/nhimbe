@@ -1,44 +1,69 @@
-import { HomeClient } from "./home-client";
+import { withAuth } from "@workos-inc/authkit-nextjs";
+import { HomeLanding } from "./home-landing";
+import { HomeYourEvents } from "./home-your-events";
+import { getMyEvents } from "./actions/my-events";
 import { listEvents } from "@/lib/mongo/events";
-import { listCategories } from "@/lib/mongo/lookups";
-import type { Event, Category } from "@/lib/api";
+import { listCitiesWithCounts, type CityWithCount } from "@/lib/mongo/lookups";
+import { isDevBypass, DEV_NAME } from "@/lib/auth/dev";
+import type { Event } from "@/lib/api";
 
-// Refresh the cached listing every 60s — matches the old fetch-level
-// revalidate so the home page stays ISR-cached rather than hitting Mongo on
-// every request.
-export const revalidate = 60;
+/**
+ * Home (NYU-24 IA refresh) — a simple surface, split server-side on auth:
+ *
+ * - Logged out → a lean serif landing (one CTA into /discover, city chips,
+ *   at most one featured event). No feed, no timeline — discovery lives on
+ *   /discover, scoped timelines on /events.
+ * - Signed in → "Your events": an Upcoming/Past segmented control over the
+ *   member's own RSVPs + hosted gatherings (Luma's "Your events" pattern).
+ *
+ * Reading the session cookie makes this route dynamic (it was ISR before the
+ * refresh); both branches stay SSR-first — Mongo is read here on the server
+ * and handed to presentational components.
+ */
 
-async function fetchInitialEvents(): Promise<Event[]> {
+async function resolveViewer(): Promise<{ signedIn: boolean; firstName: string | null }> {
+  if (isDevBypass()) {
+    return { signedIn: true, firstName: DEV_NAME.split(/\s+/)[0] ?? null };
+  }
   try {
-    // Direct Mongo read on the server — no HTTP hop. Degrades to an empty
-    // list (client retries via a server action) if the cluster is unreachable
-    // or MONGODB_URI is absent (e.g. CI builds).
-    const { events } = await listEvents({ limit: 50 });
-    return events;
+    const { user } = await withAuth();
+    if (!user) return { signedIn: false, firstName: null };
+    return { signedIn: true, firstName: user.firstName ?? null };
+  } catch {
+    // Missing/misconfigured WorkOS env (e.g. CI builds) — treat as anonymous.
+    return { signedIn: false, firstName: null };
+  }
+}
+
+async function fetchFeaturedEvent(): Promise<Event | null> {
+  try {
+    const { events } = await listEvents({ limit: 1 });
+    return events[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchCities(): Promise<CityWithCount[]> {
+  try {
+    return await listCitiesWithCounts(6);
   } catch {
     return [];
   }
 }
 
-async function fetchInitialCategories(): Promise<Category[]> {
-  try {
-    // Direct Mongo read on the server — no HTTP hop to /api or any external API.
-    return await listCategories();
-  } catch {
-    return [];
+export default async function HomePage() {
+  const viewer = await resolveViewer();
+
+  if (viewer.signedIn) {
+    const events = await getMyEvents().catch(() => ({
+      attending: [],
+      hosting: [],
+      past: [],
+    }));
+    return <HomeYourEvents events={events} userFirstName={viewer.firstName} />;
   }
-}
 
-export default async function DiscoverPage() {
-  const [initialEvents, initialCategories] = await Promise.all([
-    fetchInitialEvents(),
-    fetchInitialCategories(),
-  ]);
-
-  return (
-    <HomeClient
-      initialEvents={initialEvents}
-      initialCategories={initialCategories}
-    />
-  );
+  const [featuredEvent, cities] = await Promise.all([fetchFeaturedEvent(), fetchCities()]);
+  return <HomeLanding featuredEvent={featuredEvent} cities={cities} />;
 }

@@ -71,7 +71,7 @@ Databases (`DB` map): `events`, `identity`, `entity`, `engagement`, `places`, `c
 
 ### Data model (entity-centric hosting)
 
-Hosting is **entity-centric**: `events.events.primaryHostEntityId` → `entity.entities` → `identity.persons` (via memberships / `founderPersonId`). Places live in `places.places`; Kraal community circles in `circles.*`.
+Hosting is **entity-centric**: `events.events.primaryHostEntityId` → `entity.entities` → `identity.persons` (via memberships / `founderPersonId`). Places live in `places.places`; circle **communities** (schema.org OnlineCommunityGroup — not calendars) in `circles.*`, with `events.events.circleId` marking events hosted within a circle.
 
 ### Engagement (global cross-platform substrate)
 
@@ -130,11 +130,13 @@ Cloudflare is otherwise used only for R2 storage and the Shamwari AI Gateway. Tr
 
 ### Pages (`src/app/`)
 
-- Home (`page.tsx` + `home-client.tsx`), events (create/detail/manage), my-events, profile, map, admin.
+- Home (`page.tsx`) — **split server-side on auth** (NYU-24 IA): logged out → a lean landing (`home-landing.tsx`: serif hero, one CTA into `/discover`, city chips, ≤1 featured event — no feed); signed in → "Your events" (`home-your-events.tsx`: Upcoming/Past segmented control over the member's RSVPs + hosted gatherings via `getMyEvents`).
+- Discover (`/discover`) — the **browse** surface: category tiles → featured circles → city cards (`discover-browse.tsx`), each linking into a scoped drill-down. Never a feed.
+- Events (`/events`) — the **all-events drill-down timeline**, scopeable via `?category=<slug>` / `?city=<addressLocality>` query params (the drill-down routing choice — no parallel `/discover/[category]` tree); plus create/detail/manage. Also my-events, profile, map, admin.
 - Auth: `/auth/*`, `/callback` (WorkOS post-auth landing), `/authenticate` (legacy redirect → `/`).
 - Info: search, calendar, about, help, privacy, terms.
 - Short links: `/e/[shortCode]` (events), `/r/[code]` (referral tracking).
-- Kraal (community circles): `/kraal`, `/kraal/[id]`.
+- Circles (communities; renamed from "Kraal" — UI/route/i18n only, the DB was already `circles.*`): `/circles`, `/circles/[id]`. Permanent redirects `/kraal*` → `/circles*` live in `next.config.ts`. The circle page leads with an **Events tab** (timeline of the circle's upcoming events); the light posts stream is kept as-is — community features belong to the Circles/Campfire sibling products.
 - Signage/kiosk: `/signage`, plus event sub-pages `/events/[id]/kiosk` and `/events/[id]/signage`.
 - SEO: `robots.ts`, `sitemap.ts`; error boundaries `error.tsx`, `global-error.tsx`, `not-found.tsx`, `loading.tsx`.
 
@@ -155,13 +157,13 @@ The infrastructure spine the mzizi-branded component library compiles against. I
 
 The mzizi events-domain brand components, ported into `src/components/ui/` and each wired through the harness (`useNyuchiHarness`) for observability, reduced-motion entry animation, and a11y:
 
-- **`nyuchi-listing-card.tsx`** (`NyuchiListingCard`) — the foundational universal listing card, variants `row` / `compact` / `hero`, with a mineral category accent. **Replaces `event-card` / `event-card-horizontal` at the home feed, events listing, my-events (hosting/past), and calendar agenda.** (`event-card*.tsx` remain only for the signage + map surfaces that still import them.)
+- **`nyuchi-listing-card.tsx`** (`NyuchiListingCard`) — the foundational universal listing card, variants `row` / `compact` / `hero`, with a mineral category accent. **Replaces `event-card` / `event-card-horizontal` at the home landing teaser, my-events (hosting/past), and calendar agenda.** (`event-card*.tsx` remain only for the signage + map surfaces that still import them.)
 - **`nyuchi-rsvp-button.tsx`** (`NyuchiRSVPButton`) — stateful RSVP pill (none/pending/confirmed/waitlisted/declined) with a capacity indicator; wired into the event-detail sidebar (`events/[id]/rsvp-button.tsx`) over the existing `rsvpToEvent` action.
 - **`nyuchi-ticket-card.tsx`** (`NyuchiTicketCard`) — digital ticket (QR area, tier, status); rendered on the my-events **Attending** tab.
 - **`nyuchi-programme-item.tsx`** (`NyuchiProgrammeItem`) — timeline agenda row; renders the event-detail programme (`events/[id]/event-specifics.tsx`).
 - **`nyuchi-calendar.tsx`** (`NyuchiCalendar`) — branded month view with mineral event-dots + an agenda render-prop; powers `/calendar` (the shadcn `calendar` primitive stays for form date-pickers). Cells are `aspect-square` (4.2.0 compact calendar).
 - **`nyuchi-meta-tile.tsx`** (`NyuchiMetaTile`) — 4.2.0 date/location signature: rounded-square icon/date chip + bold 16px primary + 13px muted secondary; used for the When / Where rows on event detail.
-- **`nyuchi-timeline.tsx`** (`NyuchiTimeline`) — 4.2.0 date-railed discover list (weekday · day · month rail + tight horizontal rows: time · title · host · location · avatar stack · thumbnail). Powers the home feed, `/events`, and `/search` (via `NyuchiSearchView`'s `timeline` mode).
+- **`nyuchi-timeline.tsx`** (`NyuchiTimeline`) — 4.2.0 date-railed discover list (weekday · day · month rail + tight horizontal rows: time · title · host · location · avatar stack · thumbnail). Renders on **scoped surfaces only** (NYU-24): `/events` (incl. `?category=`/`?city=` drill-downs), `/search` (via `NyuchiSearchView`'s `timeline` mode), a circle's Events tab, and the signed-in home's "Your events" — never on the public home or `/discover`.
 - **`nyuchi-create-listing.tsx`** — create/edit form shell (`CoverThemePicker`, `FormSection`, `FormRow`, `FormTextArea`, `PublishBar`, `CreateHeader`); the create-event wizard adopts `PublishBar` for its sticky CTA without replacing its state or the `createEvent` action.
 
 Per-event mineral accents come from **`src/lib/category-mineral.ts`** (`categoryToMineral`), keyword-matched with a **tanzanite** default so the brand lead is always the fallback face. `nyuchi-forecast-card` was intentionally **not** ported: nhimbe's weather is the Mukoko iframe embed (`weather-embed.tsx`, `src/lib/weather.ts`) — a presentational forecast shell has no structured data to bind, so duplicating it was skipped.
@@ -217,7 +219,8 @@ Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/se
 
 | File                                              | Purpose                                                        |
 | ------------------------------------------------- | -------------------------------------------------------------- |
-| `src/app/page.tsx`                                | Home — SSR reads MongoDB directly                              |
+| `src/app/page.tsx`                                | Home — auth-split RSC (landing / "Your events")                |
+| `src/app/discover/page.tsx`                       | Discover browse — categories, circles, cities (SSR)            |
 | `src/app/events/[id]/page.tsx`                    | Event detail — SSR                                             |
 | `src/proxy.ts`                                    | Next.js 16 AuthKit proxy (session cookies)                     |
 | `src/lib/mongo/client.ts`                         | Cached MongoDB client (`server-only`)                          |
@@ -256,7 +259,7 @@ Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/se
   - **tanzanite stays the brand `--primary`** in every theme (cobalt is the "exceptional" mineral for links/info only — `--nh-secondary`/`--info`). Do **not** switch `--primary` to cobalt.
   - **Compact touch-target scale is intentional** (`--touch-target-lg: 48px` / `40px` / `34px`); blanket min-heights are deliberately **not** enforced (see the comment in `globals.css`). Control heights are token-driven (`--h-button-default`/`--h-button-sm`/`--h-input`, currently 36/32/36) — the single knob to adopt the doctrine's 56/48 later without touching components.
   - Extended spacing ladder (`*-plus` half-steps, `--space-4xl/5xl/6xl`), type tokens (`--fs-display-sm/h6/code`), the `--font-mono` (JetBrains Mono, loaded via `next/font` in `layout.tsx`), shadow rungs (`--shadow-none/xs/inner/focus-ring`), and motion aliases (`--motion-duration-*`, `--motion-ease-spring`, `--motion-stagger-*`) are all present.
-  - **4.2.0 washed refresh (density + cover-wash + timeline):** the `Card` primitive is compact (14px padding `py-3.5 px-3.5`, 10px `gap-2.5`, full 1px border); brand-card metadata is 13px `text-muted-foreground`. Per-event **theme options** are the mzizi **heritage + experimental** washed palettes (`src/lib/themes.ts`), tanzanite default. `EventThemeWrapper` emits each theme's light+dark values as inline `--ev-*` vars; `globals.css` selects the active mode and computes **`--wash`** (active surface + event accent, ~7% light / ~12% dark) which paints the event-detail ground. The idle RSVP CTA derives its fill from `--event-primary`. Signature patterns: **`nyuchi-meta-tile`** (date/location chip) on event detail, and **`nyuchi-timeline`** (date-rail discover list) on the home feed, `/events`, and `/search`. Compact `nyuchi-calendar` cells are `aspect-square`. **tanzanite remains the app `--primary`** — the per-theme wash only tints event surfaces (guarded by `design-tokens.test.ts`).
+  - **4.2.0 washed refresh (density + cover-wash + timeline):** the `Card` primitive is compact (14px padding `py-3.5 px-3.5`, 10px `gap-2.5`, full 1px border); brand-card metadata is 13px `text-muted-foreground`. Per-event **theme options** are the mzizi **heritage + experimental** washed palettes (`src/lib/themes.ts`), tanzanite default. `EventThemeWrapper` emits each theme's light+dark values as inline `--ev-*` vars; `globals.css` selects the active mode and computes **`--wash`** (active surface + event accent, ~7% light / ~12% dark) which paints the event-detail ground. The idle RSVP CTA derives its fill from `--event-primary`. Signature patterns: **`nyuchi-meta-tile`** (date/location chip) on event detail, and **`nyuchi-timeline`** (date-rail list) on scoped surfaces — `/events` drill-downs, `/search`, circle Events tabs, and the signed-in home. Compact `nyuchi-calendar` cells are `aspect-square`. **tanzanite remains the app `--primary`** — the per-theme wash only tints event surfaces (guarded by `design-tokens.test.ts`).
 - **Schema.org alignment** — events and users modeled after schema.org specs.
 - **Structured logging** — `[mukoko]` prefix on all log output.
 - **Path alias** — `@/*` maps to `./src/*`.

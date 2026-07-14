@@ -64,16 +64,17 @@ const translations: Record<Locale, TranslationMap> = {
     // Brand
     "brand.tagline": "Together we gather, together we grow.",
 
-    // Kraal (formerly known as circles)
-    "kraal.title": "Kraal",
-    "kraal.subtitle": "Where the gathering circle keeps the fire alive between events.",
-    "kraal.viewKraal": "View kraal",
-    "kraal.join": "Join kraal",
-    "kraal.tabs.stream": "Stream",
-    "kraal.tabs.members": "Members",
-    "kraal.tabs.archive": "Archive",
-    "kraal.compose.placeholder": "Share something with the kraal…",
-    "kraal.empty": "No posts yet — be the first to spark the fire.",
+    // Circles (communities; formerly labelled "Kraal")
+    "circle.title": "Circles",
+    "circle.subtitle": "The communities that keep the fire alive between events.",
+    "circle.view": "View circle",
+    "circle.join": "Join circle",
+    "circle.tabs.events": "Events",
+    "circle.tabs.stream": "Stream",
+    "circle.tabs.members": "Members",
+    "circle.tabs.archive": "Archive",
+    "circle.compose.placeholder": "Share something with the circle…",
+    "circle.empty": "No posts yet — be the first to spark the fire.",
   },
   sn: {
     // Navigation
@@ -117,16 +118,17 @@ const translations: Record<Locale, TranslationMap> = {
     // Brand
     "brand.tagline": "Tose tinosangana, tose tinokura.",
 
-    // Kraal
-    "kraal.title": "Kraal",
-    "kraal.subtitle": "Pekuchengetedza moto wedanho pakati pezviitiko.",
-    "kraal.viewKraal": "Ona Kraal",
-    "kraal.join": "Pinda muKraal",
-    "kraal.tabs.stream": "Mhepo",
-    "kraal.tabs.members": "Vagari",
-    "kraal.tabs.archive": "Zvakachengetwa",
-    "kraal.compose.placeholder": "Govera neKraal…",
-    "kraal.empty": "Hapana zvakanyorwa — iva wekutanga kubatidza moto.",
+    // Circles (Shona: dariro — the circle/gathering ring)
+    "circle.title": "Dariro",
+    "circle.subtitle": "Pekuchengetedza moto wedanho pakati pezviitiko.",
+    "circle.view": "Ona Dariro",
+    "circle.join": "Pinda muDariro",
+    "circle.tabs.events": "Zviitiko",
+    "circle.tabs.stream": "Mhepo",
+    "circle.tabs.members": "Vagari",
+    "circle.tabs.archive": "Zvakachengetwa",
+    "circle.compose.placeholder": "Govera neDariro…",
+    "circle.empty": "Hapana zvakanyorwa — iva wekutanga kubatidza moto.",
   },
 };
 
