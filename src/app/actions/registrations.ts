@@ -18,6 +18,10 @@
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { eventsCollection, personsCollection, rsvpsCollection } from "@/lib/mongo/databases";
 import { stampNew } from "@/lib/mongo/ids";
+import {
+  rsvpResponseToReservationStatus,
+  writeThroughReservation,
+} from "@/lib/mongo/planner";
 import { ensureHostEntityForPerson, getHostContactForEntity } from "@/lib/mongo/entities";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { sendEmail } from "@/lib/email/resend";
@@ -159,6 +163,20 @@ export async function rsvpToEvent(input: RsvpActionInput): Promise<RsvpActionRes
     if (racedExisting) return { registered: false, alreadyRegistered: true };
     throw err;
   }
+
+  // Cross-product write-through (NYU-26): mirror the RSVP into the Mukoko
+  // Planner (planner.reservations, keyed by the event's iCalUid) so the event
+  // appears in the attendee's super-app Planner. Best-effort AFTER the primary
+  // write succeeded — writeThroughReservation never throws, so a Planner
+  // failure can never fail the RSVP. Awaited for the same serverless-freeze
+  // reason as the emails below.
+  await writeThroughReservation({
+    event,
+    person,
+    reservedEntityId: attendeeEntityId,
+    reservationStatus: rsvpResponseToReservationStatus(doc.rsvpResponse),
+    partySize: seats,
+  });
 
   // Best-effort transactional emails: attendee confirmation + host notification.
   // Email must never fail or change the RSVP result, so the whole block is
