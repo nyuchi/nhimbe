@@ -21,7 +21,7 @@ npm run lint         # ESLint
 
 # Tests (Vitest)
 npm run test         # Watch mode
-npm run test:run     # Run once (~624 tests)
+npm run test:run     # Run once (~682 tests)
 npm run test:coverage
 npx vitest run src/lib/api.test.ts   # Single test file
 
@@ -64,13 +64,17 @@ Connection lives in `client.ts` — a cached `MongoClient` (no caching of reject
 | `client.ts`             | Cached `MongoClient` connection (`server-only`)                         |
 | `databases.ts`          | `DB` database-name map + typed collection accessors                     |
 | `events.ts`             | Event reads/writes                                                      |
+| `event-filters.ts`      | Shared published-and-visible predicates behind both listings and `/discover` counts (count/drill-down parity) |
 | `lookups.ts`            | Categories, cities, community stats                                     |
-| `engagement.ts`         | Reviews, ratings, referrals, tracked links (global engagement)          |
+| `engagement.ts`         | Reviews, ratings, referrals, comments, reactions, saves (global engagement) |
+| `tracked-links.ts`      | `engagement.trackedLinks` writer/reader — host referral short links (`/r/<slug>`) + click counts |
+| `circles.ts`            | Circle **community** reads (schema.org OnlineCommunityGroup in `circles.circles`) |
 | `stats.ts`              | Aggregated analytics                                                    |
 | `kiosk.ts`              | Kiosk/device pairing                                                    |
 | `host-registrations.ts` | Host-side registration reads                                            |
 | `admin.ts`              | Admin dashboard queries (consumed by the standalone `admin/` app)      |
 | `admin-types.ts`        | Client-safe admin row/tile types (no `server-only`)                     |
+| `settings.ts`           | `system.platformSettings` singleton (nhimbe-owned platform config)     |
 | `entities.ts`           | Host entities and memberships                                           |
 | `users.ts`              | `identity.persons` (WorkOS user mirror)                                 |
 | `calendars.ts`          | Calendars (NYU-25): create/reads, idempotent follows, event attach (+ tests) |
@@ -79,6 +83,7 @@ Connection lives in `client.ts` — a cached `MongoClient` (no caching of reject
 | `mappers.ts`            | Mongo doc → schema.org-aligned API shape (with `mappers.test.ts`)       |
 | `search.ts`             | Atlas `$vectorSearch` retrieval over `events.eventEmbeddings`           |
 | `types.ts`, `ids.ts`    | Doc types; ID/short-code/slug generation                               |
+| `index.ts`              | Barrel re-export of the data layer (server runtime only)               |
 
 Databases (`DB` map): `events`, `identity`, `entity`, `engagement`, `places`, `circles`, `campfire`, `planner`, `device`, `wallet`, `system`.
 
@@ -101,7 +106,7 @@ Hosting is **entity-centric**: `events.events.primaryHostEntityId` → `entity.e
 
 ### Server Actions (`src/app/actions/`)
 
-Mutations and client-invoked reads: `auth`, `events`, `event-updates`, `discovery`, `my-events`, `registrations`, `host-registrations`, `host-entities`, `host-card`, `kiosk`, `engagement`, `saves`, `waitlist`, `search`, `profile`, `circles`, `circle-detail`, `calendars`, `campfire`, `places`, `map-places`, `geocode`, `polls`, `programme`, `badges`, `ai`.
+Mutations and client-invoked reads: `auth`, `events`, `event-updates`, `discovery`, `my-events`, `registrations`, `host-registrations`, `host-entities`, `host-card`, `kiosk`, `engagement`, `saves`, `waitlist`, `search`, `profile`, `circles`, `circle-detail`, `calendars`, `campfire`, `places`, `map-places`, `geocode`, `polls`, `programme`, `badges`, `tracked-links`, `ai`.
 
 ### Route Handlers (`src/app/api/`)
 
@@ -177,6 +182,7 @@ The admin dashboard is a **standalone Next.js 16 app in `admin/`**, deployed as 
 - Calendars (NYU-25): `/calendars/[slug]` — SSR page for a followable curated event stream (washed-theme ground, Follow pill, NyuchiTimeline of its upcoming events, "from \<circle\>" provenance when circle-owned; private calendars 404 to non-owners, unlisted render but are noindexed and excluded from discover/sitemap), plus `/calendars/[slug]/ics` (route handler serving the `text/calendar` feed — public+unlisted only).
 - Circles (communities; renamed from "Kraal" — UI/route/i18n only, the DB was already `circles.*`): `/circles`, `/circles/[id]`. Permanent redirects `/kraal*` → `/circles*` live in `next.config.ts`. The circle page leads with an **Events tab** (timeline of the circle's upcoming events); the light posts stream is kept as-is — community features belong to the Circles/Campfire sibling products.
 - Signage/kiosk: `/signage`, plus event sub-pages `/events/[id]/kiosk` and `/events/[id]/signage`.
+- Agent auth guide: `/auth.md` (`src/app/auth.md/route.ts`) — a static `text/markdown` page describing how AI agents authenticate to the protected write APIs with WorkOS bearer tokens (the `auth.md` discovery convention).
 - SEO: `robots.ts`, `sitemap.ts`; error boundaries `error.tsx`, `global-error.tsx`, `not-found.tsx`, `loading.tsx`.
 
 ### UI Components (Mukoko Registry)
@@ -225,7 +231,9 @@ Per-event mineral accents come from **`src/lib/category-mineral.ts`** (`category
 - `ai/` — Shamwari gateway client + event embedding index.
 - `r2.ts` — server-only Cloudflare R2 uploader (S3 SDK) for cover images.
 - `email/` — Resend transactional email client + templates (`server-only`).
-- `auth/dev.ts` — dev auth bypass.
+- `security/` — input-validation helpers: `image.ts` (upload MIME/size checks) and `request.ts` (request-shape guards).
+- `ics.ts` — RFC 5545 `text/calendar` feed generation for the calendars `/ics` feed and event export (+ tests).
+- `auth/` — auth helpers: `dev.ts` (dev bypass), `current-person.ts` (`resolveActingPerson` session→person + lazy sync), `return-to.ts` (`safeReturnTo` open-redirect clamp), `workos-token.ts` (bearer-token verify for the MCP write path), `mcp-actor.ts`.
 - `shamwari.ts` — Shamwari assistant helpers.
 - `map/tiles.ts` — shared OpenStreetMap base-layer config (Leaflet tiles + attribution), used by the discovery map and the per-event venue map.
 - `weather.ts` — Mukoko weather-embed helpers (`slugifyLocation`, `weatherEmbedUrl`) for the `weather.mukoko.com/embed/widget` iframe (+ tests).
@@ -252,7 +260,7 @@ React Context only — `AuthProvider` (user state) and `ThemeProvider` (dark/lig
 
 ## Testing
 
-Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/setup.ts`). Tests colocate with modules or live in `src/__tests__/`. Run with `npm run test:run` (~212 tests). Covered areas include the API client, utils, calendar/timezone, auth context/guard, SEO metadata, accessibility, and the Mongo mappers (`src/lib/mongo/mappers.test.ts`).
+Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/setup.ts`). Tests colocate with modules or live in `src/__tests__/`. Run with `npm run test:run` (~682 tests across ~90 files). Covered areas include the API client, utils, calendar/timezone/ICS, auth context/guard + `return-to`, SEO metadata, accessibility, the design-token guard (`src/__tests__/design-tokens.test.ts`), and the Mongo layer (mappers, calendars, planner, campfire, entities, stats, settings, event-filters, users, ids). The standalone `admin/` app carries its own Vitest suite (~63 tests: gate, shell, section renders, admin actions) run via `npm run test:run --workspace=admin`.
 
 ## Key Files
 
