@@ -257,6 +257,8 @@ Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/se
 
 ## Workflow Conventions
 
+> **Agents:** [`AGENTS.md`](./AGENTS.md) is the tool-agnostic subset of these rules for any runner, and reusable task routines live in [`.claude/skills/`](./.claude/skills/) (e.g. `release-check`, `db-seed-verify`, `verify`).
+
 - **Big PR, multiple commits** — the Nyuchi house style. Related work lands in one pull request as a sequence of focused, independently readable commits. Don't open a second PR for "just one more cleanup" — append a commit to the active branch.
 - **Branches** — work on `claude/<topic>-<slug>` branches; push with `-u origin <branch>` and open the PR as a draft until ready for review.
 
