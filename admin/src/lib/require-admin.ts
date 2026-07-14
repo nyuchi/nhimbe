@@ -74,8 +74,8 @@ export type AdminRequester = {
  * success.
  *
  * Default `requiredRole` is "admin" (the extracted contract): the data-bearing
- * pages gate at admin; the shell layout gates at "moderator" so moderators can
- * see the navigation with locked items, exactly like the old in-app layout.
+ * pages AND the shell layout gate at admin (there is no moderator-accessible
+ * surface); settings gates at super_admin.
  */
 export async function requireAdmin(
   requiredRole: UserRole = "admin",
