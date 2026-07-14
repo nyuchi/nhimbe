@@ -20,19 +20,50 @@ interface EventsClientProps {
   initialEvents: Event[];
   initialCategories: Category[];
   initialCities: { addressLocality: string; addressCountry: string }[];
+  /** Initial scope from the URL (`?category=<slug>`), e.g. a /discover tile. */
+  initialCategory?: string;
+  /** Initial scope from the URL (`?city=<addressLocality>`), e.g. a city card. */
+  initialCity?: string;
 }
 
-export function EventsClient({ initialEvents, initialCategories, initialCities }: EventsClientProps) {
+export function EventsClient({
+  initialEvents,
+  initialCategories,
+  initialCities,
+  initialCategory,
+  initialCity,
+}: EventsClientProps) {
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [cities, setCities] = useState<{ addressLocality: string; addressCountry: string }[]>(initialCities);
   const [loading, setLoading] = useState(false);
 
-  // Filters
+  // Filters — seeded from the URL scope so /discover drill-downs land
+  // pre-filtered. The city dropdown speaks "City, Country" values, so map the
+  // bare addressLocality from the URL onto that shape when we know the city.
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [activeCity, setActiveCity] = useState("All Cities");
+  const [activeCategory, setActiveCategory] = useState(initialCategory ?? "All");
+  const [activeCity, setActiveCity] = useState(() => {
+    if (!initialCity) return "All Cities";
+    const match = initialCities.find((c) => c.addressLocality === initialCity);
+    return match ? `${match.addressLocality}, ${match.addressCountry}` : "All Cities";
+  });
   const [showFilters, setShowFilters] = useState(false);
+
+  // Keep the category/city scope shareable: reflect filter changes back into
+  // the URL (shallow — no server round-trip, no scroll jump).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (activeCategory !== "All") params.set("category", activeCategory);
+    else params.delete("category");
+    if (activeCity !== "All Cities") params.set("city", activeCity.split(",")[0].trim());
+    else params.delete("city");
+    const query = params.toString();
+    const next = `${window.location.pathname}${query ? `?${query}` : ""}`;
+    if (next !== `${window.location.pathname}${window.location.search}`) {
+      window.history.replaceState(null, "", next);
+    }
+  }, [activeCategory, activeCity]);
 
   // Only fetch client-side if no initial data was provided (fallback)
   useEffect(() => {
@@ -91,9 +122,15 @@ export function EventsClient({ initialEvents, initialCategories, initialCities }
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Discover Events</h1>
+          <h1 className="text-3xl font-bold text-foreground">
+            {activeCategory !== "All"
+              ? `${categories.find((c) => c.id === activeCategory)?.name ?? activeCategory} events`
+              : "All events"}
+          </h1>
           <p className="text-text-secondary mt-1">
-            Find gatherings that bring your community together
+            {activeCity !== "All Cities"
+              ? `Upcoming gatherings in ${activeCity.split(",")[0].trim()}`
+              : "Every upcoming gathering, day by day"}
           </p>
         </div>
         <Button asChild>
