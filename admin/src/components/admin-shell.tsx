@@ -5,10 +5,10 @@
  * NyuchiSidebarNav, mobile drawer, top bar, and the signed-in account block.
  *
  * Unlike the old in-app admin layout this component does NO access control —
- * the server layout has already run requireAdmin("moderator") before this
- * ships, and each page re-gates at its own level. The role prop only drives
- * the locked-item affordances in the nav (mirroring the old behavior where
- * moderators see the shell with admin-only items locked).
+ * the server layout has already run requireAdmin("admin") before this ships,
+ * and each page re-gates at its own level. The role prop only drives the
+ * locked-item affordances in the nav (admins see Settings locked until they
+ * hold super_admin).
  */
 
 import { useState } from "react";
@@ -49,8 +49,8 @@ interface NavEntry {
 }
 
 const NAV_ITEMS: NavEntry[] = [
-  { label: "Overview", href: "/", icon: LayoutDashboard, requiredRole: "moderator", section: "Platform" },
-  { label: "Events", href: "/events", icon: Calendar, requiredRole: "moderator", section: "Platform" },
+  { label: "Overview", href: "/", icon: LayoutDashboard, requiredRole: "admin", section: "Platform" },
+  { label: "Events", href: "/events", icon: Calendar, requiredRole: "admin", section: "Platform" },
   { label: "People", href: "/people", icon: Users, requiredRole: "admin", section: "Platform" },
   { label: "Entities", href: "/entities", icon: Building2, requiredRole: "admin", section: "Platform" },
   { label: "Circles", href: "/circles", icon: CircleDot, requiredRole: "admin", section: "Platform" },

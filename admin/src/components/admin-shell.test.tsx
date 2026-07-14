@@ -39,21 +39,20 @@ describe("AdminShell", () => {
     expect(screen.getByText("page body")).toBeInTheDocument();
   });
 
-  it("locks admin- and super_admin-only items for a moderator (never hides them)", () => {
+  it("locks every item for a moderator (never hides them) — no moderator surface", () => {
     render(
       <AdminShell user={{ ...baseUser, role: "moderator" }}>
         <p>body</p>
       </AdminShell>,
     );
 
-    // Moderator-accessible: rendered as links.
-    expect(screen.getByRole("link", { name: /overview/i })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: /events/i })).toHaveAttribute("href", "/events");
-
-    // Locked: visible but inert with the role hint.
-    const people = screen.getByText("People").closest("[aria-disabled]");
-    expect(people).not.toBeNull();
-    expect(people).toHaveAttribute("title", "Requires admin role");
+    // The whole (admin) group gates at admin now, so a moderator has no
+    // accessible surface — Overview/Events are locked too, not links.
+    for (const label of ["Overview", "Events", "People"]) {
+      const item = screen.getByText(label).closest("[aria-disabled]");
+      expect(item).not.toBeNull();
+      expect(item).toHaveAttribute("title", "Requires admin role");
+    }
     const settings = screen.getByText("Settings").closest("[aria-disabled]");
     expect(settings).toHaveAttribute("title", "Requires super_admin role");
   });

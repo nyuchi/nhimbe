@@ -69,6 +69,26 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+/**
+ * Coerce an untrusted paging value to a bounded integer. TypeScript types are
+ * erased at runtime, so a crafted client can pass an operator object (e.g.
+ * `{ $gt: "" }`) where a number is expected; this guarantees a plain integer
+ * before it reaches `.skip()` / `.limit()`.
+ */
+function toBoundedInt(value: unknown, fallback: number, min: number, max: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return clamp(Math.trunc(n), min, max);
+}
+
+/** Roles that may be used as an exact `identity.persons.role` equality filter. */
+const FILTERABLE_USER_ROLES: ReadonlySet<string> = new Set([
+  "user",
+  "moderator",
+  "admin",
+  "super_admin",
+]);
+
 function unique<T>(arr: T[]): T[] {
   return [...new Set(arr)];
 }
@@ -216,10 +236,12 @@ export interface AdminUsersResult {
 }
 
 function userStatus(doc: PersonDoc): AdminUser["status"] {
-  // Suspension in the Mukoko model is role-based (role="suspended"/"deleted",
-  // set out-of-band / by the admin actions); isActive===false mirrors it.
+  // Suspension is `isActive === false` — decoupled from `role`, which the
+  // admin suspend/activate actions leave intact. Legacy `role` literals
+  // ("suspended"/"deleted") are still honoured for docs written before the
+  // decoupling, but the admin actions no longer write them.
   const role = doc.role as string | null | undefined;
-  if (role === "suspended" || role === "deleted" || doc.isActive === false) {
+  if (doc.isActive === false || role === "suspended" || role === "deleted") {
     return "suspended";
   }
   return "active";
@@ -248,18 +270,20 @@ function toAdminUser(doc: PersonDoc): AdminUser {
 export async function listAdminUsers(
   params: ListAdminUsersParams = {},
 ): Promise<AdminUsersResult> {
-  const limit = clamp(params.limit ?? 20, 1, 100);
-  const offset = Math.max(params.offset ?? 0, 0);
+  const limit = toBoundedInt(params.limit, 20, 1, 100);
+  const offset = toBoundedInt(params.offset, 0, 0, 100_000);
 
   const filter: Filter<PersonDoc> = {};
-  if (params.search) {
+  if (typeof params.search === "string" && params.search) {
     const rx = escapeRegex(params.search);
     filter.$or = [
       { name: { $regex: rx, $options: "i" } },
       { email: { $regex: rx, $options: "i" } },
     ];
   }
-  if (params.role) {
+  // Constrain the role filter to the known enum — never let an untrusted
+  // operator object (e.g. `{ $gt: "" }`) reach the Mongo query.
+  if (typeof params.role === "string" && FILTERABLE_USER_ROLES.has(params.role)) {
     filter.role = params.role as PersonDoc["role"];
   }
 
@@ -290,7 +314,7 @@ export interface AdminEventsResult {
 
 /** Narrow the events filter by the derived admin status. */
 function applyStatusFilter(filter: Filter<EventDoc>, status?: string): void {
-  if (!status) return;
+  if (typeof status !== "string" || !status) return;
   const now = new Date();
   switch (status) {
     case "cancelled":
@@ -382,11 +406,11 @@ async function docsToAdminEvents(docs: EventDoc[]): Promise<AdminEvent[]> {
 export async function listAdminEvents(
   params: ListAdminEventsParams = {},
 ): Promise<AdminEventsResult> {
-  const limit = clamp(params.limit ?? 20, 1, 100);
-  const offset = Math.max(params.offset ?? 0, 0);
+  const limit = toBoundedInt(params.limit, 20, 1, 100);
+  const offset = toBoundedInt(params.offset, 0, 0, 100_000);
 
   const filter: Filter<EventDoc> = {};
-  if (params.search) {
+  if (typeof params.search === "string" && params.search) {
     const rx = escapeRegex(params.search);
     filter.$or = [
       { name: { $regex: rx, $options: "i" } },
@@ -426,11 +450,11 @@ export interface AdminEntitiesResult {
 export async function listAdminEntities(
   params: ListAdminEntitiesParams = {},
 ): Promise<AdminEntitiesResult> {
-  const limit = clamp(params.limit ?? 20, 1, 100);
-  const offset = Math.max(params.offset ?? 0, 0);
+  const limit = toBoundedInt(params.limit, 20, 1, 100);
+  const offset = toBoundedInt(params.offset, 0, 0, 100_000);
 
   const filter: Filter<EntityDoc> = {};
-  if (params.search) {
+  if (typeof params.search === "string" && params.search) {
     const rx = escapeRegex(params.search);
     filter.$or = [
       { name: { $regex: rx, $options: "i" } },
@@ -483,6 +507,9 @@ export async function listAdminEntities(
 
 /** Members of one entity (for the admin entity drill-down). */
 export async function listAdminEntityMembers(entityId: string): Promise<AdminEntityMember[]> {
+  // Runtime types are erased — reject anything but a plain string id so a
+  // crafted client can't slip an operator object into the `entityId` filter.
+  if (typeof entityId !== "string" || entityId.length === 0) return [];
   const memberships: EntityMembershipDoc[] = await (await entityMembershipsCollection())
     .find({ entityId })
     .sort({ joinedAt: 1 })
@@ -525,11 +552,11 @@ export interface AdminCirclesResult {
 export async function listAdminCircles(
   params: ListAdminCirclesParams = {},
 ): Promise<AdminCirclesResult> {
-  const limit = clamp(params.limit ?? 20, 1, 100);
-  const offset = Math.max(params.offset ?? 0, 0);
+  const limit = toBoundedInt(params.limit, 20, 1, 100);
+  const offset = toBoundedInt(params.offset, 0, 0, 100_000);
 
   const filter: Filter<CircleDoc> = {};
-  if (params.search) {
+  if (typeof params.search === "string" && params.search) {
     const rx = escapeRegex(params.search);
     filter.$or = [
       { name: { $regex: rx, $options: "i" } },
@@ -576,11 +603,11 @@ export interface AdminCalendarsResult {
 export async function listAdminCalendars(
   params: ListAdminCalendarsParams = {},
 ): Promise<AdminCalendarsResult> {
-  const limit = clamp(params.limit ?? 20, 1, 100);
-  const offset = Math.max(params.offset ?? 0, 0);
+  const limit = toBoundedInt(params.limit, 20, 1, 100);
+  const offset = toBoundedInt(params.offset, 0, 0, 100_000);
 
   const filter: Filter<CalendarDoc> = {};
-  if (params.search) {
+  if (typeof params.search === "string" && params.search) {
     const rx = escapeRegex(params.search);
     filter.$or = [
       { name: { $regex: rx, $options: "i" } },

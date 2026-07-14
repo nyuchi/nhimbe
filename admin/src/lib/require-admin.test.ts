@@ -60,6 +60,18 @@ describe("resolveAdminGate (pure deny semantics)", () => {
     expect(resolveAdminGate(person({ role: "super_admin", suspended: true }), "admin")).toBeNull();
   });
 
+  it("denies an inactive account (isActive === false) regardless of role", () => {
+    // Suspension is decoupled from role — the suspend action flips isActive and
+    // leaves role intact, so the gate must reject on isActive alone.
+    expect(
+      resolveAdminGate(person({ role: "super_admin", suspended: false, isActive: false }), "admin"),
+    ).toBeNull();
+  });
+
+  it("passes an active account at/above the required role", () => {
+    expect(resolveAdminGate(person({ role: "admin", isActive: true }), "admin")).toBe("admin");
+  });
+
   it("denies below the required role and passes at/above it", () => {
     expect(resolveAdminGate(person({ role: "user" }), "admin")).toBeNull();
     expect(resolveAdminGate(person({ role: "moderator" }), "admin")).toBeNull();
