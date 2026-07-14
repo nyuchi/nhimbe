@@ -1,12 +1,12 @@
 /**
  * Gated segment layout — every route in the (admin) group renders inside the
- * AdminShell AND behind a server-side requireAdmin("moderator") gate, so no
- * admin chrome ever ships to anonymous or plain-user visitors. The shell
- * gates at "moderator" (matching the old in-app layout, which showed the
- * navigation to moderators with admin-only items locked); each page then
- * re-gates at its own level — requireAdmin() (admin) for the data pages,
- * "super_admin" for settings — because client-side navigations don't re-run
- * this layout.
+ * AdminShell AND behind a server-side requireAdmin("admin") gate, so no admin
+ * chrome ever ships to anonymous, plain-user, or moderator visitors. The shell
+ * gates at "admin" to match the pages: every (admin) page re-gates at admin
+ * (settings at super_admin), so there is no moderator-accessible surface —
+ * gating the shell any lower only showed moderators navigation that denied on
+ * click. Each page still re-gates at its own level because client-side
+ * navigations don't re-run this layout.
  */
 
 import { withAuth } from "@workos-inc/authkit-nextjs";
@@ -21,7 +21,7 @@ export default async function GatedAdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const requester = await requireAdmin("moderator");
+  const requester = await requireAdmin("admin");
 
   let name = DEV_NAME;
   let email = DEV_EMAIL;
