@@ -60,7 +60,7 @@ cp .env.example .env.local   # then fill in your values
 npm run dev          # dev server at http://localhost:11825
 npm run build        # production build
 npm run lint         # ESLint
-npm run test:run     # run the Vitest suite once (~212 tests)
+npm run test:run     # run the Vitest suite once (~682 tests)
 ```
 
 The full environment-variable list and architecture reference live in **[CLAUDE.md](./CLAUDE.md)**.
@@ -76,7 +76,7 @@ The full environment-variable list and architecture reference live in **[CLAUDE.
 | Calendar | `/calendar` | Branded month view + agenda; followable calendars and ICS export |
 | Search | `/search` | Interest, place, and time search |
 | Signage / kiosk | `/signage`, `/events/[id]/kiosk` | Live event displays and on-site check-in |
-| Admin | `/admin` | Dashboard for hosts and operators |
+| Admin | `/admin` | Operator dashboard — a **separate app** (`admin/`); `/admin*` redirects there |
 
 ## Working with agents
 

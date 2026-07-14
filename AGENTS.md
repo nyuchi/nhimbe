@@ -24,7 +24,7 @@ Run all of these from the repo root; do not merge on a red check.
 npm install
 npm run lint       # ESLint + (in CI) markdownlint / prettier / etc.
 npm run build      # Next.js production build
-npm run test:run   # Vitest, run once (~212 tests)
+npm run test:run   # Vitest, run once (~682 tests)
 ```
 
 - The **design-token guard** (`src/__tests__/design-tokens.test.ts`) is part of
