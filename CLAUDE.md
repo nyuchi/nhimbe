@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Worker note: the `worker/` directory is now the **`nhimbe-mcp`** server — a task-based MCP at `nhimbe.com/mcp` and the only thing that runs on Cloudflare Workers. It is **not** part of the app request path (feature work lives in `src/`); see "nhimbe MCP" below.
 
+Admin note: the admin dashboard is a **separate Next.js app in `admin/`**, deployed as its **own Vercel project** (root directory `admin`, e.g. `admin.nhimbe.com`). The public app has **no `/admin` routes** — `/admin*` redirects there. See "nhimbe admin" below.
+
 ## Build & Dev Commands
 
 ```bash
@@ -19,9 +21,16 @@ npm run lint         # ESLint
 
 # Tests (Vitest)
 npm run test         # Watch mode
-npm run test:run     # Run once (~212 tests)
+npm run test:run     # Run once (~624 tests)
 npm run test:coverage
 npx vitest run src/lib/api.test.ts   # Single test file
+
+# Admin app (npm workspace — install always runs at the repo root)
+cd admin
+npm run dev          # Admin dev server at http://localhost:11826
+npm run build        # Standalone production build
+npm run lint
+npm run test:run     # Admin vitest suite
 ```
 
 Database: MongoDB collections/validators are owned by the Mukoko platform, not this repo. nhimbe only reads/writes documents via the `mongodb` driver (`src/lib/mongo/`). There are no migrations in this repo.
@@ -31,7 +40,7 @@ Database: MongoDB collections/validators are owned by the Mukoko platform, not t
 GitHub Actions:
 
 - **`lint.yml`** — org reusable lint workflow (actionlint, JSON validity, prettier, markdownlint, yamllint).
-- **`ci.yml`** — Lint & Build (`npm run lint` + `npm run build` with placeholder env vars) and Frontend Tests (`npm run test:run`). Worker jobs cover the `nhimbe-mcp` server in `worker/` (its own vitest suite).
+- **`ci.yml`** — Lint & Build (`npm run lint` + `npm run build` with placeholder env vars) and Frontend Tests (`npm run test:run`). Admin jobs (`Admin Lint & Build`, `Admin Tests`) cover the `admin/` app via `npm run <script> --workspace=admin` after a root `npm ci`. Worker jobs cover the `nhimbe-mcp` server in `worker/` (its own vitest suite).
 - **CodeQL** — security scanning.
 
 Vercel builds and deploys every commit (preview per branch, production on `main`).
@@ -60,7 +69,8 @@ Connection lives in `client.ts` — a cached `MongoClient` (no caching of reject
 | `stats.ts`              | Aggregated analytics                                                    |
 | `kiosk.ts`              | Kiosk/device pairing                                                    |
 | `host-registrations.ts` | Host-side registration reads                                            |
-| `admin.ts`              | Admin dashboard queries                                                 |
+| `admin.ts`              | Admin dashboard queries (consumed by the standalone `admin/` app)      |
+| `admin-types.ts`        | Client-safe admin row/tile types (no `server-only`)                     |
 | `entities.ts`           | Host entities and memberships                                           |
 | `users.ts`              | `identity.persons` (WorkOS user mirror)                                 |
 | `calendars.ts`          | Calendars (NYU-25): create/reads, idempotent follows, event attach (+ tests) |
@@ -91,7 +101,7 @@ Hosting is **entity-centric**: `events.events.primaryHostEntityId` → `entity.e
 
 ### Server Actions (`src/app/actions/`)
 
-Mutations and client-invoked reads: `auth`, `events`, `event-updates`, `discovery`, `my-events`, `registrations`, `host-registrations`, `host-entities`, `host-card`, `kiosk`, `admin`, `engagement`, `saves`, `waitlist`, `search`, `profile`, `circles`, `circle-detail`, `calendars`, `campfire`, `places`, `map-places`, `geocode`, `polls`, `programme`, `badges`, `ai`.
+Mutations and client-invoked reads: `auth`, `events`, `event-updates`, `discovery`, `my-events`, `registrations`, `host-registrations`, `host-entities`, `host-card`, `kiosk`, `engagement`, `saves`, `waitlist`, `search`, `profile`, `circles`, `circle-detail`, `calendars`, `campfire`, `places`, `map-places`, `geocode`, `polls`, `programme`, `badges`, `ai`.
 
 ### Route Handlers (`src/app/api/`)
 
@@ -138,13 +148,24 @@ The `worker/` directory is now a single-purpose **task-based MCP server** (`nhim
 
 Cloudflare is otherwise used only for R2 storage and the Shamwari AI Gateway. Transactional email now runs **on the app** (`src/lib/email/`, Resend) — the worker no longer sends mail. Supabase, PostgREST, and any dependency on `api.mukoko.com` have been removed from the app.
 
+## nhimbe admin (`admin/` → separate Vercel project)
+
+The admin dashboard is a **standalone Next.js 16 app in `admin/`**, deployed as its **own Vercel project** (root directory `admin`, domain `admin.nhimbe.com`). The public app ships **no admin surface** — `next.config.ts` redirects `/admin*` to the admin app (`ADMIN_URL`, default `https://admin.nhimbe.com`; `/admin/users` maps to `/people`).
+
+- **Share, don't duplicate.** The repo root is an **npm workspace root** (`"workspaces": ["admin"]` — one hoisted `node_modules`, one lockfile; install always runs at the repo root). The admin app's tsconfig maps `@/*` → `../src/*`, so it imports the root Mongo layer (`src/lib/mongo/admin.ts`, `admin-types.ts`, `settings.ts`, `users.ts`, …), the nyuchi/Mukoko UI components and `src/app/globals.css` unchanged; `@admin/*` → its own `admin/src/*`. `outputFileTracingRoot` + `turbopack.root` point at the repo root so Vercel traces files outside the app dir; the admin `globals.css` registers `../src` as a Tailwind v4 `@source`. Admin-only code (shell, gate, section clients, actions) lives in `admin/src/`.
+- **Gate** — `admin/src/lib/require-admin.ts` preserves the old `src/app/admin/require-admin.ts` contract on **every route, server-side**: AuthKit `withAuth({ ensureSignedIn: true })` (anonymous → hosted sign-in with return path), `identity.persons.role` decides, suspended/lookup-failure denied; denials land on `/denied`. Shell layout gates at `moderator` (locked nav affordances), pages at `admin`, settings at `super_admin`. Granting admin/super_admin roles requires super_admin (enforced in the server action).
+- **Auth plumbing** — its own `proxy.ts` (503s everything on missing WorkOS env — no anonymous surface) and `/callback` (`handleAuth`), so the project needs its **own** `NEXT_PUBLIC_WORKOS_REDIRECT_URI` (`https://admin.nhimbe.com/callback`) registered in the same WorkOS environment.
+- **Sections** — Overview (hero RSVP stat + mineral stat tiles), Events (search/filter, publish/cancel/archive, `mukoko.featured` toggle), People (roles + suspension), Entities (+ memberships drill-down), Circles (visibility/member counts, read-only), Calendars (visibility/follower counts), Support (stub queue), Signage (kiosk wall), Settings (`system.platformSettings`).
+- **Mongo admin reads** stay in the shared `src/lib/mongo/admin.ts`; the client-safe row types live in `src/lib/mongo/admin-types.ts` (no `server-only` — the admin app's client tables import them).
+- Deploy/env details: `admin/README.md`.
+
 ## Frontend Structure
 
 ### Pages (`src/app/`)
 
 - Home (`page.tsx`) — **split server-side on auth** (NYU-24 IA): logged out → a lean landing (`home-landing.tsx`: serif hero, one CTA into `/discover`, city chips, ≤1 featured event — no feed); signed in → "Your events" (`home-your-events.tsx`: Upcoming/Past segmented control over the member's RSVPs + hosted gatherings via `getMyEvents`).
 - Discover (`/discover`) — the **browse** surface: category tiles → featured circles → featured calendars → city cards (`discover-browse.tsx`), each linking into a scoped drill-down. Never a feed.
-- Events (`/events`) — the **all-events drill-down timeline**, scopeable via `?category=<slug>` / `?city=<addressLocality>` query params (the drill-down routing choice — no parallel `/discover/[category]` tree); plus create/detail/manage. Also my-events, profile, map, admin.
+- Events (`/events`) — the **all-events drill-down timeline**, scopeable via `?category=<slug>` / `?city=<addressLocality>` query params (the drill-down routing choice — no parallel `/discover/[category]` tree); plus create/detail/manage. Also my-events, profile, map. (Admin moved to the standalone `admin/` app — `/admin*` only redirects.)
 - Auth: `/auth/*`, `/callback` (WorkOS post-auth landing), `/authenticate` (legacy redirect → `/`).
 - Info: search, calendar, about, help, privacy, terms.
 - Short links: `/e/[shortCode]` (events), `/r/[code]` (referral tracking).
@@ -292,6 +313,7 @@ Set in Vercel (prod + preview) and locally in `.env.local`:
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — server-only R2 S3 API credentials for cover-image uploads (`src/lib/r2.ts`). `R2_BUCKET` *(optional)* defaults to `mukoko-storage`. When unset, `/api/media/upload` returns 503 and uploads fall back to a gradient cover.
 - `NEXT_PUBLIC_SITE_URL` — public site URL.
 - `NEXT_PUBLIC_ASSETS_URL` *(optional)* — override the R2 assets host (defaults to `https://assets-s001.mukoko.com`).
+- `ADMIN_URL` *(optional)* — where `/admin*` redirects (defaults to `https://admin.nhimbe.com`). The admin app itself is a separate Vercel project with its own env — see `admin/README.md`.
 
 Maps, address search and weather need **no API keys**: maps render **Leaflet + OpenStreetMap** tiles client-side (`src/lib/map/tiles.ts`), address geocoding is **DB-first (`places.places`) then OSM Nominatim** server-side (`src/app/actions/geocode.ts`), and weather is the shared **Mukoko embed** (`weather.mukoko.com/embed/widget`, `src/lib/weather.ts`) — replacing the former Google Maps + wttr.in stack. `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` has been removed; delete it from Vercel.
 
