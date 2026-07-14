@@ -112,6 +112,10 @@ export function HomeLanding({ featuredEvent, cities = [] }: HomeLandingProps) {
                 category={featuredEvent.category}
                 mineral={categoryToMineral(featuredEvent.category)}
                 image={featuredEvent.image ? getMediaUrl(featuredEvent.image) : undefined}
+                // Plain, serializable meta only — this is a server component
+                // feeding the "use client" NyuchiListingCard, so no function
+                // (a Lucide icon is a forwardRef object) may cross the
+                // RSC → client boundary (issue #71).
                 meta={[
                   {
                     label: "date",
@@ -121,7 +125,6 @@ export function HomeLanding({ featuredEvent, cities = [] }: HomeLandingProps) {
                     label: "location",
                     value:
                       featuredEvent.location.name || featuredEvent.location.addressLocality || "",
-                    icon: MapPin,
                   },
                 ]}
               />
