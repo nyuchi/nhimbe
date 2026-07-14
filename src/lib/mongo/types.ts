@@ -307,6 +307,13 @@ export interface EntityDoc extends BaseDoc {
   founderPersonId?: string | null;
   parentEntityId?: string | null;
   primaryPlaceId?: string | null;
+  /**
+   * WorkOS organization this entity mirrors (`org_…`) — THE join key between
+   * WorkOS organizations and `entity.entities` (issue #70). Validator-permitted
+   * extra field (v3.1 camelCase); set only on entities provisioned from
+   * `organization_membership.*` webhook events.
+   */
+  workosOrganizationId?: string | null;
   email?: string | null;
   url?: string | null;
   logo?: Record<string, unknown> | string | null;
@@ -348,6 +355,12 @@ export interface EntityMembershipDoc extends BaseDoc {
   endedAt?: Date | null;
   title?: string | null;
   permissions?: unknown[];
+  /** WorkOS organization membership (`om_…`) this row mirrors — join key for
+   *  `organization_membership.*` webhook events (issue #70). Validator-permitted
+   *  extra field; absent on memberships nhimbe creates itself. */
+  workosOrganizationMembershipId?: string | null;
+  /** WorkOS organization (`org_…`) behind the mirrored membership. */
+  workosOrganizationId?: string | null;
 }
 
 // ───────────────────────── places database ─────────────────────────

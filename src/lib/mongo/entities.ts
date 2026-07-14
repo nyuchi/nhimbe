@@ -11,12 +11,14 @@
  */
 
 import "server-only";
+import type { Filter, UpdateFilter } from "mongodb";
 import {
   entitiesCollection,
   entityMembershipsCollection,
   personsCollection,
 } from "./databases";
-import { newId, slugify, stampNew } from "./ids";
+import { newId, slugify, stampNew, WRITE_SCHEMA_VERSION } from "./ids";
+import { ensurePersonForWorkosId } from "./users";
 import type { EntityDoc, EntityMembershipDoc, EntityMembershipRole, PersonDoc } from "./types";
 
 export async function getEntityById(id: string): Promise<EntityDoc | null> {
@@ -125,4 +127,171 @@ export async function ensureHostEntityForPerson(person: PersonDoc): Promise<stri
   );
 
   return entityId;
+}
+
+// ── WorkOS organization → entity membership mirror (issue #70) ─────────
+//
+// WorkOS organization memberships are mirrored into `entity.memberships` so a
+// user added to an org in WorkOS can immediately host through the matching
+// Mukoko entity. The join keys are the validator-permitted extra fields
+// `entity.entities.workosOrganizationId` (org_…) and
+// `entity.memberships.workosOrganizationMembershipId` (om_…) — see types.ts.
+
+/** The event fields the mirror needs from a WorkOS `organization_membership.*` payload. */
+export interface WorkosOrgMembershipInput {
+  /** WorkOS organization membership id (`om_…`). */
+  workosOrganizationMembershipId: string;
+  /** WorkOS organization id (`org_…`) — resolved to an entity via the join key. */
+  workosOrganizationId: string;
+  /** Display name for a first-seen organization's entity. */
+  organizationName?: string | null;
+  /** WorkOS user id (`user_…`) — resolved/stubbed to an `identity.persons` doc. */
+  workosUserId: string;
+  /** WorkOS role slug (e.g. "admin", "member"). */
+  roleSlug?: string | null;
+  /** WorkOS membership status. Only "active" grants an active membership. */
+  status?: "active" | "inactive" | "pending" | null;
+}
+
+/**
+ * Map a WorkOS role slug onto the v3.1 membership-role enum. Slugs that
+ * already match the enum pass through; WorkOS's default "admin"/"member" map
+ * 1:1; anything unknown degrades to plain "member" (never escalates).
+ */
+const MEMBERSHIP_ROLES: ReadonlySet<string> = new Set([
+  "founder",
+  "admin",
+  "manager",
+  "representative",
+  "member",
+  "contributor",
+  "follower",
+  "kin",
+]);
+
+export function workosRoleToMembershipRole(slug: string | null | undefined): EntityMembershipRole {
+  const normalized = slug?.trim().toLowerCase();
+  if (normalized && MEMBERSHIP_ROLES.has(normalized)) return normalized as EntityMembershipRole;
+  return "member";
+}
+
+/**
+ * Resolve the entity mirroring a WorkOS organization, creating a minimal
+ * validator-complete organization entity on first sight. `$setOnInsert`-only
+ * upsert keyed on the `workosOrganizationId` join key — idempotent, and an
+ * existing entity (name, slug, …) is never overwritten.
+ */
+export async function ensureEntityForWorkosOrg(params: {
+  workosOrganizationId: string;
+  organizationName?: string | null;
+}): Promise<EntityDoc> {
+  const entities = await entitiesCollection();
+  const name = params.organizationName?.trim() || "Organisation";
+  const doc = await entities.findOneAndUpdate(
+    { workosOrganizationId: params.workosOrganizationId },
+    {
+      $setOnInsert: {
+        ...stampNew(),
+        // workosOrganizationId is supplied by the filter on insert.
+        entityType: "organization",
+        ecosystemRole: "external",
+        schemaOrgType: "Organization",
+        slug: slugify(name),
+        name,
+        isActive: true,
+        isPrivateByDefault: false,
+      },
+    },
+    { upsert: true, returnDocument: "after" },
+  );
+  if (!doc) throw new Error("[mukoko] entity.entities ensure returned null");
+  return doc;
+}
+
+/**
+ * Build the idempotent `(filter, update)` pair mirroring one WorkOS
+ * organization membership onto `entity.memberships`. Pure and exported so
+ * tests can assert the emitted document carries every validator-required
+ * field: the filter contributes `personId` + `entityId` on insert,
+ * `$setOnInsert` the immutable required fields, `$set` the mutable ones.
+ * Keying on `(personId, entityId)` makes created/updated replays converge on
+ * the single membership row.
+ */
+export function buildWorkosMembershipWrite(params: {
+  personId: string;
+  entityId: string;
+  membershipRole: EntityMembershipRole;
+  isActive: boolean;
+  workosOrganizationMembershipId: string;
+  workosOrganizationId: string;
+}): {
+  filter: Filter<EntityMembershipDoc>;
+  update: UpdateFilter<EntityMembershipDoc>;
+} {
+  const now = new Date();
+  return {
+    filter: { personId: params.personId, entityId: params.entityId },
+    update: {
+      $set: {
+        membershipRole: params.membershipRole,
+        isActive: params.isActive,
+        workosOrganizationMembershipId: params.workosOrganizationMembershipId,
+        workosOrganizationId: params.workosOrganizationId,
+        // A reactivation clears a previous end; a deactivation stamps one.
+        endedAt: params.isActive ? null : now,
+        updatedAt: now,
+      },
+      $setOnInsert: {
+        _id: newId(),
+        _schemaVersion: WRITE_SCHEMA_VERSION,
+        joinedAt: now,
+        createdAt: now,
+      },
+    },
+  };
+}
+
+/**
+ * Mirror a WorkOS `organization_membership.created|updated` event: ensure the
+ * person (stub if unseen) and the organization's entity exist, then upsert the
+ * single `(personId, entityId)` membership row. Idempotent — replays and
+ * status/role changes update in place. Throws on driver failure; the webhook
+ * route catches and answers 500 so WorkOS retries.
+ */
+export async function mirrorWorkosOrganizationMembership(
+  input: WorkosOrgMembershipInput,
+): Promise<void> {
+  const person = await ensurePersonForWorkosId(input.workosUserId);
+  const entity = await ensureEntityForWorkosOrg({
+    workosOrganizationId: input.workosOrganizationId,
+    organizationName: input.organizationName,
+  });
+
+  const memberships = await entityMembershipsCollection();
+  const { filter, update } = buildWorkosMembershipWrite({
+    personId: person._id,
+    entityId: entity._id,
+    membershipRole: workosRoleToMembershipRole(input.roleSlug),
+    isActive: input.status === "active",
+    workosOrganizationMembershipId: input.workosOrganizationMembershipId,
+    workosOrganizationId: input.workosOrganizationId,
+  });
+  await memberships.updateOne(filter, update, { upsert: true });
+}
+
+/**
+ * End a mirrored membership when WorkOS reports
+ * `organization_membership.deleted`. Deliberately NOT an upsert — deleting a
+ * membership that was never mirrored must not create a row. Keyed on the
+ * `om_…` join key, so only WorkOS-mirrored rows are ever ended.
+ */
+export async function endWorkosOrganizationMembership(params: {
+  workosOrganizationMembershipId: string;
+}): Promise<void> {
+  const memberships = await entityMembershipsCollection();
+  const now = new Date();
+  await memberships.updateOne(
+    { workosOrganizationMembershipId: params.workosOrganizationMembershipId },
+    { $set: { isActive: false, endedAt: now, updatedAt: now } },
+  );
 }
