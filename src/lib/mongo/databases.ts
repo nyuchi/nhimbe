@@ -14,6 +14,8 @@ import type { Collection, Db, Document } from "mongodb";
 import { getMongoClient } from "./client";
 import type {
   AttendanceHistoryDoc,
+  CampfireConversationDoc,
+  CampfireMessageDoc,
   CheckInDoc,
   CircleDoc,
   CircleMembershipDoc,
@@ -29,6 +31,7 @@ import type {
   PlaceCategoryDoc,
   PlaceDoc,
   PlacesGeoDoc,
+  PlannerReservationDoc,
   PollDoc,
   ProgrammeItemDoc,
   RatingDoc,
@@ -46,6 +49,8 @@ export const DB = {
   engagement: "engagement",
   places: "places",
   circles: "circles",
+  campfire: "campfire",
+  planner: "planner",
   device: "device",
   wallet: "wallet",
   system: "system",
@@ -109,6 +114,16 @@ export const referralsCollection = () => getCollection<ReferralDoc>(DB.engagemen
 export const trackedLinksCollection = () =>
   getCollection<TrackedLinkDoc>(DB.engagement, "trackedLinks");
 export const linkClicksCollection = () => getCollection<LinkClickDoc>(DB.engagement, "linkClicks");
+
+// ── campfire ────────────────────────────────────────────────────────
+export const campfireConversationsCollection = () =>
+  getCollection<CampfireConversationDoc>(DB.campfire, "conversations");
+export const campfireMessagesCollection = () =>
+  getCollection<CampfireMessageDoc>(DB.campfire, "messages");
+
+// ── planner ─────────────────────────────────────────────────────────
+export const plannerReservationsCollection = () =>
+  getCollection<PlannerReservationDoc>(DB.planner, "reservations");
 
 // ── device ──────────────────────────────────────────────────────────
 export const pairingsCollection = () => getCollection<PairingDoc>(DB.device, "pairings");
