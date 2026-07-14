@@ -6,10 +6,16 @@ nhimbe uses **continuous deployment** with manual version tags for milestones. T
 
 ### Unreleased
 
-- Consolidated nhimbe into a single full-stack app deployed on Vercel — retired the separate REST backend.
-- Moved all data to **MongoDB** as the sole data store, read and written server-side (SSR-first).
-- Standardised authentication on **WorkOS AuthKit** end to end.
-- Routed AI features ("Shamwari") through a Cloudflare AI Gateway with Atlas Vector Search.
+- Consolidated nhimbe into a single full-stack app deployed on Vercel — retired the separate REST backend; the `worker/` directory is now the task-based **`nhimbe-mcp`** server at `nhimbe.com/mcp`.
+- Moved all data to **MongoDB** as the sole data store, read and written server-side (SSR-first, Server Actions).
+- Standardised authentication on **WorkOS AuthKit** with the **hosted sign-in UI** (email code, password, MFA, passkeys, social — all dashboard-configured); removed the self-hosted sign-in/User-Management surface. Split the WorkOS domains correctly — `authenticate.nyuchi.com` (API) vs `identity.nyuchi.com` (hosted UI).
+- Added **guaranteed user provisioning** — a WorkOS event webhook (`/api/webhooks/workos`) plus a callback upsert and lazy sync, all converging on the same idempotent `identity.persons` write.
+- Routed AI features ("Shamwari") through a Cloudflare AI Gateway (Qwen + BGE) with Atlas Vector Search retrieval.
+- Shipped the **mzizi 4.2.0** design refresh — washed heritage/experimental per-event themes (tanzanite `--primary`), density, cover-wash, meta-tiles, date-rail timeline, compact square calendar.
+- Reworked the information architecture (NYU-24) — an auth-split home, a `/discover` **browse** surface, timeline as a **drill-down**, and the **Kraal → Circles** rename (308 redirects from `/kraal`).
+- Added followable **calendars** (NYU-25) — `events.calendars` + `calendarFollows`, `/calendars/[slug]` pages and `/ics` feeds, featured calendars on discover, and host attach.
+- Added **cross-product write-through** (NYU-26) — RSVP → `planner.reservations` and event update → `campfire.conversations` mirrors that run after the primary write and never throw.
+- Extracted the admin dashboard into a **standalone `admin/` app** (its own Vercel project) scoped to the **nyuchi WorkOS organization**; the public app now only redirects `/admin*`.
 
 ## Deployment
 
