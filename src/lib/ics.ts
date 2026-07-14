@@ -64,7 +64,9 @@ export interface IcsEventInput {
   /** Stable UID — the event's iCalUid. */
   uid: string;
   start: Date;
-  end: Date;
+  /** Optional — RFC 5545 permits a VEVENT with only DTSTART. When absent (or an
+   * invalid date), DTEND is omitted rather than emitting a broken line. */
+  end?: Date | null;
   summary: string;
   location?: string | null;
   url?: string | null;
@@ -101,9 +103,14 @@ export function buildCalendarIcs(input: IcsCalendarInput): string {
       `UID:${escapeIcsText(event.uid)}`,
       `DTSTAMP:${stamp}`,
       `DTSTART:${formatIcsDateUtc(event.start)}`,
-      `DTEND:${formatIcsDateUtc(event.end)}`,
-      `SUMMARY:${escapeIcsText(event.summary)}`,
     );
+    // DTEND is optional (RFC 5545 §3.6.1): an event with only DTSTART is valid.
+    // Emit it only when we have a usable end instant, so one endless/legacy
+    // event can't 500 the whole feed (L3).
+    if (event.end instanceof Date && !Number.isNaN(event.end.getTime())) {
+      lines.push(`DTEND:${formatIcsDateUtc(event.end)}`);
+    }
+    lines.push(`SUMMARY:${escapeIcsText(event.summary)}`);
     if (event.location) lines.push(`LOCATION:${escapeIcsText(event.location)}`);
     if (event.url) lines.push(`URL:${escapeIcsText(event.url)}`);
     if (event.description) {

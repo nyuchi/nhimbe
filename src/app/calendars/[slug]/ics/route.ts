@@ -9,6 +9,7 @@
 
 import { getCalendarBySlug, listCalendarEventDocs } from "@/lib/mongo/calendars";
 import { buildCalendarIcs, type IcsEventInput } from "@/lib/ics";
+import { resolveEventCity } from "@/lib/mongo/event-filters";
 import type { EventDoc } from "@/lib/mongo/types";
 
 export const runtime = "nodejs";
@@ -22,8 +23,9 @@ function eventLocationText(doc: EventDoc): string | null {
     return typeof location.url === "string" && location.url ? location.url : "Online";
   }
   const name = typeof location.name === "string" ? location.name : "";
-  const address = location.address as Record<string, unknown> | undefined;
-  const locality = typeof address?.addressLocality === "string" ? address.addressLocality : "";
+  // Canonical-first locality resolution (nested, then legacy flat) — the same
+  // path the discovery counts and drill-downs use (see event-filters.ts).
+  const locality = resolveEventCity(doc) ?? "";
   const parts = [name, locality].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : null;
 }
@@ -32,7 +34,9 @@ function toIcsEvent(doc: EventDoc): IcsEventInput {
   return {
     uid: doc.iCalUid,
     start: doc.startDate,
-    end: doc.endDate,
+    // endDate may be absent on legacy docs; the ICS builder emits a
+    // DTSTART-only VEVENT rather than failing the whole feed (L3).
+    end: doc.endDate ?? null,
     summary: doc.name,
     location: eventLocationText(doc),
     url: `https://nhimbe.com/events/${doc._id}`,
