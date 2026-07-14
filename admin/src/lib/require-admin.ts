@@ -5,8 +5,13 @@
  *  - Runs BEFORE any client admin bundle ships: anonymous visitors are
  *    bounced into the WorkOS hosted sign-in (with a return_to back to the
  *    requested admin path) by `withAuth({ ensureSignedIn: true })`.
- *  - The requester's `identity.persons.role` decides access; suspended
- *    accounts and everyone below the required role are denied.
+ *  - The requester must be an ACTIVE member of the nyuchi WorkOS organization
+ *    (require-org via `requireNyuchiOrgMembership`). Anyone who authenticates
+ *    but isn't in that org is denied regardless of role — org membership is
+ *    necessary, not sufficient. Fail-closed: an unresolvable org or a WorkOS
+ *    lookup error denies.
+ *  - The requester's `identity.persons.role` decides access on top of the org
+ *    gate; suspended accounts and everyone below the required role are denied.
  *  - Lookup failures are treated as forbidden — better to bounce a real
  *    admin once than to leak the admin shell when the cluster is wobbly.
  *
@@ -21,6 +26,7 @@ import { redirect } from "next/navigation";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { getPersonByWorkosId } from "@/lib/mongo/users";
 import { isDevBypass, DEV_WORKOS_ID } from "@/lib/auth/dev";
+import { requireNyuchiOrgMembership } from "./workos-org";
 import { hasRole, normaliseRole, type UserRole } from "./roles";
 
 export { hasRole, normaliseRole };
@@ -88,9 +94,24 @@ export async function requireAdmin(
     };
   }
 
-  const { user, accessToken } = await withAuth({ ensureSignedIn: true });
+  const { user, accessToken, organizationId } = await withAuth({
+    ensureSignedIn: true,
+  });
   // ensureSignedIn:true redirects unauthenticated users to the AuthKit flow,
   // so by the time we reach here both user and accessToken are present.
+
+  // Organization gate — the requester must be an ACTIVE member of the nyuchi
+  // WorkOS org, checked BEFORE the identity.persons role lookup so a
+  // non-member is denied regardless of role (and never touches the cluster).
+  // Fail-closed: requireNyuchiOrgMembership returns null on an unresolvable
+  // org or any WorkOS lookup error.
+  const allowedOrgId = await requireNyuchiOrgMembership({
+    workosUserId: user.id,
+    sessionOrganizationId: organizationId,
+  });
+  if (allowedOrgId === null) {
+    redirect("/denied");
+  }
 
   let person: Awaited<ReturnType<typeof getPersonByWorkosId>>;
   try {

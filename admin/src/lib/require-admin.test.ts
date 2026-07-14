@@ -19,6 +19,14 @@ vi.mock("@/lib/mongo/users", () => ({
   getPersonByWorkosId: (...args: unknown[]) => getPersonByWorkosId(...args),
 }));
 
+// The org gate is exercised in full by workos-org.test.ts; here it is mocked
+// so we can assert require-admin LAYERS role on top of org membership.
+const requireNyuchiOrgMembership = vi.fn();
+vi.mock("./workos-org", () => ({
+  requireNyuchiOrgMembership: (...args: unknown[]) =>
+    requireNyuchiOrgMembership(...args),
+}));
+
 import { requireAdmin, resolveAdminGate, hasRole, normaliseRole } from "./require-admin";
 
 const WORKOS_USER = { id: "workos_user_123", email: "admin@nhimbe.com" };
@@ -33,7 +41,14 @@ function person(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  withAuth.mockResolvedValue({ user: WORKOS_USER, accessToken: "token-abc" });
+  withAuth.mockResolvedValue({
+    user: WORKOS_USER,
+    accessToken: "token-abc",
+    organizationId: "org_nyuchi",
+  });
+  // Default: the requester is an active member of the nyuchi org, so the
+  // existing role-gate tests below assert role behaviour in isolation.
+  requireNyuchiOrgMembership.mockResolvedValue("org_nyuchi");
 });
 
 describe("resolveAdminGate (pure deny semantics)", () => {
@@ -76,6 +91,41 @@ describe("requireAdmin", () => {
       accessToken: "token-abc",
     });
     expect(getPersonByWorkosId).toHaveBeenCalledWith("workos_user_123");
+  });
+
+  it("passes the AuthKit session org id through to the org gate", async () => {
+    getPersonByWorkosId.mockResolvedValue(person());
+    await requireAdmin();
+    expect(requireNyuchiOrgMembership).toHaveBeenCalledWith({
+      workosUserId: "workos_user_123",
+      sessionOrganizationId: "org_nyuchi",
+    });
+  });
+
+  it("denies an authenticated user who is NOT in the nyuchi org — regardless of role", async () => {
+    // A bona fide super_admin who is not an org member is still denied.
+    getPersonByWorkosId.mockResolvedValue(person({ role: "super_admin" }));
+    requireNyuchiOrgMembership.mockResolvedValue(null);
+    await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/denied");
+  });
+
+  it("denies non-members BEFORE the identity.persons lookup (org gate first)", async () => {
+    requireNyuchiOrgMembership.mockResolvedValue(null);
+    await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/denied");
+    expect(getPersonByWorkosId).not.toHaveBeenCalled();
+  });
+
+  it("denies (fail-closed) when the org gate can't resolve the org", async () => {
+    // requireNyuchiOrgMembership returns null on an unresolvable org / WorkOS error.
+    getPersonByWorkosId.mockResolvedValue(person());
+    requireNyuchiOrgMembership.mockResolvedValue(null);
+    await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/denied");
+  });
+
+  it("still enforces role tiers for a bona fide org member", async () => {
+    // Org member, but only a plain user → denied by the role gate.
+    getPersonByWorkosId.mockResolvedValue(person({ role: "user" }));
+    await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/denied");
   });
 
   it("redirects a plain user to /denied", async () => {
