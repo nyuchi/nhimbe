@@ -5,8 +5,10 @@ import "server-only";
  * `notifyAttendees: true` into the Mukoko Campfire messaging substrate, so an
  * announcement made in nhimbe reaches attendees in the super app.
  *
- * Model: each event pairs with at most one `campfire.conversations` document
- * (found-or-created by `eventId`). Announcements land as system messages
+ * Model: each event pairs with at most one SYSTEM `campfire.conversations`
+ * document (found-or-created by `{ eventId, conversationType: "system" }`, so a
+ * separate live-chat conversation on the same event is never conflated with the
+ * announcement channel). Announcements land as system messages
  * (`messageType: "system"`, `matrixEventType: "m.room.message"`) with a
  * PLAINTEXT `content` body — the conversation is created with
  * `encryptionMode: "none"` precisely so these server-authored messages stay
@@ -100,27 +102,37 @@ export function buildSystemMessageDoc(input: SystemMessageInput): CampfireMessag
 }
 
 /**
- * Find the event's paired conversation by `eventId`, creating it on first
- * use. A lost insert race (duplicate key) falls back to re-reading the row
- * the winner created.
+ * Find the event's paired SYSTEM conversation, creating it on first use.
+ *
+ * Scoped to `{ eventId, conversationType: "system" }` (M1): a future
+ * live-chat conversation on the same event must never receive announcement
+ * system messages. Race-safe via an idempotent upsert (M2) — `$setOnInsert`
+ * seeds every v3.1-required field only when we create the row, so two
+ * concurrent announcements converge on one conversation without depending on a
+ * unique index (we do not own indexes on the sibling-product `campfire.*` DB).
+ * The doc is read back afterwards because `updateOne` upsert does not return it.
  */
 export async function ensureEventConversation(
   input: EnsureEventConversationInput,
 ): Promise<CampfireConversationDoc> {
   const conversations = await campfireConversationsCollection();
-  const existing = await conversations.findOne({ eventId: input.eventId });
-  if (existing) return existing;
+  const filter = { eventId: input.eventId, conversationType: "system" };
 
-  const doc = buildEventConversationDoc(input);
-  try {
-    await conversations.insertOne(doc);
-    return doc;
-  } catch (error) {
-    // Lost a create race — the winner's conversation is the paired one.
-    const raced = await conversations.findOne({ eventId: input.eventId });
-    if (raced) return raced;
-    throw error;
+  // $setOnInsert carries the full validator-complete seed; on a match nothing
+  // is written and the existing system conversation is left untouched.
+  await conversations.updateOne(
+    filter,
+    { $setOnInsert: buildEventConversationDoc(input) },
+    { upsert: true },
+  );
+
+  const conversation = await conversations.findOne(filter);
+  if (!conversation) {
+    throw new Error(
+      `Campfire system conversation for event ${input.eventId} could not be resolved.`,
+    );
   }
+  return conversation;
 }
 
 /**
