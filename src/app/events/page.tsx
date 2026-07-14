@@ -16,7 +16,9 @@ interface EventsPageProps {
  */
 
 export async function generateMetadata({ searchParams }: EventsPageProps): Promise<Metadata> {
-  const { category, city } = await searchParams;
+  const params = await searchParams;
+  const category = params.category || undefined;
+  const city = params.city || undefined;
   const scope = [category, city].filter(Boolean).join(" · ");
   return {
     title: scope ? `${scope} — events` : "All Events",
@@ -30,7 +32,11 @@ export async function generateMetadata({ searchParams }: EventsPageProps): Promi
 // API). `EventsClient` hydrates from this initial data (pre-scoped by the URL)
 // and only re-filters client-side / re-fetches via server actions afterwards.
 export default async function EventsPage({ searchParams }: EventsPageProps) {
-  const { category, city } = await searchParams;
+  const params = await searchParams;
+  // Treat empty params (`?category=`) as absent so the heading and filters
+  // never scope to an empty string.
+  const category = params.category || undefined;
+  const city = params.city || undefined;
 
   const [eventsResult, initialCategories, initialCities] = await Promise.all([
     listEvents({ limit: 100 }).catch(() => null),

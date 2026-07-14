@@ -42,7 +42,7 @@ export function EventsClient({
   // pre-filtered. The city dropdown speaks "City, Country" values, so map the
   // bare addressLocality from the URL onto that shape when we know the city.
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState(initialCategory ?? "All");
+  const [activeCategory, setActiveCategory] = useState(initialCategory || "All");
   const [activeCity, setActiveCity] = useState(() => {
     if (!initialCity) return "All Cities";
     const match = initialCities.find((c) => c.addressLocality === initialCity);
