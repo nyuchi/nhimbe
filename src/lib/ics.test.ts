@@ -142,4 +142,43 @@ describe("buildCalendarIcs", () => {
     expect(ics).not.toContain("LOCATION:");
     expect(ics).not.toContain("DESCRIPTION:");
   });
+
+  it("emits a DTSTART-only VEVENT when endDate is missing (L3)", () => {
+    // A single event with no end must not kill the whole feed — RFC 5545 §3.6.1
+    // permits a VEVENT with only DTSTART.
+    for (const end of [undefined, null]) {
+      const ics = buildCalendarIcs({
+        name: "Markets",
+        events: [{ ...events[0], end }],
+        now,
+      });
+      expect(ics).toContain("DTSTART:20260801T090000Z");
+      expect(ics).not.toContain("DTEND:");
+      expect(ics).toContain("BEGIN:VEVENT");
+      expect(ics).toContain("END:VEVENT");
+    }
+  });
+
+  it("skips DTEND for an invalid end date rather than emitting a broken line", () => {
+    const ics = buildCalendarIcs({
+      name: "Markets",
+      events: [{ ...events[0], end: new Date("not-a-date") }],
+      now,
+    });
+    expect(ics).not.toContain("DTEND:");
+    expect(ics).not.toContain("NaN");
+  });
+
+  it("keeps building the rest of the feed when one event lacks an end", () => {
+    const ics = buildCalendarIcs({
+      name: "Markets",
+      events: [{ ...events[0], uid: "no-end@nhimbe.com", end: null }, events[0]],
+      now,
+    });
+    // Both events render; only the complete one carries a DTEND.
+    expect(ics).toContain("UID:no-end@nhimbe.com");
+    expect(ics).toContain("UID:event-1@nhimbe.com");
+    expect((ics.match(/BEGIN:VEVENT/g) ?? []).length).toBe(2);
+    expect((ics.match(/DTEND:/g) ?? []).length).toBe(1);
+  });
 });

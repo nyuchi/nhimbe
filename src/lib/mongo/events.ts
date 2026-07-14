@@ -24,16 +24,14 @@ import {
   placesCollection,
 } from "./databases";
 import { mapEventDocToApi, type EventRelations } from "./mappers";
+import { PUBLISHED_STATUSES, cityLocalityFilter } from "./event-filters";
 import type { EntityDoc, EventDoc, PersonDoc, PlaceDoc } from "./types";
 import type { Event } from "@/lib/api";
-
-/** A published, publicly-listable event is published or live. */
-const PUBLISHED_STATUSES = ["published", "live"] as const;
 
 export interface ListEventsParams {
   limit?: number;
   offset?: number;
-  /** Filter by city (matches the event's embedded location.addressLocality). */
+  /** Filter by city (matches the event's embedded location.address.addressLocality). */
   city?: string;
   /** Filter by a tag/category string. */
   category?: string;
@@ -69,8 +67,11 @@ function publishedFilter(params: ListEventsParams): Filter<EventDoc> {
   if (params.circleId) filter.circleId = params.circleId;
   if (params.calendarId) filter.calendarId = params.calendarId;
   if (params.city) {
-    // The city lives in the embedded schema.org location object.
-    (filter as Record<string, unknown>)["location.addressLocality"] = params.city;
+    // The city lives in the embedded schema.org location. Match on either the
+    // canonical nested path (location.address.addressLocality — what
+    // createEvent writes) or the legacy flat one, symmetric with the /discover
+    // count aggregation's coalescing city expression (see event-filters.ts).
+    Object.assign(filter as Record<string, unknown>, cityLocalityFilter(params.city));
   }
   return filter;
 }
