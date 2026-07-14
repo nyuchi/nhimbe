@@ -256,17 +256,24 @@ export async function postCampfireMessage(
   // Messages are entity-centric (Rule 10): the person acts through an entity.
   const senderEntityId = await ensureHostEntityForPerson(person);
 
-  // Monotonic per-conversation sequence — next after the current highest.
-  const messages = await messagesCollection();
-  const last = await messages
-    .find({ conversationId })
-    .sort({ sequence: -1 })
-    .limit(1)
-    .toArray();
-  const sequence = (last[0]?.sequence ?? 0) + 1;
+  const now = new Date();
+  // Claim the next per-conversation sequence ATOMICALLY (L2): a single
+  // findOneAndUpdate `$inc: { messageCount: 1 }` bumps and returns the
+  // post-increment count, which becomes the ordinal — read-max+1 raced and
+  // could hand two concurrent posts the same sequence. Mirrors the campfire
+  // write-through's atomic claim (src/lib/mongo/campfire.ts).
+  const bumped = await conversations.findOneAndUpdate(
+    { _id: conversationId },
+    { $inc: { messageCount: 1 }, $set: { lastMessageAt: now, updatedAt: now } },
+    { returnDocument: "after" },
+  );
+  if (!bumped) {
+    throw new Error("This campfire is no longer available.");
+  }
+  const sequence = bumped.messageCount ?? 1;
 
   const id = newId();
-  const now = new Date();
+  const messages = await messagesCollection();
   const doc: CampfireMessageDoc = {
     ...stampNew(id),
     conversationId,
@@ -280,11 +287,6 @@ export async function postCampfireMessage(
     deletedAt: null,
   };
   await messages.insertOne(doc);
-
-  await conversations.updateOne(
-    { _id: conversationId },
-    { $inc: { messageCount: 1 }, $set: { lastMessageAt: now, updatedAt: now } },
-  );
 
   // Best-effort read receipt for the sender (failure must not fail the send).
   try {
