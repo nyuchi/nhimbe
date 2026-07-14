@@ -75,6 +75,37 @@ export interface SyncPersonInput {
 }
 
 /**
+ * Structural view of a WorkOS user record — satisfied both by the AuthKit
+ * session `User` (`@workos-inc/authkit-nextjs`) and by the webhook event
+ * `User` (`@workos-inc/node`), so every provisioning surface (callback
+ * `onSuccess`, webhook, lazy sync) maps the same way.
+ */
+export interface WorkosUserLike {
+  id: string;
+  email?: string | null;
+  /** Full name — present on webhook users, absent from session users. */
+  name?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  profilePictureUrl?: string | null;
+  emailVerified?: boolean;
+}
+
+/** Map a WorkOS user record onto the person-sync input. Pure. */
+export function syncInputFromWorkosUser(user: WorkosUserLike): SyncPersonInput {
+  const joined = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  return {
+    workosUserId: user.id,
+    email: user.email ?? null,
+    name: user.name?.trim() || joined || null,
+    givenName: user.firstName ?? null,
+    familyName: user.lastName ?? null,
+    picture: user.profilePictureUrl ?? null,
+    emailVerified: typeof user.emailVerified === "boolean" ? user.emailVerified : undefined,
+  };
+}
+
+/**
  * Upsert the signed-in WorkOS user into `identity.persons`, keyed on
  * `workosUserId`. Returns the resulting person in the app user shape. Idempotent
  * — safe to call on every sign-in / refresh.
@@ -116,6 +147,54 @@ export async function syncPersonFromWorkos(input: SyncPersonInput): Promise<AppU
 
   if (!doc) throw new Error("[mukoko] identity.persons upsert returned null");
   return mapPersonToAppUser(doc);
+}
+
+/**
+ * Ensure a person document exists for a WorkOS user id WITHOUT touching any
+ * profile fields on an existing doc — `$setOnInsert` only. Used by the
+ * organization-membership webhook mirror, which knows only the WorkOS user id:
+ * if the `user.created` event hasn't landed yet this creates a minimal,
+ * validator-complete stub that the full sync enriches later; if the person
+ * already exists nothing is overwritten. Idempotent.
+ */
+export async function ensurePersonForWorkosId(workosUserId: string): Promise<PersonDoc> {
+  const col = await personsCollection();
+  const now = new Date();
+  const doc = await col.findOneAndUpdate(
+    { workosUserId },
+    {
+      $setOnInsert: {
+        _id: newId(),
+        _schemaVersion: WRITE_SCHEMA_VERSION,
+        // workosUserId is supplied by the filter on insert.
+        email: null,
+        name: null,
+        emailVerified: false,
+        phoneNumberVerified: false,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    },
+    { upsert: true, returnDocument: "after" },
+  );
+  if (!doc) throw new Error("[mukoko] identity.persons ensure returned null");
+  return doc;
+}
+
+/**
+ * Soft-deactivate a person when WorkOS reports `user.deleted`. Flips
+ * `isActive` to false (the app derives `suspended` from it) — never a hard
+ * delete, and never an upsert (deleting an unknown user must not create a
+ * doc). Returns whether a person was matched.
+ */
+export async function deactivatePersonByWorkosId(workosUserId: string): Promise<boolean> {
+  const col = await personsCollection();
+  const result = await col.updateOne(
+    { workosUserId },
+    { $set: { isActive: false, updatedAt: new Date() } },
+  );
+  return result.matchedCount > 0;
 }
 
 /** Look up a person by their WorkOS user id. */
