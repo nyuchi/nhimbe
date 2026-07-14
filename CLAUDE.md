@@ -63,11 +63,20 @@ Connection lives in `client.ts` — a cached `MongoClient` (no caching of reject
 | `admin.ts`              | Admin dashboard queries                                                 |
 | `entities.ts`           | Host entities and memberships                                           |
 | `users.ts`              | `identity.persons` (WorkOS user mirror)                                 |
+| `planner.ts`            | RSVP → `planner.reservations` write-through (+ `planner.test.ts`)       |
+| `campfire.ts`           | Event update → Campfire system-message write-through (+ tests)          |
 | `mappers.ts`            | Mongo doc → schema.org-aligned API shape (with `mappers.test.ts`)       |
 | `search.ts`             | Atlas `$vectorSearch` retrieval over `events.eventEmbeddings`           |
 | `types.ts`, `ids.ts`    | Doc types; ID/short-code/slug generation                               |
 
-Databases (`DB` map): `events`, `identity`, `entity`, `engagement`, `places`, `circles`, `device`, `wallet`, `system`.
+Databases (`DB` map): `events`, `identity`, `entity`, `engagement`, `places`, `circles`, `campfire`, `planner`, `device`, `wallet`, `system`.
+
+### Cross-product write-through (NYU-26)
+
+nhimbe feeds the Mukoko super app — two best-effort mirrors run server-side **after** the primary write succeeds and **never throw** (failures are logged via the `[mukoko]` logger and swallowed, same contract as `src/lib/email/resend.ts`):
+
+- **RSVP → Planner** (`src/lib/mongo/planner.ts`): `rsvpToEvent` upserts a schema.org `EventReservation` into `planner.reservations`, keyed idempotently by `(reservedPersonId, event iCalUid)`. RSVP yes → `ReservationConfirmed`, maybe → `ReservationHold`, no / host cancellation (`cancelRegistration`) → `ReservationCancelled` (cancellation updates without upsert). `partySize` = 1 + additional guests; `reservationFor` carries an event snapshot.
+- **Event update → Campfire** (`src/lib/mongo/campfire.ts` + `src/app/actions/event-updates.ts`): `postEventUpdate` (host-gated) writes `events.updates`; with `notifyAttendees: true` it find-or-creates the event's paired `campfire.conversations` doc (`conversationType: "system"`, `encryptionMode: "none"`, `mukoko.routingSource: "nhimbe"`) and appends the text as a plaintext system message whose `sequence` is claimed atomically via `$inc: { messageCount: 1 }`. Additive to (not replacing) the transactional emails; the live event chat in `src/app/actions/campfire.ts` keeps owning user-authored messages.
 
 ### Data model (entity-centric hosting)
 
@@ -79,7 +88,7 @@ Hosting is **entity-centric**: `events.events.primaryHostEntityId` → `entity.e
 
 ### Server Actions (`src/app/actions/`)
 
-Mutations and client-invoked reads: `auth`, `events`, `discovery`, `my-events`, `registrations`, `host-registrations`, `host-entities`, `host-card`, `kiosk`, `admin`, `engagement`, `saves`, `waitlist`, `search`, `profile`, `circles`, `circle-detail`, `campfire`, `places`, `map-places`, `geocode`, `polls`, `programme`, `badges`, `ai`.
+Mutations and client-invoked reads: `auth`, `events`, `event-updates`, `discovery`, `my-events`, `registrations`, `host-registrations`, `host-entities`, `host-card`, `kiosk`, `admin`, `engagement`, `saves`, `waitlist`, `search`, `profile`, `circles`, `circle-detail`, `campfire`, `places`, `map-places`, `geocode`, `polls`, `programme`, `badges`, `ai`.
 
 ### Route Handlers (`src/app/api/`)
 
