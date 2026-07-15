@@ -27,6 +27,7 @@
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { placesCollection } from "@/lib/mongo/databases";
 import { isDevBypass } from "@/lib/auth/dev";
+import { verificationTierLevel } from "@/lib/kweli";
 import type { PlaceDoc } from "@/lib/mongo/types";
 
 /** Rich place data for the EventDetail venue card. Mirrors the field names the
@@ -54,6 +55,10 @@ export interface PlaceDetail {
   activity: string[] | null;
   aggregateRatingValue: number | null;
   aggregateRatingCount: number | null;
+  /** Kweli verification tier (0–4) read from `places.places.bundu` —
+   *  0/absent means unverified (no badge). READ-ONLY: verification state is
+   *  owned by Mukoko Kweli; nhimbe never writes it. */
+  verificationTier: number;
   osmContributed: boolean;
   osmChangesetId: string | null;
   osmContributedAt: string | null;
@@ -120,6 +125,9 @@ function mapPlaceDocToDetail(doc: PlaceDoc): PlaceDetail {
     activity: null,
     aggregateRatingValue: numOrNull(rating.value),
     aggregateRatingCount: numOrNull(rating.count),
+    // Kweli-owned trust facet — may arrive as number or numeric string;
+    // absent on most docs today (degrades to 0 = no badge).
+    verificationTier: verificationTierLevel(doc.bundu?.verificationTier),
     osmContributed: false,
     osmChangesetId: null,
     osmContributedAt: null,
