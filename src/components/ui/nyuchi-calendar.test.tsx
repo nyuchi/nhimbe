@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, afterAll, vi } from "vitest";
 import { render, cleanup, fireEvent, within } from "@testing-library/react";
 import { NyuchiCalendar } from "./nyuchi-calendar";
 
@@ -8,6 +8,19 @@ afterEach(() => {
 });
 
 const july2026 = new Date(2026, 6, 1);
+
+// The event-dot color depends on whether the event day is "today"
+// (today/selected days render a primary-foreground dot instead of the
+// mineral). Pin the clock so the assertion is deterministic on every
+// calendar date — this test previously failed only when run ON July 15.
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 6, 1, 12));
+});
+
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 describe("NyuchiCalendar", () => {
   it("renders the month label and a full grid of day buttons", () => {

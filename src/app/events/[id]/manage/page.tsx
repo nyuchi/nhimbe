@@ -62,6 +62,7 @@ import {
 } from "@/app/actions/host-registrations";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { PairKiosk } from "../kiosk/pair-kiosk";
+import { VenueVerifyCta } from "./venue-verify-cta";
 import { useAuth } from "@/components/auth/auth-context";
 import { useToast } from "@/hooks/use-toast";
 
@@ -444,6 +445,14 @@ function ManageEventContent() {
                     </>
                   )}
                 </div>
+
+                {/* Host-only nudge: unverified venues deep-link to the Kweli
+                    verification gateway (renders nothing when verified). */}
+                {event.eventAttendanceMode !== 'OnlineEventAttendanceMode' && event.placeId && (
+                  <div className="-mt-2 mb-4">
+                    <VenueVerifyCta placeId={event.placeId} />
+                  </div>
+                )}
 
                 {/* Host Info */}
                 <div className="border-t border-elevated pt-4">

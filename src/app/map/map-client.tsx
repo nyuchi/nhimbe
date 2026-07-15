@@ -9,6 +9,7 @@ import { getMapPlaceById } from "@/app/actions/map-places";
 import { BASE_LAYERS, type BaseLayerId } from "@/lib/map/tiles";
 import { NyuchiPlaceCard } from "@/components/ui/nyuchi-place-card";
 import { categoryToMineral } from "@/lib/category-mineral";
+import { verificationTierCode } from "@/lib/kweli";
 
 /**
  * Map-first discovery view. Uses OpenStreetMap raster tiles directly (no API
@@ -105,6 +106,9 @@ export function MapClient({ initialEvents }: MapClientProps) {
   // Initial placement from event-side fallback (city centroid). The places
   // resolver below upgrades these to real venue coords when a place_id is set.
   const [resolvedCoords, setResolvedCoords] = useState<Map<string, [number, number]>>(new Map());
+  // Kweli verification tier per event id (read-only, from places.places.bundu)
+  // — feeds the selected-pin venue card's tier dot. Absent → unverified.
+  const [resolvedTiers, setResolvedTiers] = useState<Map<string, number>>(new Map());
   const placedEvents = useMemo(() => {
     return initialEvents
       .map((ev) => {
@@ -130,17 +134,26 @@ export function MapClient({ initialEvents }: MapClientProps) {
         toResolve.map(async ({ id, placeId }) => {
           const place = await getMapPlaceById(placeId);
           if (place?.latitude != null && place?.longitude != null) {
-            return [id, [place.latitude, place.longitude] as [number, number]] as const;
+            return [
+              id,
+              [place.latitude, place.longitude] as [number, number],
+              place.verificationTier,
+            ] as const;
           }
           return null;
         }),
       );
       if (cancelled) return;
       const next = new Map<string, [number, number]>();
+      const nextTiers = new Map<string, number>();
       for (const r of results) {
-        if (r) next.set(r[0], r[1]);
+        if (r) {
+          next.set(r[0], r[1]);
+          nextTiers.set(r[0], r[2]);
+        }
       }
       if (next.size > 0) setResolvedCoords(next);
+      if (nextTiers.size > 0) setResolvedTiers(nextTiers);
     })();
     return () => {
       cancelled = true;
@@ -298,6 +311,7 @@ export function MapClient({ initialEvents }: MapClientProps) {
               category={`${selected.date.month} ${selected.date.day} · ${selected.category}`}
               address={selected.location.name ? selected.location.addressLocality : undefined}
               mineral={categoryToMineral(selected.category)}
+              verificationTier={verificationTierCode(resolvedTiers.get(selected.id))}
               href={`/events/${selected.id}`}
             />
           </div>

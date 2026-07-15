@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { Globe, Star, MapPin, Accessibility, Mountain, Users } from "lucide-react";
 import { getPlaceById, type PlaceDetail } from "@/app/actions/places";
+import { NyuchiVerifiedBadge } from "@/components/ui/verified-badge";
+import { verificationTierCode } from "@/lib/kweli";
 
 /**
  * Rich venue card backed by places.places. Replaces the legacy
@@ -11,6 +13,9 @@ import { getPlaceById, type PlaceDetail } from "@/app/actions/places";
  * place_id set. Surfaces:
  *   - Real venue name + full address + lat/lng (the foundation for the
  *     Map's accurate pin placement when this same place is plotted there)
+ *   - Kweli verification badge — `bundu.verificationTier` (owned by Mukoko
+ *     Kweli, the ecosystem verification surface) rendered read-only via
+ *     `NyuchiVerifiedBadge`; tier 0/absent renders nothing
  *   - Cover image when available
  *   - Aggregate rating
  *   - Accessibility features
@@ -81,7 +86,11 @@ export function EventVenueCard({ placeId }: EventVenueCardProps) {
       <div className="p-5">
         <header className="flex items-start gap-3 mb-3">
           <div className="flex-1 min-w-0">
-            <h3 className="font-serif text-xl font-bold text-foreground leading-tight">{place.name}</h3>
+            <h3 className="font-serif text-xl font-bold text-foreground leading-tight inline-flex items-center gap-1.5">
+              {place.name}
+              {/* Kweli-owned verification tier — renders nothing at tier 0. */}
+              <NyuchiVerifiedBadge tier={verificationTierCode(place.verificationTier)} size="md" />
+            </h3>
             {fullAddress && (
               <p className="text-sm text-muted-foreground mt-1 flex items-start gap-1.5">
                 <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" aria-hidden />

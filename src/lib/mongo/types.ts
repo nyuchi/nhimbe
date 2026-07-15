@@ -394,6 +394,12 @@ export interface PlaceDoc extends BaseDoc {
     interactionCount?: number | null;
     viewCount?: number | null;
   } | null;
+  /** Bundu trust facet. `verificationTier` (0–4) is written ONLY by the
+   *  Mukoko Kweli verification surface — nhimbe reads it to render the
+   *  mineral verified badge and never writes verification state. */
+  bundu?: {
+    verificationTier?: number;
+  } | null;
 }
 
 export interface PlacesGeoDoc extends BaseDoc {

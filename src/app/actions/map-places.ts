@@ -16,12 +16,16 @@
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { placesCollection } from "@/lib/mongo/databases";
 import { isDevBypass } from "@/lib/auth/dev";
+import { verificationTierLevel } from "@/lib/kweli";
 import type { PlaceDoc } from "@/lib/mongo/types";
 
 export interface MapPlaceCoords {
   id: string;
   latitude: number;
   longitude: number;
+  /** Kweli verification tier (0–4) from `places.places.bundu` — read-only
+   *  (verification is owned by Mukoko Kweli); 0 when absent. */
+  verificationTier: number;
 }
 
 /**
@@ -76,11 +80,16 @@ export async function getMapPlaceById(placeId: string): Promise<MapPlaceCoords |
   const places = await placesCollection();
   const place = (await places.findOne(
     { _id: placeId },
-    { projection: { geo: 1 } },
-  )) as Pick<PlaceDoc, "_id" | "geo"> | null;
+    { projection: { geo: 1, bundu: 1 } },
+  )) as Pick<PlaceDoc, "_id" | "geo" | "bundu"> | null;
   if (!place) return null;
 
   const ll = coordsFromGeo(place.geo);
   if (!ll) return null;
-  return { id: placeId, latitude: ll[0], longitude: ll[1] };
+  return {
+    id: placeId,
+    latitude: ll[0],
+    longitude: ll[1],
+    verificationTier: verificationTierLevel(place.bundu?.verificationTier),
+  };
 }
