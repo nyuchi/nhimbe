@@ -3,7 +3,7 @@ import { Users, Heart, Globe, Sparkles } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "About",
-  description: "Learn about nhimbe — a community events discovery and management platform connecting people across Africa.",
+  description: "Learn about Nhimbe — a community events discovery and management platform connecting people across Africa.",
 };
 
 export default function AboutPage() {
@@ -39,7 +39,7 @@ export default function AboutPage() {
       {/* Hero */}
       <div className="text-center mb-16">
         <h1 className="font-serif text-4xl md:text-5xl font-bold text-foreground mb-4">
-          About <span className="text-primary">nhimbe</span>
+          About <span className="text-primary">Nhimbe</span>
         </h1>
         <p className="text-xl text-text-secondary leading-relaxed">
           The gatherings and events platform built for African communities
@@ -63,8 +63,8 @@ export default function AboutPage() {
             Together, everyone thrived.
           </p>
           <p>
-            We built nhimbe to bring this spirit into the digital age. In a world where
-            we&apos;re more connected than ever yet often feel isolated, nhimbe helps
+            We built Nhimbe to bring this spirit into the digital age. In a world where
+            we&apos;re more connected than ever yet often feel isolated, Nhimbe helps
             communities come together—whether for a tech meetup, a cultural celebration,
             a wellness session, or a simple gathering of friends.
           </p>
@@ -95,7 +95,7 @@ export default function AboutPage() {
       {/* Part of Mukoko */}
       <section className="mb-16">
         <div className="p-8 bg-surface rounded-xl border border-elevated text-center">
-          <p className="text-text-secondary mb-2">nhimbe is part of</p>
+          <p className="text-text-secondary mb-2">Nhimbe is part of</p>
           <h3 className="text-2xl font-bold text-secondary mb-4">Mukoko</h3>
           <p className="text-text-secondary max-w-md mx-auto">
             The digital ecosystem connecting African communities through technology.

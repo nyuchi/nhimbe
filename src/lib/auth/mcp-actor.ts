@@ -40,7 +40,7 @@ export async function resolveActorFromBearer(authorization: string | null): Prom
   const person = await persons.findOne({ workosUserId: verified.workosUserId });
   if (!person) {
     throw new ActorError(
-      "Sign in to nhimbe once to set up your profile before hosting via the MCP.",
+      "Sign in to Nhimbe once to set up your profile before hosting via the MCP.",
       403,
     );
   }

@@ -205,7 +205,7 @@ describe("CalendarPage (private-404 gate)", () => {
 describe("generateMetadata", () => {
   it("emits title/description/canonical for a public calendar", async () => {
     const metadata = await generateMetadata(pageProps());
-    expect(metadata.title).toBe("Harare Live Music - nhimbe");
+    expect(metadata.title).toBe("Harare Live Music - Nhimbe");
     expect(metadata.description).toBe("Every gig worth catching.");
     expect(metadata.alternates?.canonical).toBe(
       "https://nhimbe.com/calendars/harare-live-music-abc123",
@@ -216,14 +216,14 @@ describe("generateMetadata", () => {
   it("noindexes unlisted calendars but still names them", async () => {
     getCalendarBySlug.mockResolvedValue({ ...baseCalendar, visibility: "unlisted" });
     const metadata = await generateMetadata(pageProps());
-    expect(metadata.title).toBe("Harare Live Music - nhimbe");
+    expect(metadata.title).toBe("Harare Live Music - Nhimbe");
     expect(metadata.robots).toEqual({ index: false });
   });
 
   it("never leaks a private calendar's name through metadata", async () => {
     getCalendarBySlug.mockResolvedValue({ ...baseCalendar, visibility: "private" });
     const metadata = await generateMetadata(pageProps());
-    expect(metadata.title).toBe("Calendar not found - nhimbe");
+    expect(metadata.title).toBe("Calendar not found - Nhimbe");
     expect(JSON.stringify(metadata)).not.toContain("Harare Live Music");
   });
 });

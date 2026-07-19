@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "How nhimbe protects your data and respects your privacy.",
+  description: "How Nhimbe protects your data and respects your privacy.",
 };
 
 export default function PrivacyPage() {
@@ -19,7 +19,7 @@ export default function PrivacyPage() {
             1. Introduction
           </h2>
           <p>
-            Nyuchi Africa (&ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;) operates nhimbe, an events
+            Nyuchi Africa (&ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;) operates Nhimbe, an events
             and gatherings platform. This Privacy Policy explains how we collect, use,
             disclose, and safeguard your information when you use our Service.
           </p>

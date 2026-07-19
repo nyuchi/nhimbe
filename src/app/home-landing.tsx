@@ -45,7 +45,7 @@ export function HomeLanding({ featuredEvent, cities = [] }: HomeLandingProps) {
             Find your <span className="text-primary">people</span>.
           </h1>
           <p className="text-lg text-text-secondary max-w-150 mb-8">
-            Cultural celebrations, faith gatherings, tech meetups, music, family days — nhimbe is
+            Cultural celebrations, faith gatherings, tech meetups, music, family days — Nhimbe is
             where your community comes together.
           </p>
 

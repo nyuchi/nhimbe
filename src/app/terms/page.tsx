@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description: "nhimbe terms and conditions for using our community events platform.",
+  description: "Nhimbe terms and conditions for using our community events platform.",
 };
 
 export default function TermsPage() {
@@ -19,7 +19,7 @@ export default function TermsPage() {
             1. Acceptance of Terms
           </h2>
           <p>
-            By accessing or using nhimbe (&ldquo;the Service&rdquo;), operated by Nyuchi Africa
+            By accessing or using Nhimbe (&ldquo;the Service&rdquo;), operated by Nyuchi Africa
             (&ldquo;we&rdquo;, &ldquo;us&rdquo;, or &ldquo;our&rdquo;), you agree to be bound by these Terms of
             Service. If you do not agree to these terms, please do not use the Service.
           </p>
@@ -30,7 +30,7 @@ export default function TermsPage() {
             2. Description of Service
           </h2>
           <p>
-            nhimbe is an events and gatherings platform that enables users to discover,
+            Nhimbe is an events and gatherings platform that enables users to discover,
             create, and manage community events. The Service is part of the Mukoko
             ecosystem and may integrate with other Mukoko products.
           </p>

@@ -33,10 +33,10 @@ function wrapHtml(content: string): string {
 </head>
 <body>
   <div class="container">
-    <div class="header"><h1>nhimbe</h1></div>
+    <div class="header"><h1>Nhimbe</h1></div>
     ${content}
     <div class="footer">
-      <p>nhimbe — together we gather, together we grow</p>
+      <p>Nhimbe — together we gather, together we grow</p>
     </div>
   </div>
 </body>
@@ -63,7 +63,7 @@ export function registrationConfirmed(data: {
         <a href="${data.eventUrl}" class="cta">View Event Details</a>
       </div>
     `),
-    text: `Hi ${data.userName},\n\nYou're registered for ${data.eventName}!\n\nDate: ${data.eventDate}\nLocation: ${data.eventLocation}\n\nView details: ${data.eventUrl}\n\n— nhimbe`,
+    text: `Hi ${data.userName},\n\nYou're registered for ${data.eventName}!\n\nDate: ${data.eventDate}\nLocation: ${data.eventLocation}\n\nView details: ${data.eventUrl}\n\n— Nhimbe`,
   };
 }
 
@@ -87,7 +87,7 @@ export function eventReminder(data: {
         <a href="${data.eventUrl}" class="cta">View Event</a>
       </div>
     `),
-    text: `Hi ${data.userName},\n\nReminder: ${data.eventName} is tomorrow!\n\nDate: ${data.eventDate}\nLocation: ${data.eventLocation}\n\nView details: ${data.eventUrl}\n\n— nhimbe`,
+    text: `Hi ${data.userName},\n\nReminder: ${data.eventName} is tomorrow!\n\nDate: ${data.eventDate}\nLocation: ${data.eventLocation}\n\nView details: ${data.eventUrl}\n\n— Nhimbe`,
   };
 }
 
@@ -106,11 +106,11 @@ export function eventCancelled(data: {
         <p class="event-name">${data.eventName}</p>
         <p class="detail">📅 ${data.eventDate}</p>
         <p style="margin: 16px 0 0; font-size: 14px; color: #a1a1aa;">
-          We apologize for any inconvenience. Check out other events on nhimbe.
+          We apologize for any inconvenience. Check out other events on Nhimbe.
         </p>
       </div>
     `),
-    text: `Hi ${data.userName},\n\nUnfortunately, ${data.eventName} (${data.eventDate}) has been cancelled.\n\nWe apologize for any inconvenience.\n\n— nhimbe`,
+    text: `Hi ${data.userName},\n\nUnfortunately, ${data.eventName} (${data.eventDate}) has been cancelled.\n\nWe apologize for any inconvenience.\n\n— Nhimbe`,
   };
 }
 
@@ -135,7 +135,7 @@ export function hostNewRegistration(data: {
         <a href="${data.eventUrl}" class="cta">Manage Event</a>
       </div>
     `),
-    text: `Hi ${data.hostName},\n\n${data.attendeeName} registered for ${data.eventName}.\n\nTotal attendees: ${data.attendeeCount}\n\nManage: ${data.eventUrl}\n\n— nhimbe`,
+    text: `Hi ${data.hostName},\n\n${data.attendeeName} registered for ${data.eventName}.\n\nTotal attendees: ${data.attendeeCount}\n\nManage: ${data.eventUrl}\n\n— Nhimbe`,
   };
 }
 
@@ -191,6 +191,6 @@ export function registrationCancelled(data: {
         <p class="detail">📅 ${data.eventDate}</p>
       </div>
     `),
-    text: `Hi ${data.userName},\n\nYour registration for ${data.eventName} (${data.eventDate}) has been cancelled.\n\n— nhimbe`,
+    text: `Hi ${data.userName},\n\nYour registration for ${data.eventName} (${data.eventDate}) has been cancelled.\n\n— Nhimbe`,
   };
 }

@@ -206,7 +206,7 @@ function HorizontalSignage({ events, stats }: { events: Event[]; stats: Communit
       {/* Header */}
       <header className="px-10 py-5 flex items-center justify-between border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="text-2xl font-bold">nhimbe</div>
+          <div className="text-2xl font-bold">Nhimbe</div>
           <span className="text-white/30">|</span>
           <span className="text-white/50 text-sm">Community Events</span>
         </div>
@@ -248,7 +248,7 @@ function HorizontalSignage({ events, stats }: { events: Event[]; stats: Communit
 
       <footer className="px-10 py-3 border-t border-white/10 flex items-center justify-between">
         <div className="text-xs text-white/30">
-          Powered by <span className="text-white/50 font-semibold">nhimbe</span> &middot; A Mukoko Product
+          Powered by <span className="text-white/50 font-semibold">Nhimbe</span> &middot; A Mukoko Product
         </div>
         <div className="text-xs text-white/30">
           Discover events at nhimbe.com
@@ -267,7 +267,7 @@ function VerticalSignage({ events, stats }: { events: Event[]; stats: CommunityS
     <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 flex flex-col text-white">
       {/* Header */}
       <header className="px-6 py-5 text-center border-b border-white/10">
-        <div className="text-2xl font-bold">nhimbe</div>
+        <div className="text-2xl font-bold">Nhimbe</div>
         <div className="text-white/40 text-sm mt-1">Community Events</div>
       </header>
 
@@ -295,7 +295,7 @@ function VerticalSignage({ events, stats }: { events: Event[]; stats: CommunityS
 
       <footer className="px-6 py-3 text-center border-t border-white/10">
         <div className="text-xs text-white/30">
-          Powered by <span className="text-white/50 font-semibold">nhimbe</span> &middot; A Mukoko Product
+          Powered by <span className="text-white/50 font-semibold">Nhimbe</span> &middot; A Mukoko Product
         </div>
       </footer>
     </div>

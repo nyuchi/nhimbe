@@ -43,7 +43,7 @@ function createCalendarEvent(event: EventActionsProps["event"]): CalendarEvent {
   const descLines = [event.description.slice(0, 500)];
   descLines.push("");
   descLines.push(`View event details, RSVP, and explore more: ${eventPageUrl || "https://nhimbe.com"}`);
-  descLines.push("Powered by nhimbe — Together we gather, together we grow");
+  descLines.push("Powered by Nhimbe — Together we gather, together we grow");
 
   return {
     title: event.name,
@@ -76,7 +76,7 @@ export function EventActions({ event }: EventActionsProps) {
       try {
         await navigator.share({
           title: event.name,
-          text: `Check out ${event.name} on nhimbe`,
+          text: `Check out ${event.name} on Nhimbe`,
           url,
         });
       } catch {
@@ -264,7 +264,7 @@ export function ShareButton({ event }: EventActionsProps) {
       try {
         await navigator.share({
           title: event.name,
-          text: `Check out ${event.name} on nhimbe`,
+          text: `Check out ${event.name} on Nhimbe`,
           url,
         });
       } catch {

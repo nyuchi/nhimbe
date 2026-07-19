@@ -23,8 +23,8 @@ export async function generateMetadata({ searchParams }: EventsPageProps): Promi
   return {
     title: scope ? `${scope} — events` : "All Events",
     description: scope
-      ? `Upcoming ${category ?? "community"} events${city ? ` in ${city}` : ""} on nhimbe.`
-      : "Every upcoming community event on nhimbe — concerts, meetups, workshops, and more.",
+      ? `Upcoming ${category ?? "community"} events${city ? ` in ${city}` : ""} on Nhimbe.`
+      : "Every upcoming community event on Nhimbe — concerts, meetups, workshops, and more.",
   };
 }
 

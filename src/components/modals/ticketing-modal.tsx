@@ -60,7 +60,7 @@ export function TicketingModal({
         {isFree && (
           <div className="p-4 bg-primary/10 rounded-xl">
             <p className="text-sm text-primary">
-              Free events allow guests to RSVP directly on nhimbe. For paid events, toggle off &quot;Free Event&quot; and add a link to your external ticketing provider.
+              Free events allow guests to RSVP directly on Nhimbe. For paid events, toggle off &quot;Free Event&quot; and add a link to your external ticketing provider.
             </p>
           </div>
         )}

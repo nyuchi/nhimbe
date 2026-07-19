@@ -71,12 +71,12 @@ async function summarize(query: string, events: Event[], fallback: string): Prom
     )
     .join("\n");
 
-  const prompt = `You are a helpful assistant for nhimbe, an African events platform.
+  const prompt = `You are a helpful assistant for Nhimbe, an African events platform.
 Based on the user's search for "${query}", summarize these matching events in 2-3 sentences:
 
 ${list}
 
-Be friendly, concise, and highlight what makes these events relevant to the search. Use the nhimbe tagline spirit: "Together we gather, together we grow".`;
+Be friendly, concise, and highlight what makes these events relevant to the search. Use the Nhimbe tagline spirit: "Together we gather, together we grow".`;
 
   try {
     const text = await chat(

@@ -1,12 +1,12 @@
 # Releases
 
-nhimbe uses **continuous deployment** with manual version tags for milestones. This document is both the running changelog and the release process.
+Nhimbe uses **continuous deployment** with manual version tags for milestones. This document is both the running changelog and the release process.
 
 ## Changelog
 
 ### Unreleased
 
-- Consolidated nhimbe into a single full-stack app deployed on Vercel — retired the separate REST backend; the `worker/` directory is now the task-based **`nhimbe-mcp`** server at `nhimbe.com/mcp`.
+- Consolidated Nhimbe into a single full-stack app deployed on Vercel — retired the separate REST backend; the `worker/` directory is now the task-based **`nhimbe-mcp`** server at `nhimbe.com/mcp`.
 - Moved all data to **MongoDB** as the sole data store, read and written server-side (SSR-first, Server Actions).
 - Standardised authentication on **WorkOS AuthKit** with the **hosted sign-in UI** (email code, password, MFA, passkeys, social — all dashboard-configured); removed the self-hosted sign-in/User-Management surface. Split the WorkOS domains correctly — `authenticate.nyuchi.com` (API) vs `identity.nyuchi.com` (hosted UI).
 - Added **guaranteed user provisioning** — a WorkOS event webhook (`/api/webhooks/workos`) plus a callback upsert and lazy sync, all converging on the same idempotent `identity.persons` write.
