@@ -18,7 +18,7 @@ const emailLog = createLogger("email");
  * The sending domain (`notify.mukoko.com`) is the domain verified in Resend;
  * sending from an unverified domain is rejected by the API.
  */
-const FROM_ADDRESS = "nhimbe <events@notify.mukoko.com>";
+const FROM_ADDRESS = "Nhimbe <events@notify.mukoko.com>";
 
 export interface SendEmailParams {
   to: string | string[];

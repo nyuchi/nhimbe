@@ -146,14 +146,14 @@ function PairingScreen({ onPaired }: { onPaired: (session: KioskSession, token: 
         )}
 
         <div className="mt-12 text-sm text-text-tertiary space-y-1">
-          <p>1. Open nhimbe on your phone</p>
+          <p>1. Open Nhimbe on your phone</p>
           <p>2. Go to your event → Manage → Kiosk</p>
           <p>3. Enter the 6-digit code above</p>
         </div>
       </div>
 
       <footer className="absolute bottom-6 text-xs text-text-tertiary">
-        Powered by <span className="text-secondary font-semibold">nhimbe</span> &middot; A Mukoko Product
+        Powered by <span className="text-secondary font-semibold">Nhimbe</span> &middot; A Mukoko Product
       </footer>
     </div>
   );
@@ -423,7 +423,7 @@ function CheckinScreen({ session, token }: { session: KioskSession; token: strin
 
       <footer className="border-t border-elevated px-6 py-3 text-center">
         <p className="text-xs text-text-tertiary">
-          Powered by <span className="text-secondary font-semibold">nhimbe</span> &middot; A Mukoko Product
+          Powered by <span className="text-secondary font-semibold">Nhimbe</span> &middot; A Mukoko Product
         </p>
       </footer>
     </div>

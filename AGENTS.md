@@ -7,7 +7,7 @@ subset so every runner gets the same contract.
 > architecture, data model, file map). This file is the tool-agnostic subset —
 > where the two overlap they agree; when you need depth, read `CLAUDE.md`.
 
-## What nhimbe is
+## What Nhimbe is
 
 A single full-stack **Next.js 16** app (App Router, React 19, TypeScript strict,
 Tailwind v4) — the community events platform of the **Mukoko** ecosystem. There
@@ -58,7 +58,7 @@ npm run test:run   # Vitest, run once (~682 tests)
 
 ## Conventions
 
-- **Brand:** always lowercase **"nhimbe"** — even at the start of a sentence.
+- **Brand:** capitalized **"Nhimbe"** in user-facing copy and docs (rule reversed 2026-07-19; code identifiers, slugs, URLs and package names stay lowercase).
 - **TypeScript strict mode.** WCAG AAA (7:1+ contrast, comfortable touch
   targets). Dark/light via design tokens in `globals.css`.
 - **React Context** for global state (AuthProvider, ThemeProvider) — no

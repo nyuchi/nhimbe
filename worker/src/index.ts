@@ -37,7 +37,7 @@ app.use(
 app.get("/", (c) =>
   c.json({
     name: c.env.MCP_SERVER_NAME || "nhimbe",
-    description: "nhimbe events — task-based MCP server",
+    description: "Nhimbe events — task-based MCP server",
     transport: "streamable-http",
     endpoint: "/mcp",
     protocolVersions: {

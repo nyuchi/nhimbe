@@ -40,13 +40,13 @@ export async function generateMetadata({ params }: CalendarPageProps): Promise<M
   const calendar = await loadCalendar(slug);
   if (!calendar || calendar.visibility === "private") {
     // Private calendars never leak name/description through metadata.
-    return { title: "Calendar not found - nhimbe", robots: { index: false } };
+    return { title: "Calendar not found - Nhimbe", robots: { index: false } };
   }
   const description =
     calendar.description ??
-    `Follow ${calendar.name} on nhimbe and never miss a gathering they host.`;
+    `Follow ${calendar.name} on Nhimbe and never miss a gathering they host.`;
   return {
-    title: `${calendar.name} - nhimbe`,
+    title: `${calendar.name} - Nhimbe`,
     description,
     // Unlisted calendars render for anyone with the link, but stay out of
     // search indexes (mirroring their exclusion from /discover + sitemap).
@@ -57,7 +57,7 @@ export async function generateMetadata({ params }: CalendarPageProps): Promise<M
       description,
       type: "website",
       url: `https://nhimbe.com/calendars/${calendar.slug}`,
-      siteName: "nhimbe",
+      siteName: "Nhimbe",
     },
   };
 }

@@ -1,4 +1,4 @@
-# nhimbe docs
+# Nhimbe docs
 
 This directory holds supplementary documentation: a design-system reference and
 a set of **archived, point-in-time plans**. It is not the primary source of
@@ -9,13 +9,13 @@ truth — the canonical, always-current docs live at the repository root.
 | Document | Purpose |
 | --- | --- |
 | [`../CLAUDE.md`](../CLAUDE.md) | Architecture and conventions — the source of truth, kept current |
-| [`../README.md`](../README.md) | Project overview and what nhimbe does |
+| [`../README.md`](../README.md) | Project overview and what Nhimbe does |
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Local setup, conventions, and the PR process |
 | [`../SECURITY.md`](../SECURITY.md) | Security policy and vulnerability reporting |
 | [`../RELEASES.md`](../RELEASES.md) | Changelog and release process |
 | [`../worker/README.md`](../worker/README.md) | The `nhimbe-mcp` server (task-based MCP at `events.mukoko.com/mcp`) |
 
-**Architecture in one line:** nhimbe is a single **Next.js 16** app on **Vercel**
+**Architecture in one line:** Nhimbe is a single **Next.js 16** app on **Vercel**
 that reads and writes **MongoDB server-side** (SSR-first, Server Actions), with
 **WorkOS AuthKit** for auth, a same-origin `/api` fallback, **Cloudflare R2** for
 media, and the **Shamwari** Cloudflare AI Gateway. The `worker/` directory is the
@@ -32,7 +32,7 @@ stateless `nhimbe-mcp` server and owns no data.
 These are **dated, point-in-time plans**. They are kept for historical context
 and are **not** current architecture — each carries an archival banner at the
 top. Several describe a since-retired backend (a standalone Cloudflare Workers
-REST service on D1/Supabase, a Hono migration, Paynow payments); nhimbe has since
+REST service on D1/Supabase, a Hono migration, Paynow payments); Nhimbe has since
 consolidated onto Vercel + MongoDB, and the worker is now `nhimbe-mcp`. Do not
 use these as a guide to how the app works today.
 

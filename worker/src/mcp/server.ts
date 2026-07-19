@@ -35,7 +35,7 @@ import {
 } from "./versions";
 
 const INSTRUCTIONS =
-  "nhimbe events. Use events_near_me and events_matching_interests to discover events, " +
+  "Nhimbe events. Use events_near_me and events_matching_interests to discover events, " +
   "get_event to look one up, and create_event/update_event to host (sign-in required).";
 
 /** Freshness hint for cacheable list/discover results (1 hour). */

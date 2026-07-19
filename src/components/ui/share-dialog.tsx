@@ -89,7 +89,7 @@ function ShareDialog({
       subtitle={description}
       imageUrl={imageUrl}
       url={url}
-      sourceApp="nhimbe"
+      sourceApp="Nhimbe"
       copied={copied}
       onCopyLink={handleCopyLink}
       onNativeShare={handleNativeShare}

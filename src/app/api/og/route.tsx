@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
 
     // Get and sanitize parameters
-    const title = sanitizeText(searchParams.get("title"), 100) || "nhimbe";
+    const title = sanitizeText(searchParams.get("title"), 100) || "Nhimbe";
     const subtitle = sanitizeText(searchParams.get("subtitle"), 200) || "Together we gather, together we grow";
     const date = sanitizeText(searchParams.get("date"), 50);
     const location = sanitizeText(searchParams.get("location"), 100);
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
             >
               <span style={{ fontSize: 28, fontWeight: 700, color: "#0A0A0A" }}>n</span>
             </div>
-            <span style={{ fontSize: 28, fontWeight: 600, color: "#FFFFFF" }}>nhimbe</span>
+            <span style={{ fontSize: 28, fontWeight: 600, color: "#FFFFFF" }}>Nhimbe</span>
           </div>
 
           {/* Category badge */}
