@@ -19,6 +19,9 @@ export interface ProfileFields {
   addressLocality?: string;
   addressCountry?: string;
   interests?: string[];
+  /** Event-update notifications (opt-out preference; stored under
+   *  `mukoko.notifications.eventUpdates` on the person doc). */
+  subscribeToEventUpdates?: boolean;
 }
 
 export async function updateMyProfile(fields: ProfileFields): Promise<AppUser | null> {
@@ -36,6 +39,9 @@ export async function updateMyProfile(fields: ProfileFields): Promise<AppUser | 
   if (typeof fields.addressLocality === "string") set.addressLocality = fields.addressLocality.trim();
   if (typeof fields.addressCountry === "string") set.addressCountry = fields.addressCountry.trim();
   if (Array.isArray(fields.interests)) set.interests = fields.interests;
+  if (typeof fields.subscribeToEventUpdates === "boolean") {
+    set["mukoko.notifications.eventUpdates"] = fields.subscribeToEventUpdates;
+  }
 
   const persons = await personsCollection();
   const doc = await persons.findOneAndUpdate(

@@ -39,6 +39,8 @@ export interface AppUser {
   role: AppUserRole;
   onboardingCompleted: boolean;
   suspended: boolean;
+  /** Event-update notifications (opt-out; absent on the doc means ON). */
+  subscribedToEventUpdates?: boolean;
 }
 
 const KNOWN_ROLES: ReadonlySet<string> = new Set(["user", "moderator", "admin", "super_admin"]);
@@ -61,6 +63,8 @@ export function mapPersonToAppUser(doc: PersonDoc): AppUser {
     // Heuristic: a synced user with a name has cleared the minimum bar.
     onboardingCompleted: Boolean(doc.name),
     suspended: doc.isActive === false,
+    // Opt-out preference: only an explicit false means unsubscribed.
+    subscribedToEventUpdates: doc.mukoko?.notifications?.eventUpdates !== false,
   };
 }
 

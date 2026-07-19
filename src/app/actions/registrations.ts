@@ -36,6 +36,9 @@ export interface RsvpActionInput {
   /** Extra guests the attendee is bringing (defaults to 0). */
   additionalGuests?: number;
   notes?: string | null;
+  /** Host-update subscription for this event (defaults to true; the person's
+   *  global preference still gates delivery). */
+  subscribeToUpdates?: boolean;
 }
 
 export interface RsvpActionResult {
@@ -137,6 +140,7 @@ export async function rsvpToEvent(input: RsvpActionInput): Promise<RsvpActionRes
     additionalGuests,
     respondedAt: new Date(),
     notes: input.notes?.trim() || null,
+    subscribedToUpdates: input.subscribeToUpdates !== false,
   };
 
   try {

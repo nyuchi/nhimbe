@@ -7,6 +7,7 @@ import { AuthGuard } from "@/components/auth/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { type Category } from "@/lib/api";
 import { getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
 import { updateMyProfile, type ProfileFields } from "@/app/actions/profile";
@@ -26,6 +27,7 @@ function ProfileEditContent() {
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
   const [interests, setInterests] = useState<string[]>([]);
+  const [eventUpdates, setEventUpdates] = useState(true);
 
   const [cities, setCities] = useState<{ addressLocality: string; addressCountry: string }[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -40,6 +42,7 @@ function ProfileEditContent() {
       setCity(user.addressLocality || "");
       setCountry(user.addressCountry || "");
       setInterests(user.interests || []);
+      setEventUpdates(user.subscribedToEventUpdates !== false);
       setDataLoaded(true);
     }
   }, [user, dataLoaded]);
@@ -83,6 +86,9 @@ function ProfileEditContent() {
       if (country !== (user?.addressCountry || "")) changedFields.addressCountry = country;
       if (JSON.stringify(interests) !== JSON.stringify(user?.interests || [])) {
         changedFields.interests = interests;
+      }
+      if (eventUpdates !== (user?.subscribedToEventUpdates !== false)) {
+        changedFields.subscribeToEventUpdates = eventUpdates;
       }
 
       if (Object.keys(changedFields).length === 0) {
@@ -202,6 +208,26 @@ function ProfileEditContent() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Preferences */}
+      <div className="bg-surface rounded-xl p-4 mb-6">
+        <Label className="block text-sm font-semibold text-text-tertiary uppercase tracking-wider mb-3">
+          Preferences
+        </Label>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="font-medium">Event updates</div>
+            <p className="text-sm text-text-secondary">
+              Get updates from the hosts of events you attend or help run.
+            </p>
+          </div>
+          <Switch
+            checked={eventUpdates}
+            onCheckedChange={setEventUpdates}
+            aria-label="Receive event updates"
+          />
+        </div>
       </div>
 
       {/* Error */}

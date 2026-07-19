@@ -27,6 +27,8 @@ import type {
   EventDoc,
   EventEmbeddingDoc,
   EventUpdateDoc,
+  EngagementInteractionDoc,
+  EngagementReactionDoc,
   LinkClickDoc,
   PairingDoc,
   PersonDoc,
@@ -120,6 +122,10 @@ export const referralsCollection = () => getCollection<ReferralDoc>(DB.engagemen
 export const trackedLinksCollection = () =>
   getCollection<TrackedLinkDoc>(DB.engagement, "trackedLinks");
 export const linkClicksCollection = () => getCollection<LinkClickDoc>(DB.engagement, "linkClicks");
+export const interactionsCollection = () =>
+  getCollection<EngagementInteractionDoc>(DB.engagement, "interactions");
+export const reactionsCollection = () =>
+  getCollection<EngagementReactionDoc>(DB.engagement, "reactions");
 
 // ── campfire ────────────────────────────────────────────────────────
 export const campfireConversationsCollection = () =>

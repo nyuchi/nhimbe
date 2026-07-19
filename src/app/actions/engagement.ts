@@ -22,7 +22,10 @@ import {
   getReferralLeaderboard,
   getUserReferralCode,
   markReviewHelpful,
+  submitEventReview,
 } from "@/lib/mongo/engagement";
+import { requireActingPerson } from "@/lib/auth/current-person";
+import { ensureHostEntityForPerson } from "@/lib/mongo/entities";
 import { getEventStats } from "@/lib/mongo/stats";
 import type {
   EventReviewsResponse,
@@ -59,6 +62,40 @@ export async function getHostReputationAction(userId: string): Promise<HostStats
 
 export async function getUserReferralCodeAction(userId: string): Promise<UserReferralCode | null> {
   return getUserReferralCode(userId);
+}
+
+// ── writes ───────────────────────────────────────────────────────────
+
+export interface SubmitEventReviewActionInput {
+  eventId: string;
+  rating: number;
+  headline?: string;
+  body?: string;
+}
+
+/**
+ * Submit (or revise) the signed-in attendee's review of an event. Runtime
+ * input validation mirrors the admin-action convention (types are erased at
+ * runtime); the mongo layer enforces the attendance gate and the one-review-
+ * per-person upsert.
+ */
+export async function submitEventReviewAction(
+  input: SubmitEventReviewActionInput,
+): Promise<{ reviewId: string }> {
+  const eventId = typeof input?.eventId === "string" ? input.eventId.trim() : "";
+  if (!eventId) throw new Error("An event id is required.");
+  const rating = Number(input?.rating);
+
+  const person = await requireActingPerson("You must be signed in to review an event.");
+  const reviewerEntityId = await ensureHostEntityForPerson(person);
+
+  const { reviewId } = await submitEventReview(person, reviewerEntityId, {
+    eventId,
+    rating,
+    headline: typeof input?.headline === "string" ? input.headline : null,
+    body: typeof input?.body === "string" ? input.body : null,
+  });
+  return { reviewId };
 }
 
 // ── writes (graceful stubs) ──────────────────────────────────────────

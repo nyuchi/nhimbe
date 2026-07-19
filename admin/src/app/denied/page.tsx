@@ -37,7 +37,7 @@ export default async function DeniedPage() {
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">Access denied</h1>
           <p className="text-muted-foreground">
-            This is the nhimbe admin dashboard. Your account
+            This is the Mukoko Events Admin dashboard. Your account
             {user?.email ? (
               <>
                 {" "}

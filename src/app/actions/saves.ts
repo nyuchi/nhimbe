@@ -1,58 +1,40 @@
 "use server";
 
 /**
- * Saved-event (bookmark) server actions — Vercel server runtime → MongoDB.
+ * Saved-event (bookmark) + like server actions — Vercel server runtime →
+ * MongoDB, on the SHARED engagement substrate (no silos).
  *
- * Replaces the old browser-side direct-Supabase path in `use-save-event.ts`
- * (which wrote to `events.save_action` via the anon-key client). The browser
- * can't talk to MongoDB, so saving now runs server-side: the acting person is
- * resolved via AuthKit `withAuth()` (or the local dev bypass), and the bookmark
- * is persisted as one `events.savedEvents` document.
+ * Saves write `engagement.interactions` (`interactionType: "save"`) and likes
+ * write `engagement.reactions` (`LikeAction` on `events_event`) — the
+ * cross-product collections every Mukoko surface reads — via
+ * `src/lib/mongo/interactions.ts`. This replaces the app-private
+ * `events.savedEvents` collection (which never held data).
  *
- * Idempotency: a save is identified by the (person, event) pair, encoded as a
- * deterministic `_id` (`<personId>:<eventId>`). `saveEvent` upserts on that key,
- * so a second save — e.g. from another tab — is silently absorbed instead of
- * creating a duplicate. `unsaveEvent` is a plain delete on the same key.
+ * Idempotency: saves/likes are keyed upserts on the (person, event) pair;
+ * unsave/unlike are plain deletes on the same key. The acting person is
+ * resolved via AuthKit `withAuth()` (or the local dev bypass), and their
+ * acting entity via `ensureHostEntityForPerson` (Rule 10: entity-centric).
  */
 
-import { getCollection, DB } from "@/lib/mongo/databases";
-import { WRITE_SCHEMA_VERSION } from "@/lib/mongo/ids";
 import { resolveActingPerson } from "@/lib/auth/current-person";
-import type { BaseDoc } from "@/lib/mongo/types";
-
-/**
- * One bookmark row. Lives in `events.savedEvents`; the `_id` is the deterministic
- * `<personId>:<eventId>` composite that makes saves idempotent.
- */
-interface SavedEventDoc extends BaseDoc {
-  personId: string;
-  eventId: string;
-  savedAt: Date;
-}
-
-const savedEventsCollection = () =>
-  getCollection<SavedEventDoc>(DB.events, "savedEvents");
-
-/** Deterministic primary key for a (person, event) bookmark. */
-function savedEventId(personId: string, eventId: string): string {
-  return `${personId}:${eventId}`;
-}
-
-/**
- * Resolve the acting person's id (`identity.persons._id`) from the WorkOS
- * session or the dev bypass, via the shared {@link resolveActingPerson} helper.
- * Returns null when there is no session — callers treat that as "can't save".
- */
-async function resolveActingPersonId(): Promise<string | null> {
-  const person = await resolveActingPerson();
-  return person?._id ?? null;
-}
+import { ensureHostEntityForPerson } from "@/lib/mongo/entities";
+import {
+  getEventLikeState,
+  isEventSavedByPerson,
+  likeEventForPerson,
+  saveEventForPerson,
+  unlikeEventForPerson,
+  unsaveEventForPerson,
+  type EventLikeState,
+} from "@/lib/mongo/interactions";
 
 function requireEventId(eventId: string): string {
-  const id = eventId?.trim() ?? "";
+  const id = typeof eventId === "string" ? eventId.trim() : "";
   if (!id) throw new Error("An event id is required.");
   return id;
 }
+
+// ── saves ────────────────────────────────────────────────────────────
 
 /**
  * Is the current user's bookmark present for `eventId`? Returns false when
@@ -60,12 +42,9 @@ function requireEventId(eventId: string): string {
  */
 export async function isEventSaved(eventId: string): Promise<boolean> {
   const id = requireEventId(eventId);
-  const personId = await resolveActingPersonId();
-  if (!personId) return false;
-
-  const col = await savedEventsCollection();
-  const doc = await col.findOne({ _id: savedEventId(personId, id) });
-  return !!doc;
+  const person = await resolveActingPerson();
+  if (!person) return false;
+  return isEventSavedByPerson(person._id, id);
 }
 
 /**
@@ -74,25 +53,10 @@ export async function isEventSaved(eventId: string): Promise<boolean> {
  */
 export async function saveEvent(eventId: string): Promise<boolean> {
   const id = requireEventId(eventId);
-  const personId = await resolveActingPersonId();
-  if (!personId) throw new Error("You must be signed in to save an event.");
-
-  const now = new Date();
-  const col = await savedEventsCollection();
-  await col.updateOne(
-    { _id: savedEventId(personId, id) },
-    {
-      $setOnInsert: {
-        _schemaVersion: WRITE_SCHEMA_VERSION,
-        personId,
-        eventId: id,
-        savedAt: now,
-        createdAt: now,
-      },
-      $set: { updatedAt: now },
-    },
-    { upsert: true },
-  );
+  const person = await resolveActingPerson();
+  if (!person) throw new Error("You must be signed in to save an event.");
+  const entityId = await ensureHostEntityForPerson(person);
+  await saveEventForPerson(person._id, entityId, id);
   return true;
 }
 
@@ -102,10 +66,36 @@ export async function saveEvent(eventId: string): Promise<boolean> {
  */
 export async function unsaveEvent(eventId: string): Promise<boolean> {
   const id = requireEventId(eventId);
-  const personId = await resolveActingPersonId();
-  if (!personId) throw new Error("You must be signed in to manage saved events.");
-
-  const col = await savedEventsCollection();
-  await col.deleteOne({ _id: savedEventId(personId, id) });
+  const person = await resolveActingPerson();
+  if (!person) throw new Error("You must be signed in to manage saved events.");
+  await unsaveEventForPerson(person._id, id);
   return false;
+}
+
+// ── likes ────────────────────────────────────────────────────────────
+
+/** Like count + whether the current user (if any) has liked the event. */
+export async function getEventLikes(eventId: string): Promise<EventLikeState> {
+  const id = requireEventId(eventId);
+  const person = await resolveActingPerson();
+  return getEventLikeState(id, person?._id ?? null);
+}
+
+/** Like an event (idempotent). Returns the new state. */
+export async function likeEvent(eventId: string): Promise<EventLikeState> {
+  const id = requireEventId(eventId);
+  const person = await resolveActingPerson();
+  if (!person) throw new Error("You must be signed in to like an event.");
+  const entityId = await ensureHostEntityForPerson(person);
+  await likeEventForPerson(person._id, entityId, id);
+  return getEventLikeState(id, person._id);
+}
+
+/** Remove the current user's like (idempotent). Returns the new state. */
+export async function unlikeEvent(eventId: string): Promise<EventLikeState> {
+  const id = requireEventId(eventId);
+  const person = await resolveActingPerson();
+  if (!person) throw new Error("You must be signed in to manage likes.");
+  await unlikeEventForPerson(person._id, id);
+  return getEventLikeState(id, person._id);
 }

@@ -5,10 +5,16 @@ import { Star, MessageSquare, Loader2 } from "lucide-react";
 import { Rating } from "@/components/ui/rating";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { NyuchiReviewCard } from "@/components/ui/nyuchi-review-card";
 import { type EventReview as ApiReview, type ReviewStats } from "@/lib/api";
-import { getEventReviewsAction, markReviewHelpfulAction } from "@/app/actions/engagement";
+import {
+  getEventReviewsAction,
+  markReviewHelpfulAction,
+  submitEventReviewAction,
+} from "@/app/actions/engagement";
 import { useAuth } from "@/components/auth/auth-context";
+import { toast } from "sonner";
 
 interface Review {
   id: string;
@@ -55,31 +61,63 @@ export function EventRatings({
   const [stats, setStats] = useState<ReviewStats | null>(null);
   const { accessToken, getAccessToken } = useAuth();
 
-  useEffect(() => {
-    async function fetchReviews() {
-      try {
-        const data = await getEventReviewsAction(eventId);
-        // Transform API data to component format
-        const transformedReviews: Review[] = data.reviews.map((r) => ({
-          id: r.id,
-          userName: r.userName,
-          userInitials: r.userInitials,
-          rating: r.rating,
-          reviewBody: r.reviewBody || "",
-          date: formatRelativeDate(r.dateCreated),
-          helpful: r.helpfulCount,
-          verifiedAttendee: r.isVerifiedAttendee,
-        }));
-        setReviews(transformedReviews);
-        setStats(data.stats);
-      } catch (error) {
-        console.error("Failed to fetch event reviews:", error);
-      } finally {
-        setLoading(false);
-      }
+  // Write-a-review form state.
+  const [showForm, setShowForm] = useState(false);
+  const [formRating, setFormRating] = useState(0);
+  const [formBody, setFormBody] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function fetchReviews() {
+    try {
+      const data = await getEventReviewsAction(eventId);
+      // Transform API data to component format
+      const transformedReviews: Review[] = data.reviews.map((r) => ({
+        id: r.id,
+        userName: r.userName,
+        userInitials: r.userInitials,
+        rating: r.rating,
+        reviewBody: r.reviewBody || "",
+        date: formatRelativeDate(r.dateCreated),
+        helpful: r.helpfulCount,
+        verifiedAttendee: r.isVerifiedAttendee,
+      }));
+      setReviews(transformedReviews);
+      setStats(data.stats);
+    } catch (error) {
+      console.error("Failed to fetch event reviews:", error);
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
     fetchReviews();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
+
+  async function handleSubmitReview() {
+    if (formRating < 1) {
+      toast.error("Pick a star rating first.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await submitEventReviewAction({
+        eventId,
+        rating: formRating,
+        body: formBody.trim() || undefined,
+      });
+      toast.success("Thanks — your review is live.");
+      setShowForm(false);
+      setFormRating(0);
+      setFormBody("");
+      await fetchReviews();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Your review could not be saved.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   const averageRating = stats?.averageRating ?? 0;
   const totalReviews = stats?.totalReviews ?? 0;
@@ -119,6 +157,32 @@ export function EventRatings({
 
   const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 3);
 
+  // Inline write-a-review form, shared by the empty state and the footer CTA.
+  const reviewForm = showForm ? (
+    <div className="mt-4 p-4 bg-background rounded-xl space-y-3 text-left">
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium">Your rating</span>
+        <Rating value={formRating} onChange={setFormRating} size="lg" />
+      </div>
+      <Textarea
+        value={formBody}
+        onChange={(e) => setFormBody(e.target.value)}
+        placeholder="How was the event? (optional)"
+        maxLength={4000}
+        rows={3}
+      />
+      <div className="flex items-center gap-2 justify-end">
+        <Button variant="ghost" size="sm" onClick={() => setShowForm(false)} disabled={submitting}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={handleSubmitReview} disabled={submitting || formRating < 1}>
+          {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Star className="w-4 h-4" />}
+          Post review
+        </Button>
+      </div>
+    </div>
+  ) : null;
+
   if (loading) {
     return (
       <div className={`bg-surface rounded-2xl p-6 ${className}`}>
@@ -148,12 +212,16 @@ export function EventRatings({
         </div>
         <div className="text-center py-8">
           <p className="text-text-secondary mb-4">No reviews yet. Be the first to share your experience!</p>
-          {userCanReview && isPastEvent && (
-            <Button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 transition-opacity mx-auto">
+          {userCanReview && isPastEvent && !showForm && (
+            <Button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 transition-opacity mx-auto"
+            >
               <Star className="w-4 h-4" />
               Write a Review
             </Button>
           )}
+          {reviewForm}
         </div>
       </div>
     );
@@ -239,13 +307,17 @@ export function EventRatings({
             {showAllReviews ? "Show less" : `View all ${reviews.length} reviews`}
           </Button>
         )}
-        {userCanReview && isPastEvent && (
-          <Button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 transition-opacity">
+        {userCanReview && isPastEvent && !showForm && (
+          <Button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium hover:opacity-90 transition-opacity"
+          >
             <Star className="w-4 h-4" />
             Write a Review
           </Button>
         )}
       </div>
+      {reviewForm}
 
       {/* Open Data Note */}
       <div className="mt-4 p-3 bg-background rounded-xl">

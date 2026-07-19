@@ -139,6 +139,40 @@ export function hostNewRegistration(data: {
   };
 }
 
+/** Minimal HTML escape for user-authored text interpolated into templates. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// Host update posted — sent to subscribed attendees + the event team
+export function eventUpdatePosted(data: {
+  eventName: string;
+  updateText: string;
+  eventUrl: string;
+}): TemplateResult {
+  const safeText = escapeHtml(data.updateText).replace(/\n/g, "<br>");
+  return {
+    subject: `Update from the host: ${data.eventName}`,
+    html: wrapHtml(`
+      <div class="content">
+        <p style="margin: 0 0 16px; font-size: 15px;">The host posted an update for:</p>
+        <p class="event-name">${data.eventName}</p>
+        <p style="margin: 0 0 16px; font-size: 15px;">${safeText}</p>
+        <a href="${data.eventUrl}" class="cta">View Event</a>
+        <p style="margin: 16px 0 0; font-size: 12px; color: #8a8a8a;">
+          You're receiving this because you subscribed to updates for this event.
+          Manage this in your profile preferences.
+        </p>
+      </div>
+    `),
+    text: `Update for ${data.eventName}:\n\n${data.updateText}\n\nView event: ${data.eventUrl}\n\nYou're receiving this because you subscribed to updates for this event. Manage this in your profile preferences.\n\n— Nhimbe`,
+  };
+}
+
 // Registration cancelled
 export function registrationCancelled(data: {
   userName: string;
