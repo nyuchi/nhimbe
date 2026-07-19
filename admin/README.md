@@ -1,4 +1,4 @@
-# nhimbe-admin
+# Mukoko Events Admin (nhimbe-admin)
 
 The standalone administration dashboard for **nhimbe** — a Next.js 16 app that
 deploys as its **own Vercel project** from this repo's `admin/` directory. The
@@ -132,7 +132,7 @@ Create a **second Vercel project** on this same Git repo:
 | Node.js Version      | 20+                                                     |
 | Include files outside root directory | **Enabled** (default) — required, the app imports `../src` |
 | Install Command      | default (`npm install`) — Vercel detects the npm workspace and installs at the repo root |
-| Domain               | `admin.nhimbe.com` (or your choice — keep the public app's `ADMIN_URL` redirect in sync) |
+| Domain               | `admin.events.mukoko.com` (or your choice — keep the public app's `ADMIN_URL` redirect in sync) |
 
 ### Environment variables (prod + preview)
 
@@ -144,18 +144,18 @@ Create a **second Vercel project** on this same Git repo:
 | `WORKOS_COOKIE_PASSWORD`          | ≥32 chars; may differ from the public app's                        |
 | `WORKOS_ADMIN_ORG_ID`             | *Optional.* The nyuchi WorkOS **organization id** (`org_…`) used only to org-scope the hosted sign-in screen (`getSignInUrl({ organizationId })`) — a UX hint, not the gate. |
 | `NYUCHI_ADMIN_ENTITY_ID`          | *Optional.* The Nyuchi **entity id** (`entity.entities._id`) whose active staff memberships may enter the admin app. When unset the entity is resolved by the `nyuchi-africa` slug and cached per process. |
-| `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | **`https://admin.nhimbe.com/callback`** — this project's own domain |
+| `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | **`https://admin.events.mukoko.com/callback`** — this project's own domain |
 | `WORKOS_API_HOSTNAME`             | `authenticate.nyuchi.com` (custom API domain — must match the same WorkOS environment) |
 | `NEXT_PUBLIC_SITE_URL`            | `https://nhimbe.com` — "View site" links + event/calendar deep links |
 
 ### WorkOS dashboard
 
 Add the admin callback to the environment's **redirect URI allow-list**:
-`https://admin.nhimbe.com/callback` (plus preview-domain URIs if you sign in
+`https://admin.events.mukoko.com/callback` (plus preview-domain URIs if you sign in
 on previews). Everything else (hosted UI at `identity.nyuchi.com`, MFA,
 passkeys, social) is shared with the public app — no further changes.
 
 ### Public app
 
 Set `ADMIN_URL` on the **public** app's Vercel project if the admin domain is
-not `https://admin.nhimbe.com` — it drives the `/admin/*` redirects.
+not `https://admin.events.mukoko.com` — it drives the `/admin/*` redirects.

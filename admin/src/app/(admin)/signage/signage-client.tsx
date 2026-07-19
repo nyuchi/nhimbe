@@ -279,7 +279,7 @@ function HorizontalAdmin({
         <div className="flex items-center gap-3">
           <Shield className="w-6 h-6 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold">Nhimbe Admin</h1>
+            <h1 className="text-2xl font-bold">Mukoko Events Admin</h1>
             <p className="text-xs text-white/40">Platform Analytics Dashboard</p>
           </div>
         </div>
@@ -409,7 +409,7 @@ function VerticalAdmin({
           <Shield className="w-5 h-5 text-primary" />
           <Activity className="w-3 h-3 text-green-400 animate-pulse" />
         </div>
-        <h1 className="text-2xl font-bold">Nhimbe Admin</h1>
+        <h1 className="text-2xl font-bold">Mukoko Events Admin</h1>
         <p className="text-xs text-white/40 mt-1">Platform Analytics</p>
       </header>
 

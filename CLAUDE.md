@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **nhimbe** (pronounced /ˈnhimbɛ/) — community events discovery and management platform, part of the Mukoko ecosystem. It is a single full-stack **Next.js 16** app (App Router, React 19, TypeScript strict, Tailwind v4) deployed on **Vercel** — there is no separate application backend. Data lives in **MongoDB** (the Mukoko v3.1 cluster) and is read/written **server-side only** via the official `mongodb` driver. Auth is **WorkOS AuthKit** end-to-end. AI ("Shamwari") runs through the **Cloudflare AI Gateway**; media is stored in **Cloudflare R2**.
 
-Worker note: the `worker/` directory is now the **`nhimbe-mcp`** server — a task-based MCP at `nhimbe.com/mcp` and the only thing that runs on Cloudflare Workers. It is **not** part of the app request path (feature work lives in `src/`); see "nhimbe MCP" below.
+Worker note: the `worker/` directory is now the **`nhimbe-mcp`** server — a task-based MCP at `events.mukoko.com/mcp` (canonical; `nhimbe.com/mcp` stays live as a legacy route) and the only thing that runs on Cloudflare Workers. It is **not** part of the app request path (feature work lives in `src/`); see "nhimbe MCP" below.
 
-Admin note: the admin dashboard is a **separate Next.js app in `admin/`**, deployed as its **own Vercel project** (root directory `admin`, e.g. `admin.nhimbe.com`). The public app has **no `/admin` routes** — `/admin*` redirects there. See "nhimbe admin" below.
+Admin note: the admin dashboard — **Mukoko Events Admin** — is a **separate Next.js app in `admin/`**, deployed as its **own Vercel project** (root directory `admin`, canonical domain `admin.events.mukoko.com`; `admin.nhimbe.com` stays as a legacy alias). The public app has **no `/admin` routes** — `/admin*` redirects there. See "nhimbe admin" below.
 
 ## Build & Dev Commands
 
@@ -149,7 +149,7 @@ Media lives in the **shared** Mukoko bucket `mukoko-storage`, served at `assets-
 
 ### nhimbe MCP (`worker/` → `nhimbe-mcp`)
 
-The `worker/` directory is now a single-purpose **task-based MCP server** (`nhimbe-mcp`) — the legacy REST backend, Supabase reads, Paynow, Resend email and queues were all stripped out. It is a stateless Streamable-HTTP MCP server (JSON-RPC 2.0, fetch-native, `hono`; no data of its own) deployed behind the nhimbe zone at **`nhimbe.com/mcp/*`** — the zone is Cloudflare-proxied (orange cloud) in front of Vercel, and the Worker route intercepts `/mcp/*` while everything else passes through to the app.
+The `worker/` directory is now a single-purpose **task-based MCP server** (`nhimbe-mcp`) — the legacy REST backend, Supabase reads, Paynow, Resend email and queues were all stripped out. It is a stateless Streamable-HTTP MCP server (JSON-RPC 2.0, fetch-native, `hono`; no data of its own) deployed at **`events.mukoko.com/mcp/*`** (canonical, on the mukoko.com zone; the legacy `nhimbe.com/mcp/*` routes stay live) — both zones are Cloudflare-proxied (orange cloud) in front of Vercel, and the Worker route intercepts `/mcp/*` while everything else passes through to the app. `events.mukoko.com` is nhimbe's alternative domain.
 
 - **Tools** (`worker/src/mcp/`): `events_near_me`, `events_matching_interests`, `get_event` (anonymous reads) and `create_event`, `update_event` (WorkOS-gated). Each returns **inline HTML** — a carousel for multiple events, a single card for one — plus a text fallback.
 - **No data ownership.** Every tool calls the nhimbe app API (`APP_API_URL`, `https://nhimbe.com`). Reads hit the public `/api/events*` endpoints; writes hit `POST /api/events` / `PATCH /api/events/:id`, which the worker reaches by forwarding the caller's WorkOS **bearer** token. The app verifies the token (`src/lib/auth/workos-token.ts` → JWKS) and is the single trust boundary. **No autonomous/agent tools yet** — deliberately future work.
@@ -329,7 +329,7 @@ Set in Vercel (prod + preview) and locally in `.env.local`:
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — server-only R2 S3 API credentials for cover-image uploads (`src/lib/r2.ts`). `R2_BUCKET` *(optional)* defaults to `mukoko-storage`. When unset, `/api/media/upload` returns 503 and uploads fall back to a gradient cover.
 - `NEXT_PUBLIC_SITE_URL` — public site URL.
 - `NEXT_PUBLIC_ASSETS_URL` *(optional)* — override the R2 assets host (defaults to `https://assets-s001.mukoko.com`).
-- `ADMIN_URL` *(optional)* — where `/admin*` redirects (defaults to `https://admin.nhimbe.com`). The admin app itself is a separate Vercel project with its own env — see `admin/README.md`.
+- `ADMIN_URL` *(optional)* — where `/admin*` redirects (defaults to `https://admin.events.mukoko.com`). The admin app itself is a separate Vercel project with its own env — see `admin/README.md`.
 - `WORKOS_ADMIN_ORG_ID` *(admin app only; optional)* — the nyuchi WorkOS **organization id** (`org_…`) used only to org-scope the hosted sign-in screen (a UX hint, not the gate). Set on the **nhimbe-admin** Vercel project, not the public app.
 - `NYUCHI_ADMIN_ENTITY_ID` *(admin app only; optional)* — the Nyuchi **entity id** (`entity.entities._id`) whose active staff memberships (`entity.memberships`) may enter the admin app; when unset the entity is resolved by the `nyuchi-africa` slug and cached per process. See `admin/README.md`.
 

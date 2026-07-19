@@ -16,10 +16,10 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: "Nhimbe Admin",
-    template: "%s | Nhimbe Admin",
+    default: "Mukoko Events Admin",
+    template: "%s | Mukoko Events Admin",
   },
-  description: "Internal administration dashboard for the Nhimbe events platform.",
+  description: "Internal administration dashboard for Nhimbe — Mukoko Events.",
   // Internal tool — never index, whatever domain it's served from.
   robots: { index: false, follow: false },
   icons: {

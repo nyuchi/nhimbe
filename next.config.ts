@@ -48,7 +48,7 @@ const CONTENT_SECURITY_POLICY = [
  * environment (build-time, like all next.config redirects); temporary (307)
  * so the destination can move without poisoning browser caches.
  */
-const ADMIN_URL = (process.env.ADMIN_URL || "https://admin.nhimbe.com").replace(/\/+$/, "");
+const ADMIN_URL = (process.env.ADMIN_URL || "https://admin.events.mukoko.com").replace(/\/+$/, "");
 
 const nextConfig: NextConfig = {
   // Don't advertise the framework via the `X-Powered-By: Next.js` response
