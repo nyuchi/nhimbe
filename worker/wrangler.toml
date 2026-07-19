@@ -3,7 +3,7 @@
 #
 # This worker hosts ONLY the nhimbe MCP server (see src/mcp/). It owns no data:
 # every tool reads/writes through the nhimbe app API. Deployed behind the
-# nhimbe zone at `nhimbe.com/mcp/*` — the zone is Cloudflare-proxied (orange
+# mukoko zone at `events.mukoko.com/mcp/*` — the zone is Cloudflare-proxied (orange
 # cloud) in front of Vercel, and this Worker route intercepts `/mcp/*` while
 # everything else passes through to the app.
 name = "nhimbe-mcp"
@@ -35,14 +35,14 @@ invocation_logs = true
 
 # ============================================
 # PRODUCTION
-# Route: nhimbe.com/mcp/* (zone must be Cloudflare-proxied in front of Vercel).
+# Route: events.mukoko.com/mcp/* (zone must be Cloudflare-proxied in front of Vercel).
 # ============================================
 [env.production]
 name = "nhimbe-mcp"
 vars = { ENVIRONMENT = "production", ALLOWED_ORIGINS = "https://nhimbe.com,https://www.nhimbe.com,https://mukoko.com,https://www.mukoko.com", APP_API_URL = "https://nhimbe.com", MCP_SERVER_NAME = "nhimbe" }
 routes = [
-  { pattern = "nhimbe.com/mcp", zone_name = "nhimbe.com" },
-  { pattern = "nhimbe.com/mcp/*", zone_name = "nhimbe.com" }
+  { pattern = "events.mukoko.com/mcp", zone_name = "mukoko.com" },
+  { pattern = "events.mukoko.com/mcp/*", zone_name = "mukoko.com" }
 ]
 
 [env.production.observability]
@@ -57,14 +57,14 @@ invocation_logs = true
 
 # ============================================
 # STAGING
-# Route: staging.nhimbe.com/mcp/*
+# Route: staging.events.mukoko.com/mcp/*
 # ============================================
 [env.staging]
 name = "nhimbe-mcp-staging"
 vars = { ENVIRONMENT = "staging", ALLOWED_ORIGINS = "https://staging.nhimbe.com", APP_API_URL = "https://staging.nhimbe.com", MCP_SERVER_NAME = "nhimbe (staging)" }
 routes = [
-  { pattern = "staging.nhimbe.com/mcp", zone_name = "nhimbe.com" },
-  { pattern = "staging.nhimbe.com/mcp/*", zone_name = "nhimbe.com" }
+  { pattern = "staging.events.mukoko.com/mcp", zone_name = "mukoko.com" },
+  { pattern = "staging.events.mukoko.com/mcp/*", zone_name = "mukoko.com" }
 ]
 
 [env.staging.observability]

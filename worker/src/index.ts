@@ -1,7 +1,7 @@
 /**
  * nhimbe-mcp — Cloudflare Worker hosting the nhimbe task-based MCP server.
  *
- * This worker is deployed behind the nhimbe zone at `nhimbe.com/mcp/*` (the
+ * This worker is deployed behind the mukoko zone at `events.mukoko.com/mcp/*` (the
  * zone is Cloudflare-proxied in front of Vercel; the Worker route intercepts
  * `/mcp/*` and everything else passes through to the app). It is the ONLY thing
  * that runs on the worker now — the legacy REST API, Supabase reads, Paynow,
@@ -28,7 +28,7 @@ app.use(
   cors({
     origin: (origin) => origin ?? "*",
     allowMethods: ["POST", "GET", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization", "MCP-Protocol-Version"],
+    allowHeaders: ["Content-Type", "Authorization", "MCP-Protocol-Version", "Mcp-Method", "Mcp-Name"],
     maxAge: 86400,
   }),
 );
@@ -40,6 +40,11 @@ app.get("/", (c) =>
     description: "nhimbe events — task-based MCP server",
     transport: "streamable-http",
     endpoint: "/mcp",
+    protocolVersions: {
+      modern: ["2026-07-28"],
+      legacy: ["2025-06-18", "2025-03-26", "2024-11-05"],
+      note: "2026-07-28 support is beta — built against the release candidate (final spec expected 2026-07-28).",
+    },
     environment: c.env.ENVIRONMENT ?? "development",
   }),
 );
