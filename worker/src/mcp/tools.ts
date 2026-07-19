@@ -78,7 +78,7 @@ function bool(v: unknown, fallback = false): boolean {
 function requireToken(ctx: ToolContext): string {
   if (!ctx.token) {
     throw new AppApiError(
-      "This action needs you to be signed in. Connect nhimbe with your account and try again.",
+      "This action needs you to be signed in. Connect Nhimbe with your account and try again.",
       401,
     );
   }
@@ -93,7 +93,7 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "events_near_me",
     description:
-      "Find upcoming nhimbe events near a place. Pass a city (recommended). Returns a carousel of event cards.",
+      "Find upcoming Nhimbe events near a place. Pass a city (recommended). Returns a carousel of event cards.",
     inputSchema: {
       type: "object",
       properties: {
@@ -112,7 +112,7 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "events_matching_interests",
     description:
-      "Find nhimbe events matching one or more interests/categories (e.g. \"Music\", \"Tech\"). Optionally scope to a city. Returns a carousel.",
+      "Find Nhimbe events matching one or more interests/categories (e.g. \"Music\", \"Tech\"). Optionally scope to a city. Returns a carousel.",
     inputSchema: {
       type: "object",
       properties: {
@@ -155,7 +155,7 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "get_event",
-    description: "Look up a single nhimbe event by id, slug, or short code. Returns one event card.",
+    description: "Look up a single Nhimbe event by id, slug, or short code. Returns one event card.",
     inputSchema: {
       type: "object",
       properties: {
@@ -177,7 +177,7 @@ export const TOOLS: ToolDefinition[] = [
   {
     name: "create_event",
     description:
-      "Create a new nhimbe event as the signed-in host. Requires the caller to be authenticated with WorkOS. Returns the created event card.",
+      "Create a new Nhimbe event as the signed-in host. Requires the caller to be authenticated with WorkOS. Returns the created event card.",
     inputSchema: {
       type: "object",
       properties: {

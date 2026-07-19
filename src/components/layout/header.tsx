@@ -142,7 +142,7 @@ export function Header() {
           <div className="rhino w-8.5 h-8.5 bg-surface border border-elevated">
             <Image
               src="/mukoko-mark-full-light.svg"
-              alt="nhimbe"
+              alt="Nhimbe"
               width={34}
               height={34}
               className="zebra zebra-light"
@@ -165,7 +165,7 @@ export function Header() {
                   : "opacity-100"
               }`}
             >
-              nhimbe
+              Nhimbe
             </span>
             {/* Page title - visible when scrolled */}
             {pageTitle && (

@@ -1,6 +1,6 @@
-# Contributing to nhimbe
+# Contributing to Nhimbe
 
-Thanks for your interest in nhimbe — the community events platform of the [Mukoko](https://mukoko.com) ecosystem. Contributions of every kind are welcome, from bug reports and docs to features and fixes.
+Thanks for your interest in Nhimbe — the community events platform of the [Mukoko](https://mukoko.com) ecosystem. Contributions of every kind are welcome, from bug reports and docs to features and fixes.
 
 Come say hello first if you like: **[discord.gg/CP2P4JpPR](https://discord.gg/CP2P4JpPR)**.
 
@@ -51,7 +51,7 @@ The Nyuchi house style is **one pull request, many focused commits**. Group rela
 
 ## Code conventions
 
-- **Brand:** always lowercase **"nhimbe"** — even at the start of a sentence.
+- **Brand:** capitalized **"Nhimbe"** in user-facing copy and docs (rule reversed 2026-07-19; code identifiers, slugs, URLs and package names stay lowercase).
 - **TypeScript strict mode** throughout.
 - **Accessibility:** target **WCAG AAA** — strong contrast and comfortable, consistent touch targets.
 - **No hardcoded content:** categories, cities, and stats come from data, not literals.
@@ -64,7 +64,7 @@ See **[CLAUDE.md](./CLAUDE.md)** for architecture, data ownership, and the deepe
 
 ## Data access
 
-nhimbe is a single full-stack app — all data access happens server-side, within this repository. The underlying collections are owned by the Mukoko platform, **not this repo**; if your change needs a data-model modification, coordinate that in the platform project first, then update the consumer code here. See **[CLAUDE.md](./CLAUDE.md)** for details.
+Nhimbe is a single full-stack app — all data access happens server-side, within this repository. The underlying collections are owned by the Mukoko platform, **not this repo**; if your change needs a data-model modification, coordinate that in the platform project first, then update the consumer code here. See **[CLAUDE.md](./CLAUDE.md)** for details.
 
 ## Reporting security issues
 

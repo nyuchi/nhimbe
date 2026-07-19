@@ -54,7 +54,7 @@ async function handleMessage(msg: JsonRpcRequest, ctx: ToolContext, env: Env) {
           version: SERVER_VERSION,
         },
         instructions:
-          "nhimbe events. Use events_near_me and events_matching_interests to discover events, " +
+          "Nhimbe events. Use events_near_me and events_matching_interests to discover events, " +
           "get_event to look one up, and create_event/update_event to host (sign-in required).",
       });
     }

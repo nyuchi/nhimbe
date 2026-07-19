@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**nhimbe** (pronounced /ˈnhimbɛ/) — community events discovery and management platform, part of the Mukoko ecosystem. It is a single full-stack **Next.js 16** app (App Router, React 19, TypeScript strict, Tailwind v4) deployed on **Vercel** — there is no separate application backend. Data lives in **MongoDB** (the Mukoko v3.1 cluster) and is read/written **server-side only** via the official `mongodb` driver. Auth is **WorkOS AuthKit** end-to-end. AI ("Shamwari") runs through the **Cloudflare AI Gateway**; media is stored in **Cloudflare R2**.
+**Nhimbe** (pronounced /ˈnhimbɛ/) — community events discovery and management platform, part of the Mukoko ecosystem. It is a single full-stack **Next.js 16** app (App Router, React 19, TypeScript strict, Tailwind v4) deployed on **Vercel** — there is no separate application backend. Data lives in **MongoDB** (the Mukoko v3.1 cluster) and is read/written **server-side only** via the official `mongodb` driver. Auth is **WorkOS AuthKit** end-to-end. AI ("Shamwari") runs through the **Cloudflare AI Gateway**; media is stored in **Cloudflare R2**.
 
-Worker note: the `worker/` directory is now the **`nhimbe-mcp`** server — a task-based MCP at `nhimbe.com/mcp` and the only thing that runs on Cloudflare Workers. It is **not** part of the app request path (feature work lives in `src/`); see "nhimbe MCP" below.
+Worker note: the `worker/` directory is now the **`nhimbe-mcp`** server — a task-based MCP at `nhimbe.com/mcp` and the only thing that runs on Cloudflare Workers. It is **not** part of the app request path (feature work lives in `src/`); see "Nhimbe MCP" below.
 
-Admin note: the admin dashboard is a **separate Next.js app in `admin/`**, deployed as its **own Vercel project** (root directory `admin`, e.g. `admin.nhimbe.com`). The public app has **no `/admin` routes** — `/admin*` redirects there. See "nhimbe admin" below.
+Admin note: the admin dashboard is a **separate Next.js app in `admin/`**, deployed as its **own Vercel project** (root directory `admin`, e.g. `admin.nhimbe.com`). The public app has **no `/admin` routes** — `/admin*` redirects there. See "Nhimbe admin" below.
 
 ## Build & Dev Commands
 
@@ -33,7 +33,7 @@ npm run lint
 npm run test:run     # Admin vitest suite
 ```
 
-Database: MongoDB collections/validators are owned by the Mukoko platform, not this repo. nhimbe only reads/writes documents via the `mongodb` driver (`src/lib/mongo/`). There are no migrations in this repo.
+Database: MongoDB collections/validators are owned by the Mukoko platform, not this repo. Nhimbe only reads/writes documents via the `mongodb` driver (`src/lib/mongo/`). There are no migrations in this repo.
 
 ## CI Pipeline
 
@@ -74,7 +74,7 @@ Connection lives in `client.ts` — a cached `MongoClient` (no caching of reject
 | `host-registrations.ts` | Host-side registration reads                                            |
 | `admin.ts`              | Admin dashboard queries (consumed by the standalone `admin/` app)      |
 | `admin-types.ts`        | Client-safe admin row/tile types (no `server-only`)                     |
-| `settings.ts`           | `system.platformSettings` singleton (nhimbe-owned platform config)     |
+| `settings.ts`           | `system.platformSettings` singleton (Nhimbe-owned platform config)     |
 | `entities.ts`           | Host entities and memberships                                           |
 | `users.ts`              | `identity.persons` (WorkOS user mirror)                                 |
 | `calendars.ts`          | Calendars (NYU-25): create/reads, idempotent follows, event attach (+ tests) |
@@ -89,7 +89,7 @@ Databases (`DB` map): `events`, `identity`, `entity`, `engagement`, `places`, `c
 
 ### Cross-product write-through (NYU-26)
 
-nhimbe feeds the Mukoko super app — two best-effort mirrors run server-side **after** the primary write succeeds and **never throw** (failures are logged via the `[mukoko]` logger and swallowed, same contract as `src/lib/email/resend.ts`):
+Nhimbe feeds the Mukoko super app — two best-effort mirrors run server-side **after** the primary write succeeds and **never throw** (failures are logged via the `[mukoko]` logger and swallowed, same contract as `src/lib/email/resend.ts`):
 
 - **RSVP → Planner** (`src/lib/mongo/planner.ts`): `rsvpToEvent` upserts a schema.org `EventReservation` into `planner.reservations`, keyed idempotently by `(reservedPersonId, event iCalUid)`. RSVP yes → `ReservationConfirmed`, maybe → `ReservationHold`, no / host cancellation (`cancelRegistration`) → `ReservationCancelled` (cancellation updates without upsert). `partySize` = 1 + additional guests; `reservationFor` carries an event snapshot.
 - **Event update → Campfire** (`src/lib/mongo/campfire.ts` + `src/app/actions/event-updates.ts`): `postEventUpdate` (host-gated) writes `events.updates`; with `notifyAttendees: true` it find-or-creates the event's paired `campfire.conversations` doc (`conversationType: "system"`, `encryptionMode: "none"`, `mukoko.routingSource: "nhimbe"`) and appends the text as a plaintext system message whose `sequence` is claimed atomically via `$inc: { messageCount: 1 }`. Additive to (not replacing) the transactional emails; the live event chat in `src/app/actions/campfire.ts` keeps owning user-authored messages.
@@ -102,7 +102,7 @@ Hosting is **entity-centric**: `events.events.primaryHostEntityId` → `entity.e
 
 ### Engagement (global cross-platform substrate)
 
-`engagement.*` collections (reviews, ratings, referrals, comments, reactions, trackedLinks, …) are **shared across all Mukoko products**, not owned by nhimbe. Event-scoped queries filter by `targetReferenceType: "event"` and `targetProductId: <eventId>`. Engagement primitives (reviews, likes/reactions, saves, comments) are universal across content types; **events additionally add RSVPs and check-ins**. **End-to-end encryption is disabled** — reviews/ratings carry plaintext bodies.
+`engagement.*` collections (reviews, ratings, referrals, comments, reactions, trackedLinks, …) are **shared across all Mukoko products**, not owned by Nhimbe. Event-scoped queries filter by `targetReferenceType: "event"` and `targetProductId: <eventId>`. Engagement primitives (reviews, likes/reactions, saves, comments) are universal across content types; **events additionally add RSVPs and check-ins**. **End-to-end encryption is disabled** — reviews/ratings carry plaintext bodies.
 
 ### Server Actions (`src/app/actions/`)
 
@@ -114,7 +114,7 @@ Same-origin fallback endpoints: `events`, `events/[id]` (both also take bearer-a
 
 ### Authentication Flow (WorkOS AuthKit — hosted UI)
 
-Auth uses **WorkOS's hosted AuthKit UI**. nhimbe no longer ships a self-hosted sign-in page or headless User Management routes — every "Sign in" / "Sign up" affordance links to the entry route **`/auth/hosted`** (`src/app/auth/hosted/route.ts`), which builds the hosted URL and redirects to WorkOS:
+Auth uses **WorkOS's hosted AuthKit UI**. Nhimbe no longer ships a self-hosted sign-in page or headless User Management routes — every "Sign in" / "Sign up" affordance links to the entry route **`/auth/hosted`** (`src/app/auth/hosted/route.ts`), which builds the hosted URL and redirects to WorkOS:
 
 - **Sign in** — `getSignInUrl({ returnTo })`; **Sign up** — `getSignUpUrl({ returnTo })` via `?screen=sign-up`. The route is a Route Handler (not an RSC) because these writers set PKCE/state cookies. `return_to` is a deep-link back into the app after login, clamped to a same-origin absolute path by `safeReturnTo` (`src/lib/auth/return-to.ts`) so it can never be an open redirect (rejects `//host`, `/\`, external URLs). A missing/misconfigured WorkOS env yields a clear **503**.
 - The **hosted UI owns all methods** — email code, password, **MFA (TOTP)**, **passkeys** and **social login** are configured in the WorkOS dashboard, not in our code. (This replaces the former self-hosted magic/password/MFA-OTP/SSO surface, which is gone.)
@@ -147,16 +147,16 @@ Env: `SHAMWARI_AI_GATEWAY_URL`, `SHAMWARI_AI_GATEWAY_TOKEN`, and optional `SHAMW
 
 Media lives in the **shared** Mukoko bucket `mukoko-storage`, served at `assets-s001.mukoko.com` (`getMediaUrl` in `src/lib/api.ts`, overridable via `NEXT_PUBLIC_ASSETS_URL`) — **not** a per-app silo. Reads need no credentials. **Uploads** (event cover images) go through `POST /api/media/upload` (WorkOS session-gated; validates image type + 4 MB) which writes to `mukoko-storage` via `src/lib/r2.ts` (the AWS S3 SDK pointed at the R2 endpoint). Uploads need an R2 S3 API token — `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (defaults to `mukoko-storage`); when unset the route returns 503 and the create-event form falls back to a gradient cover.
 
-### nhimbe MCP (`worker/` → `nhimbe-mcp`)
+### Nhimbe MCP (`worker/` → `nhimbe-mcp`)
 
-The `worker/` directory is now a single-purpose **task-based MCP server** (`nhimbe-mcp`) — the legacy REST backend, Supabase reads, Paynow, Resend email and queues were all stripped out. It is a stateless Streamable-HTTP MCP server (JSON-RPC 2.0, fetch-native, `hono`; no data of its own) deployed behind the nhimbe zone at **`nhimbe.com/mcp/*`** — the zone is Cloudflare-proxied (orange cloud) in front of Vercel, and the Worker route intercepts `/mcp/*` while everything else passes through to the app.
+The `worker/` directory is now a single-purpose **task-based MCP server** (`nhimbe-mcp`) — the legacy REST backend, Supabase reads, Paynow, Resend email and queues were all stripped out. It is a stateless Streamable-HTTP MCP server (JSON-RPC 2.0, fetch-native, `hono`; no data of its own) deployed behind the Nhimbe zone at **`nhimbe.com/mcp/*`** — the zone is Cloudflare-proxied (orange cloud) in front of Vercel, and the Worker route intercepts `/mcp/*` while everything else passes through to the app.
 
 - **Tools** (`worker/src/mcp/`): `events_near_me`, `events_matching_interests`, `get_event` (anonymous reads) and `create_event`, `update_event` (WorkOS-gated). Each returns **inline HTML** — a carousel for multiple events, a single card for one — plus a text fallback.
-- **No data ownership.** Every tool calls the nhimbe app API (`APP_API_URL`, `https://nhimbe.com`). Reads hit the public `/api/events*` endpoints; writes hit `POST /api/events` / `PATCH /api/events/:id`, which the worker reaches by forwarding the caller's WorkOS **bearer** token. The app verifies the token (`src/lib/auth/workos-token.ts` → JWKS) and is the single trust boundary. **No autonomous/agent tools yet** — deliberately future work.
+- **No data ownership.** Every tool calls the Nhimbe app API (`APP_API_URL`, `https://nhimbe.com`). Reads hit the public `/api/events*` endpoints; writes hit `POST /api/events` / `PATCH /api/events/:id`, which the worker reaches by forwarding the caller's WorkOS **bearer** token. The app verifies the token (`src/lib/auth/workos-token.ts` → JWKS) and is the single trust boundary. **No autonomous/agent tools yet** — deliberately future work.
 
 Cloudflare is otherwise used only for R2 storage and the Shamwari AI Gateway. Transactional email now runs **on the app** (`src/lib/email/`, Resend) — the worker no longer sends mail. Supabase, PostgREST, and any dependency on `api.mukoko.com` have been removed from the app.
 
-## nhimbe admin (`admin/` → separate Vercel project)
+## Nhimbe admin (`admin/` → separate Vercel project)
 
 The admin dashboard is a **standalone Next.js 16 app in `admin/`**, deployed as its **own Vercel project** (root directory `admin`, domain `admin.nhimbe.com`). The public app ships **no admin surface** — `next.config.ts` redirects `/admin*` to the admin app (`ADMIN_URL`, default `https://admin.nhimbe.com`; `/admin/users` maps to `/people`).
 
@@ -191,7 +191,7 @@ shadcn/Radix primitives installed from the Mukoko registry (`registry.mukoko.com
 
 #### nyuchi-harness (`src/components/ui/harness.tsx`)
 
-The infrastructure spine the mzizi-branded component library compiles against. It **unifies nhimbe's existing infra modules** behind one contract rather than re-implementing them — observability (`src/lib/observability.ts`), a11y announcements (`src/components/ui/live-region.tsx`), error resilience (`src/components/error/section-error-boundary.tsx`), and skeleton loading (`src/components/ui/skeleton.tsx`). Motion is token-driven (`--motion-duration-*` / `--motion-ease-*`, with fallbacks) and honours `prefers-reduced-motion`; shared entry keyframes are injected at runtime so `globals.css` stays owned by the design-system PR. Two entry points:
+The infrastructure spine the mzizi-branded component library compiles against. It **unifies Nhimbe's existing infra modules** behind one contract rather than re-implementing them — observability (`src/lib/observability.ts`), a11y announcements (`src/components/ui/live-region.tsx`), error resilience (`src/components/error/section-error-boundary.tsx`), and skeleton loading (`src/components/ui/skeleton.tsx`). Motion is token-driven (`--motion-duration-*` / `--motion-ease-*`, with fallbacks) and honours `prefers-reduced-motion`; shared entry keyframes are injected at runtime so `globals.css` stays owned by the design-system PR. Two entry points:
 
 - **`NyuchiHarness`** — declarative section wrapper: `<NyuchiHarness name="feed" loading skeleton={…} fallback={…}>…</NyuchiHarness>` (error boundary + skeleton + render-timing log + entry animation + a11y roles).
 - **`useNyuchiHarness(name)`** — imperative hook for leaf brand components, returning `{ log, motion, animStyle, prefersReducedMotion, locale, theme, reportHealth, announce, announceUrgent }`. Also exports the standalone `animStyle()` / `prefersReducedMotion()` helpers.
@@ -211,7 +211,7 @@ The mzizi events-domain brand components, ported into `src/components/ui/` and e
 - **`nyuchi-timeline.tsx`** (`NyuchiTimeline`) — 4.2.0 date-railed discover list (weekday · day · month rail + tight horizontal rows: time · title · host · location · avatar stack · thumbnail). Renders on **scoped surfaces only** (NYU-24): `/events` (incl. `?category=`/`?city=` drill-downs), `/search` (via `NyuchiSearchView`'s `timeline` mode), a circle's Events tab, and the signed-in home's "Your events" — never on the public home or `/discover`.
 - **`nyuchi-create-listing.tsx`** — create/edit form shell (`CoverThemePicker`, `FormSection`, `FormRow`, `FormTextArea`, `PublishBar`, `CreateHeader`); the create-event wizard adopts `PublishBar` for its sticky CTA without replacing its state or the `createEvent` action.
 
-Per-event mineral accents come from **`src/lib/category-mineral.ts`** (`categoryToMineral`), keyword-matched with a **tanzanite** default so the brand lead is always the fallback face. `nyuchi-forecast-card` was intentionally **not** ported: nhimbe's weather is the Mukoko iframe embed (`weather-embed.tsx`, `src/lib/weather.ts`) — a presentational forecast shell has no structured data to bind, so duplicating it was skipped.
+Per-event mineral accents come from **`src/lib/category-mineral.ts`** (`categoryToMineral`), keyword-matched with a **tanzanite** default so the brand lead is always the fallback face. `nyuchi-forecast-card` was intentionally **not** ported: Nhimbe's weather is the Mukoko iframe embed (`weather-embed.tsx`, `src/lib/weather.ts`) — a presentational forecast shell has no structured data to bind, so duplicating it was skipped.
 
 ### Components (`src/components/`)
 
@@ -295,7 +295,7 @@ Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/se
 
 ## Code Conventions
 
-- **Brand**: always lowercase "nhimbe" — even at sentence start.
+- **Brand**: capitalized "Nhimbe" in user-facing copy and docs (rule reversed 2026-07-19). Code identifiers, slugs, URLs, package names, DB values, storage keys and env vars stay lowercase.
 - **TypeScript strict mode**.
 - **Server-side data only** — MongoDB access is guarded by `import "server-only"`; never touch the driver from client components.
 - **Tailwind CSS v4** with the `cn()` helper from `src/lib/utils.ts`.
@@ -303,7 +303,7 @@ Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/se
 - **`"use client"`** directive required for interactive components.
 - **WCAG AAA** — 7:1+ contrast for primary/secondary text, 44px touch targets.
 - **Dark/light modes** via `.dark`/`.light` classes, design tokens in `globals.css`.
-- **Design tokens follow the mzizi doctrine 4.1.0** (`src/app/globals.css`, guarded by `src/__tests__/design-tokens.test.ts`), applied **additively** with deliberate nhimbe divergences:
+- **Design tokens follow the mzizi doctrine 4.1.0** (`src/app/globals.css`, guarded by `src/__tests__/design-tokens.test.ts`), applied **additively** with deliberate Nhimbe divergences:
   - **Pill inputs (the 4.1.0 headline):** `--radius-button` and `--radius-input` are `9999px` — Button, Input and the Select trigger render as **pills** (`rounded-full`); Textarea uses `rounded-2xl` (17px) to avoid a growing-stadium artifact. Per-component radii: card 14px (`--radius-lg`), dialog/tabs 17px (`--radius-xl`), checkbox 7px (`--radius-sm`). `--radius-base` (14) / `--radius-2xl` (17) are doctrine aliases.
   - **tanzanite stays the brand `--primary`** in every theme (cobalt is the "exceptional" mineral for links/info only — `--nh-secondary`/`--info`). Do **not** switch `--primary` to cobalt.
   - **Compact touch-target scale is intentional** (`--touch-target-lg: 48px` / `40px` / `34px`); blanket min-heights are deliberately **not** enforced (see the comment in `globals.css`). Control heights are token-driven (`--h-button-default`/`--h-button-sm`/`--h-input`, currently 36/32/36) — the single knob to adopt the doctrine's 56/48 later without touching components.

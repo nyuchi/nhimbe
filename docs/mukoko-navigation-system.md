@@ -2,7 +2,7 @@
 
 A reusable navigation system for Mukoko ecosystem apps. This document is a
 **design-system reference** — copy-paste-ready header, footer, and theme
-components — not a description of nhimbe's runtime architecture. For that, see
+components — not a description of Nhimbe's runtime architecture. For that, see
 [`README.md`](./README.md) (the docs index) and the root `CLAUDE.md`.
 
 ## Table of Contents
@@ -259,7 +259,7 @@ const pageTitles: Record<string, string> = {
 
 // App configuration - change these per app
 const APP_CONFIG = {
-  name: "nhimbe", // Lowercase wordmark
+  name: "Nhimbe", // Capitalized wordmark
   createPath: "/events/create",
   searchPath: "/search",
   profilePath: "/profile",
@@ -443,7 +443,7 @@ const footerLinks = [
 
 // App configuration - change these per app
 const APP_CONFIG = {
-  name: "nhimbe",
+  name: "Nhimbe",
   tagline: "Together we gather, together we grow",
   mukokoUrl: "https://mukoko.com",
   copyrightHolder: "Nyuchi Africa",
@@ -753,7 +753,7 @@ import { Plus, Search, Bell, Settings } from "lucide-react";
 ┌─────────────────────────────────────────────────────────────┐
 │ At Top (transparent):                                        │
 │                                                             │
-│   nhimbe          Discover  My Events  Calendar    [+][🔍][👤]│
+│   Nhimbe          Discover  My Events  Calendar    [+][🔍][👤]│
 │   ↑ logo                                            ↑ pill   │
 └─────────────────────────────────────────────────────────────┘
 
@@ -770,7 +770,7 @@ import { Plus, Search, Bell, Settings } from "lucide-react";
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                                                             │
-│   nhimbe "Tagline"   About  Help  Terms  Privacy   [🌙] A Mukoko Product © 2025│
+│   Nhimbe "Tagline"   About  Help  Terms  Privacy   [🌙] A Mukoko Product © 2025│
 │   ↑ brand             ↑ links                       ↑ theme toggle              │
 └─────────────────────────────────────────────────────────────┘
 ```

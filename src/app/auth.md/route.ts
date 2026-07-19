@@ -7,9 +7,9 @@ export const dynamic = "force-static";
 
 const AUTH_MD = `# auth.md
 
-nhimbe is a community events discovery and management platform, part of the
+Nhimbe is a community events discovery and management platform, part of the
 Mukoko ecosystem by Nyuchi Web Services (https://nhimbe.com). AI agents
-authenticate to nhimbe's protected APIs using WorkOS AuthKit bearer tokens:
+authenticate to Nhimbe's protected APIs using WorkOS AuthKit bearer tokens:
 present a WorkOS-issued access token (a JWT) in the \`Authorization: Bearer\`
 header on write/protected requests.
 
@@ -23,7 +23,7 @@ endpoints:
 
 ## Authentication
 
-nhimbe uses WorkOS AuthKit as its authorization server. To call protected
+Nhimbe uses WorkOS AuthKit as its authorization server. To call protected
 APIs, an agent first obtains a WorkOS AuthKit access token via the OAuth 2.1
 authorization-code flow with PKCE:
 
@@ -33,13 +33,13 @@ authorization-code flow with PKCE:
 2. Exchange the returned authorization code for tokens at the WorkOS token
    endpoint: \`https://identity.nyuchi.com/user_management/authenticate\` (supplying
    the PKCE \`code_verifier\`).
-3. Call nhimbe APIs with the access token:
+3. Call Nhimbe APIs with the access token:
    \`Authorization: Bearer <token>\`.
 
-Tokens are issued by WorkOS through nhimbe's custom auth domain (issuer
-\`https://identity.nyuchi.com\`) and validated by nhimbe against the WorkOS JWKS
+Tokens are issued by WorkOS through Nhimbe's custom auth domain (issuer
+\`https://identity.nyuchi.com\`) and validated by Nhimbe against the WorkOS JWKS
 at \`https://identity.nyuchi.com/sso/jwks/client_01KQBBSMQTSMTBN7HEC9KQBJC0\`. The
-WorkOS custom auth domain for nhimbe is https://identity.nyuchi.com.
+WorkOS custom auth domain for Nhimbe is https://identity.nyuchi.com.
 
 ## agent_auth
 
@@ -54,7 +54,7 @@ authorization_servers:
 scopes_supported: [openid, profile, email, offline_access]
 bearer_methods_supported: [header]
 agent_auth:
-  skill: "Discover and register for community events on nhimbe"
+  skill: "Discover and register for community events on Nhimbe"
   register_uri: https://identity.nyuchi.com/oauth2/register
   identity_types_supported: [identity_assertion]
   identity_assertion:

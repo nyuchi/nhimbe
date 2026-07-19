@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="./public/app-icon-192.png" alt="nhimbe" width="96" height="96">
+<img src="./public/app-icon-192.png" alt="Nhimbe" width="96" height="96">
 
-# nhimbe
+# Nhimbe
 
 **Together we gather, together we grow.**
 
@@ -20,9 +20,9 @@ Discover, host, and grow community events across African cities.
 
 ## About
 
-**nhimbe** (pronounced /ˈnhimbɛ/) is the community events platform of the [Mukoko](https://mukoko.com) super app. It takes its name from the Shona tradition of *nhimbe* — the communal work gathering where neighbours come together to get something done and share in the harvest.
+**Nhimbe** (pronounced /ˈnhimbɛ/) is the community events platform of the [Mukoko](https://mukoko.com) super app. It takes its name from the Shona tradition of *nhimbe* — the communal work gathering where neighbours come together to get something done and share in the harvest.
 
-That spirit — the Ubuntu idea that *I am because we are* — runs through the whole product. **Together we gather, together we grow.** nhimbe exists to help communities across African cities find one another, plan the moment, and turn up.
+That spirit — the Ubuntu idea that *I am because we are* — runs through the whole product. **Together we gather, together we grow.** Nhimbe exists to help communities across African cities find one another, plan the moment, and turn up.
 
 ## What you can do
 
@@ -80,7 +80,7 @@ The full environment-variable list and architecture reference live in **[CLAUDE.
 
 ## Working with agents
 
-nhimbe is built to be worked on by coding agents as well as people.
+Nhimbe is built to be worked on by coding agents as well as people.
 
 - **[AGENTS.md](./AGENTS.md)** — the tool-agnostic standing rules (checks, boundaries, workflow) any runner should follow.
 - **[.claude/skills/](./.claude/skills/)** — task routines (e.g. `release-check`, `db-seed-verify`, `verify`).
@@ -88,7 +88,7 @@ nhimbe is built to be worked on by coding agents as well as people.
 
 ## Community
 
-Have a question, an idea, or want to help shape nhimbe? Join the people building it:
+Have a question, an idea, or want to help shape Nhimbe? Join the people building it:
 
 **→ [discord.gg/CP2P4JpPR](https://discord.gg/CP2P4JpPR)**
 
@@ -118,6 +118,6 @@ Released under the MIT License — see **[LICENSE](./LICENSE)**.
 
 <div align="center">
 
-**nhimbe** is a [Mukoko](https://mukoko.com) product by [Nyuchi Web Services](https://nyuchi.com).
+**Nhimbe** is a [Mukoko](https://mukoko.com) product by [Nyuchi Web Services](https://nyuchi.com).
 
 </div>
