@@ -16,12 +16,23 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: "nhimbe admin",
-    template: "%s | nhimbe admin",
+    default: "Nhimbe Admin",
+    template: "%s | Nhimbe Admin",
   },
-  description: "Internal administration dashboard for the nhimbe events platform.",
+  description: "Internal administration dashboard for the Nhimbe events platform.",
   // Internal tool — never index, whatever domain it's served from.
   robots: { index: false, follow: false },
+  icons: {
+    // The one Mukoko icon: the full-colour Seed-of-Life flower (same files as
+    // the public app — the mono/tinted marks are never used on any tool).
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+    shortcut: "/favicon-32.png",
+  },
 };
 
 // Same pre-hydration theme script as the public app (shared localStorage key,

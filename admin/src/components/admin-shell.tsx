@@ -122,7 +122,7 @@ export function AdminShell({ user, children }: AdminShellProps) {
               <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                 <Shield className="w-5 h-5 text-primary-foreground" />
               </div>
-              <span className="font-bold">nhimbe admin</span>
+              <span className="font-bold">Nhimbe Admin</span>
             </Link>
             <button
               onClick={() => setSidebarOpen(false)}
