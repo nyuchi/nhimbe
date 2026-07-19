@@ -515,6 +515,46 @@ export type EngagementReferenceType = string;
  * Reviews are encrypted at rest. Only `reviewRating` (and counts/flags) are
  * plaintext and usable for star aggregates — the body lives in `ciphertext`.
  */
+/**
+ * `engagement.interactions` — the shared cross-product interaction primitive
+ * (view/save/bookmark/share/…). Post-E2E plaintext shape: the collection's
+ * validator is `validationLevel: "off"` while E2E is disabled, so the actor is
+ * carried in plaintext extras (`actorPersonId`/`actorEntityId`) alongside the
+ * schema's `actorPseudoId` (set to the person id — per-target pseudonymity is
+ * moot without encryption). `targetId` mirrors reactions/comments naming and
+ * carries the concrete content id (e.g. the event id); `targetEntityId` stays
+ * the owning entity per the validator.
+ */
+export interface EngagementInteractionDoc extends BaseDoc {
+  actorPseudoId: string;
+  /** Plaintext actor (post-E2E) — the routing key for unsave/lookups. */
+  actorPersonId: string;
+  actorEntityId: string;
+  targetEntityId: string;
+  targetReferenceType: string;
+  /** Concrete content id (event id for events) — plaintext extra. */
+  targetId: string;
+  interactionType: string;
+  visibility: "private" | "public" | "circle_members" | "self_only";
+  occurredAt: Date;
+  surfaceContext: string;
+}
+
+/**
+ * `engagement.reactions` — likes/endorsements (schema.org *Action). Post-E2E
+ * plaintext shape, same rationale as interactions above; `targetReferenceType`
+ * uses the reactions enum (`events_event`, `news_article`, …).
+ */
+export interface EngagementReactionDoc extends BaseDoc {
+  schemaOrgType: "LikeAction" | "EndorseAction" | "AgreeAction" | "DisagreeAction" | "ReactAction";
+  targetId: string;
+  targetReferenceType: string;
+  reactorPersonId: string;
+  reactorEntityId: string;
+  visibility: "private" | "public" | "circle_members" | "self_only";
+  surfaceContext: string;
+}
+
 export interface ReviewDoc extends BaseDoc {
   reviewerPersonId: string;
   reviewerEntityId: string;

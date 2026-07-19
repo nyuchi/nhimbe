@@ -66,7 +66,9 @@ Connection lives in `client.ts` — a cached `MongoClient` (no caching of reject
 | `events.ts`             | Event reads/writes                                                      |
 | `event-filters.ts`      | Shared published-and-visible predicates behind both listings and `/discover` counts (count/drill-down parity) |
 | `lookups.ts`            | Categories, cities, community stats                                     |
-| `engagement.ts`         | Reviews, ratings, referrals, comments, reactions, saves (global engagement) |
+| `engagement.ts`         | Reviews (incl. submit), ratings, referrals, host reputation (global engagement) |
+| `interactions.ts`       | Saves + likes on the shared substrate (`engagement.interactions` save rows, `engagement.reactions` LikeAction) |
+| `update-subscribers.ts` | Recipient resolution for host-update emails (RSVP + team, opt-out aware) |
 | `tracked-links.ts`      | `engagement.trackedLinks` writer/reader — host referral short links (`/r/<slug>`) + click counts |
 | `circles.ts`            | Circle **community** reads (schema.org OnlineCommunityGroup in `circles.circles`) |
 | `stats.ts`              | Aggregated analytics                                                    |
