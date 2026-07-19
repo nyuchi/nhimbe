@@ -54,28 +54,31 @@ project's own redirect URI**:
   gating the shell lower only showed moderators nav that denied on click);
   settings gates at `super_admin`. The shell's role prop only drives
   locked-nav affordances.
-- **nyuchi WorkOS organization scoping** (`src/lib/workos-org.ts`) — layered
-  **on top of** the role gate: every requester must be an **active member of
-  the nyuchi WorkOS organization**. Anyone who authenticates but isn't in that
-  org is denied (→ `/denied`) **regardless of role** — org membership is
+- **Nyuchi entity-membership scoping** (`src/lib/nyuchi-membership.ts`) —
+  layered **on top of** the role gate, grounded in the platform's **own RBAC
+  substrate** (`entity.memberships`) rather than a per-request WorkOS API
+  call (WorkOS is authentication-only): every requester must hold an
+  **active staff membership on the Nyuchi entity**. Anyone who authenticates
+  without one is denied (→ `/denied`) **regardless of role** — membership is
   *necessary*, not *sufficient* (a member still needs the right role for a
   page). Mechanics:
-  - **Allowed org** — resolved from `WORKOS_ADMIN_ORG_ID` when set (preferred,
-    precise, no lookup); otherwise resolved by the `nyuchi.com` domain via the
-    WorkOS SDK (`organizations.listOrganizations({ domains: ["nyuchi.com"] })`)
-    and cached per server process.
-  - **Membership** — the WorkOS `userManagement.listOrganizationMemberships`
-    API (`statuses: ["active"]`) is the **source of truth**; the AuthKit
-    session's `organizationId` is only a hint. The org check runs **before**
-    the `identity.persons` role lookup, so a non-member never touches the
-    cluster.
-  - **Fail closed** — an unresolvable org or any WorkOS lookup error **denies**
-    (never falls open). Missing WorkOS env still 503s at the proxy.
+  - **Allowed entity** — resolved from `NYUCHI_ADMIN_ENTITY_ID` when set
+    (preferred, precise, no lookup); otherwise resolved by the
+    `nyuchi-africa` slug in `entity.entities` and cached per server process
+    (positive hits only).
+  - **Membership** — an `entity.memberships` row for (personId, entityId)
+    with `isActive: true` and a **staff** `membershipRole`
+    (founder/admin/manager/representative/member). Audience relations
+    (follower/contributor/kin) do not grant passage. The check is keyed on
+    `personId`, so it runs **after** the `identity.persons` lookup.
+  - **Fail closed** — an unresolvable entity or any cluster lookup error
+    **denies** (never falls open). Missing WorkOS env still 503s at the proxy.
   - **Org-scoped sign-in** — the `/denied` re-auth affordance builds the hosted
-    sign-in with `getSignInUrl({ organizationId })` so the WorkOS screen is
-    nyuchi-scoped. This is a hint; the server-side membership gate is the real
-    enforcement. (The proxy's anonymous middleware-auth bounce stays as-is —
-    the gate catches any non-member it lets reach a route.)
+    sign-in with `getSignInUrl({ organizationId })` from `WORKOS_ADMIN_ORG_ID`
+    when set, so the WorkOS screen is nyuchi-scoped. This is a pure UX hint
+    (no API lookup); the server-side membership gate is the real enforcement.
+    (The proxy's anonymous middleware-auth bounce stays as-is — the gate
+    catches any non-member it lets reach a route.)
 - No client-only gating anywhere.
 
 ## Sections
@@ -139,7 +142,8 @@ Create a **second Vercel project** on this same Git repo:
 | `WORKOS_CLIENT_ID`                | Same WorkOS environment as the public app                          |
 | `WORKOS_API_KEY`                  | Server-only                                                        |
 | `WORKOS_COOKIE_PASSWORD`          | ≥32 chars; may differ from the public app's                        |
-| `WORKOS_ADMIN_ORG_ID`             | **Recommended.** The nyuchi WorkOS **organization id** (`org_…`) allowed into the admin app. When set it is used directly (no lookup); when unset the org is resolved by the `nyuchi.com` domain and cached per process. Set this in production for a precise, lookup-free gate. |
+| `WORKOS_ADMIN_ORG_ID`             | *Optional.* The nyuchi WorkOS **organization id** (`org_…`) used only to org-scope the hosted sign-in screen (`getSignInUrl({ organizationId })`) — a UX hint, not the gate. |
+| `NYUCHI_ADMIN_ENTITY_ID`          | *Optional.* The Nyuchi **entity id** (`entity.entities._id`) whose active staff memberships may enter the admin app. When unset the entity is resolved by the `nyuchi-africa` slug and cached per process. |
 | `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | **`https://admin.nhimbe.com/callback`** — this project's own domain |
 | `WORKOS_API_HOSTNAME`             | `authenticate.nyuchi.com` (custom API domain — must match the same WorkOS environment) |
 | `NEXT_PUBLIC_SITE_URL`            | `https://nhimbe.com` — "View site" links + event/calendar deep links |
