@@ -35,11 +35,11 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL("https://nhimbe.com"),
   title: {
-    default: "nhimbe - Together we gather, together we grow",
-    template: "%s | nhimbe",
+    default: "Nhimbe - Together we gather, together we grow",
+    template: "%s | Nhimbe",
   },
   description:
-    "Discover events and gatherings across Africa. nhimbe connects communities through cultural celebrations, tech meetups, music festivals, and more. A Mukoko product.",
+    "Discover events and gatherings across Africa. Nhimbe connects communities through cultural celebrations, tech meetups, music festivals, and more. A Mukoko product.",
   keywords: [
     "events",
     "gatherings",
@@ -61,7 +61,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Mukoko", url: "https://mukoko.com" }],
   creator: "Mukoko (Nyuchi Web Services)",
-  publisher: "nhimbe",
+  publisher: "Nhimbe",
   formatDetection: {
     email: false,
     address: false,
@@ -80,25 +80,25 @@ export const metadata: Metadata = {
   },
   manifest: "/manifest.json",
   openGraph: {
-    title: "nhimbe - Together we gather, together we grow",
+    title: "Nhimbe - Together we gather, together we grow",
     description:
       "Discover events and gatherings across Africa. Connect with your community and celebrate together.",
     type: "website",
     locale: "en_US",
     url: "https://nhimbe.com",
-    siteName: "nhimbe",
+    siteName: "Nhimbe",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "nhimbe - African Events Platform",
+        alt: "Nhimbe - African Events Platform",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "nhimbe - Together we gather, together we grow",
+    title: "Nhimbe - Together we gather, together we grow",
     description:
       "Discover events and gatherings across Africa. A Mukoko product.",
     site: "@nhimbe_app",
@@ -146,7 +146,7 @@ const themeScript = `
 function DegradedShell() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
-      <h1 className="text-2xl font-bold mb-4">nhimbe</h1>
+      <h1 className="text-2xl font-bold mb-4">Nhimbe</h1>
       <p className="text-text-secondary mb-6">Something went wrong loading the app. Please refresh the page.</p>
       <a href="/" className="px-6 py-3 bg-primary text-primary-foreground rounded-xl font-semibold">
         Refresh
@@ -159,7 +159,7 @@ function MinimalNav() {
   return (
     <header className="sticky top-0 z-50 bg-background/70 backdrop-blur-xl border-b border-elevated/50">
       <div className="max-w-300 mx-auto px-6 py-4 flex items-center justify-between">
-        <a href="/" className="text-xl font-bold text-primary">nhimbe</a>
+        <a href="/" className="text-xl font-bold text-primary">Nhimbe</a>
         <nav className="flex items-center gap-4 text-sm text-text-secondary">
           <a href="/events">Events</a>
           <a href="/search">Search</a>

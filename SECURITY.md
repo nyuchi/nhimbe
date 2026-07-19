@@ -1,6 +1,6 @@
 # Security Policy
 
-The safety of the nhimbe community matters to us. We welcome responsible disclosure and will work with you to resolve genuine issues quickly.
+The safety of the Nhimbe community matters to us. We welcome responsible disclosure and will work with you to resolve genuine issues quickly.
 
 ## Supported versions
 
@@ -9,7 +9,7 @@ The safety of the nhimbe community matters to us. We welcome responsible disclos
 | Latest on `main` | ✅ |
 | Older releases | ❌ |
 
-nhimbe is continuously deployed, so the latest `main` is the only supported version. Fixes land there and roll out from there.
+Nhimbe is continuously deployed, so the latest `main` is the only supported version. Fixes land there and roll out from there.
 
 ## Reporting a vulnerability
 
@@ -32,7 +32,7 @@ We'll acknowledge your report within **48 hours** and aim to provide a detailed 
 
 ## Security practices
 
-nhimbe is built with defense-in-depth. Without enumerating implementation that changes over time, our baseline includes:
+Nhimbe is built with defense-in-depth. Without enumerating implementation that changes over time, our baseline includes:
 
 - **Authentication & authorization** — identity is handled by **WorkOS AuthKit** and verified server-side on every request; access is role-based and least-privilege; suspended accounts are denied.
 - **Data** — application data lives in **MongoDB** and is read and written server-side only; no secrets or personal data are committed to this repository.

@@ -411,7 +411,7 @@ export default function CreateEventForm() {
     }
   };
 
-  const publishLabel = uploading ? "Uploading image…" : step < 3 ? "Continue" : "Publish nhimbe";
+  const publishLabel = uploading ? "Uploading image…" : step < 3 ? "Continue" : "Publish Nhimbe";
 
   if (created) {
     return (

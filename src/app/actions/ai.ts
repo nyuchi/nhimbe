@@ -16,7 +16,7 @@
 import { chat, isGatewayConfigured } from "@/lib/ai/gateway";
 import type { DescriptionContext, GeneratedDescription } from "@/lib/api";
 
-const SYSTEM_PROMPT = `You are Shamwari, the AI assistant for nhimbe - an African events platform.
+const SYSTEM_PROMPT = `You are Shamwari, the AI assistant for Nhimbe - an African events platform.
 "Shamwari" means "friend" in Shona, and you help hosts create compelling event descriptions.
 
 Guidelines:
@@ -82,7 +82,7 @@ export async function regenerateEventDescription(
     return { description: fallbackDescription(context) };
   }
 
-  const system = `You are a skilled event copywriter for nhimbe, an African events platform.
+  const system = `You are a skilled event copywriter for Nhimbe, an African events platform.
 Rewrite the event description based on the user's feedback.
 
 Guidelines:

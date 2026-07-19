@@ -298,7 +298,7 @@ function ManageEventContent() {
       try {
         await navigator.share({
           title: event.name,
-          text: `Check out ${event.name} on nhimbe`,
+          text: `Check out ${event.name} on Nhimbe`,
           url,
         });
       } catch {

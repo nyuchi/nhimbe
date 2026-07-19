@@ -40,7 +40,7 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
 
   if (!event) {
     return {
-      title: "Event Not Found - nhimbe",
+      title: "Event Not Found - Nhimbe",
     };
   }
 
@@ -64,7 +64,7 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
   const imageUrl = event.image || ogImageUrl;
 
   return {
-    title: `${event.name} - nhimbe`,
+    title: `${event.name} - Nhimbe`,
     description,
     keywords: [
       event.category,
@@ -72,14 +72,14 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
       event.location.addressLocality,
       event.location.addressCountry,
       "events",
-      "nhimbe",
+      "Nhimbe",
     ],
     openGraph: {
       title: event.name,
       description,
       type: "website",
       url: eventUrl,
-      siteName: "nhimbe",
+      siteName: "Nhimbe",
       locale: "en_US",
       images: [
         {

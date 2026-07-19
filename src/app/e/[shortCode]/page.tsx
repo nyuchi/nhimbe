@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: ShortCodePageProps): Promise<
 
   if (!event) {
     return {
-      title: "Event Not Found - nhimbe",
+      title: "Event Not Found - Nhimbe",
     };
   }
 
@@ -33,14 +33,14 @@ export async function generateMetadata({ params }: ShortCodePageProps): Promise<
   const description = `${event.name} on ${event.date.full} at ${event.location.name}, ${event.location.addressLocality}`;
 
   return {
-    title: `${event.name} - nhimbe`,
+    title: `${event.name} - Nhimbe`,
     description,
     openGraph: {
       title: event.name,
       description,
       type: "website",
       url: eventUrl,
-      siteName: "nhimbe",
+      siteName: "Nhimbe",
       images: event.image
         ? [{ url: event.image, width: 1200, height: 630, alt: event.name }]
         : undefined,

@@ -11,27 +11,27 @@ import { describe, it, expect } from 'vitest';
 const metadata = {
   metadataBase: 'https://nhimbe.com',
   title: {
-    default: 'nhimbe - Together we gather, together we grow',
-    template: '%s | nhimbe',
+    default: 'Nhimbe - Together we gather, together we grow',
+    template: '%s | Nhimbe',
   },
-  description: 'Discover events and gatherings across Africa. nhimbe connects communities through cultural celebrations, tech meetups, music festivals, and more. A Mukoko product.',
+  description: 'Discover events and gatherings across Africa. Nhimbe connects communities through cultural celebrations, tech meetups, music festivals, and more. A Mukoko product.',
   keywords: [
     'events', 'gatherings', 'community', 'Mukoko', 'Africa', 'Zimbabwe',
     'Harare', 'South Africa', 'Kenya', 'Nigeria', 'Ghana',
     'tech events', 'cultural events', 'music festivals', 'networking', 'celebrations', 'Ubuntu',
   ],
   openGraph: {
-    title: 'nhimbe - Together we gather, together we grow',
+    title: 'Nhimbe - Together we gather, together we grow',
     description: 'Discover events and gatherings across Africa. Connect with your community and celebrate together.',
     type: 'website',
     locale: 'en_US',
     url: 'https://nhimbe.com',
-    siteName: 'nhimbe',
+    siteName: 'Nhimbe',
     images: [{ url: '/og-image.png', width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'nhimbe - Together we gather, together we grow',
+    title: 'Nhimbe - Together we gather, together we grow',
     site: '@nhimbe_app',
     creator: '@mukoko_app',
     images: ['/og-image.png'],
@@ -58,11 +58,11 @@ const metadata = {
 
 describe('SEO: Basic Metadata', () => {
   it('has default page title', () => {
-    expect(metadata.title.default).toBe('nhimbe - Together we gather, together we grow');
+    expect(metadata.title.default).toBe('Nhimbe - Together we gather, together we grow');
   });
 
   it('title template includes brand', () => {
-    expect(metadata.title.template).toContain('nhimbe');
+    expect(metadata.title.template).toContain('Nhimbe');
     expect(metadata.title.template).toContain('%s');
   });
 
@@ -105,7 +105,7 @@ describe('SEO: Open Graph', () => {
   });
 
   it('has og:site_name', () => {
-    expect(metadata.openGraph.siteName).toBe('nhimbe');
+    expect(metadata.openGraph.siteName).toBe('Nhimbe');
   });
 
   it('has og:locale', () => {
@@ -173,9 +173,9 @@ describe('SEO: Robots', () => {
 // ============================================
 
 describe('SEO: Brand Consistency', () => {
-  it('nhimbe is always lowercase', () => {
-    expect(metadata.title.default).toContain('nhimbe');
-    expect(metadata.title.default).not.toMatch(/Nhimbe/);
+  it('Nhimbe is capitalized (brand rule reversed 2026-07-19)', () => {
+    expect(metadata.title.default).toContain('Nhimbe');
+    expect(metadata.title.default).not.toMatch(/\bnhimbe\b/);
   });
 
   it('tagline is consistent', () => {
