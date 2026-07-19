@@ -25,6 +25,9 @@ import { eventsCollection, eventUpdatesCollection, personsCollection } from "@/l
 import { stampNew } from "@/lib/mongo/ids";
 import { notifyAttendeesViaCampfire } from "@/lib/mongo/campfire";
 import { listHostEntitiesForPerson } from "@/lib/mongo/entities";
+import { listUpdateSubscribers } from "@/lib/mongo/update-subscribers";
+import { sendEmail } from "@/lib/email/resend";
+import { eventUpdatePosted } from "@/lib/email/templates";
 import { isDevBypass, DEV_WORKOS_ID } from "@/lib/auth/dev";
 import { createLogger } from "@/lib/observability";
 import type { EventDoc, EventUpdateDoc, PersonDoc } from "@/lib/mongo/types";
@@ -149,6 +152,38 @@ export async function postEventUpdate(
       });
     } catch (error) {
       updatesLog.error("Campfire notification failed for event update", {
+        data: { eventId, updateId: doc._id },
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+
+    // Email fan-out — subscribed attendees + the event team (opt-out at both
+    // the RSVP and the profile-preference level; the author never emails
+    // themself). Best-effort, same never-throw contract as Campfire; sendEmail
+    // itself no-ops when RESEND_API_KEY is unset.
+    try {
+      const recipients = await listUpdateSubscribers({
+        eventId,
+        hostEntityId: authorEntityId,
+        excludePersonId: person._id,
+      });
+      if (recipients.length > 0) {
+        const eventUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://nhimbe.com"}/events/${eventId}`;
+        const template = eventUpdatePosted({ eventName: event.name, updateText: text, eventUrl });
+        const results = await Promise.allSettled(
+          recipients.map((r) =>
+            sendEmail({ to: r.email, subject: template.subject, html: template.html, text: template.text }),
+          ),
+        );
+        const failed = results.filter(
+          (r) => r.status === "rejected" || (r.status === "fulfilled" && !r.value.success),
+        ).length;
+        updatesLog.info("Event-update emails sent", {
+          data: { eventId, updateId: doc._id, recipients: recipients.length, failed },
+        });
+      }
+    } catch (error) {
+      updatesLog.error("Event-update email fan-out failed", {
         data: { eventId, updateId: doc._id },
         error: error instanceof Error ? error : new Error(String(error)),
       });

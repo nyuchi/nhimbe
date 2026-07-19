@@ -171,6 +171,9 @@ export interface RsvpDoc extends BaseDoc {
   respondedAt: Date;
   ticketIds?: string[];
   notes?: string | null;
+  /** Per-event host-update subscription (validator-permitted extra). Absent
+   *  means "fall back to the person's global preference". */
+  subscribedToUpdates?: boolean | null;
 }
 
 export type CheckInMethod =
@@ -281,6 +284,13 @@ export interface PersonDoc extends BaseDoc {
   addressLocality?: string | null;
   addressCountry?: string | null;
   interests?: string[] | null;
+  /** Notification preferences (validator-permitted extra). `eventUpdates`
+   *  defaults ON (opt-out): absent/undefined means subscribed. */
+  mukoko?: {
+    notifications?: {
+      eventUpdates?: boolean;
+    };
+  } | null;
   bundu?: {
     defaultFamilyEntityId?: string;
     familyMembership?: Record<string, unknown>;
