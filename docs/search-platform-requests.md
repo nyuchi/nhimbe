@@ -68,7 +68,7 @@ Consumed by `atlasTextSearchIds` and `autocompleteEventNames` in
 We currently fuse the vector and full-text result lists **in application code**
 (Reciprocal Rank Fusion, `reciprocalRankFuse` in `src/lib/mongo/search.ts`)
 because the native `$rankFusion` aggregation stage — which fuses `$vectorSearch`
-+ `$search` in one pipeline — **requires MongoDB 8.1+**, and the cluster is
+and `$search` in one pipeline — **requires MongoDB 8.1+**, and the cluster is
 8.0.x. Once upgraded, the app-side fusion can be swapped for a single
 `$rankFusion` pipeline (same result contract; a localized change in
 `search.ts`). No app change is needed to benefit from the upgrade itself — this
