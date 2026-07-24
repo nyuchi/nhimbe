@@ -87,6 +87,11 @@ function clampLimit(limit: number | undefined): number {
   return Math.min(Math.max(limit ?? 20, 1), 50);
 }
 
+/** Escape regex metacharacters so user input is matched literally. */
+function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * Fuse several ranked id lists into one by Reciprocal Rank Fusion:
  * score(id) = Σ weightᵢ / (K + rankᵢ) with rank 1-based. Higher = better.
@@ -232,9 +237,7 @@ async function regexSearch(
   limit: number,
   params: SemanticSearchParams,
 ): Promise<Event[]> {
-  // Escape regex metacharacters so user input is treated literally.
-  const safe = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const rx = { $regex: safe, $options: "i" };
+  const rx = { $regex: escapeRegex(query), $options: "i" };
 
   const filter: Record<string, unknown> = {
     status: { $in: PUBLISHED_STATUSES },
@@ -293,9 +296,8 @@ export async function autocompleteEventNames(prefix: string, limit = 6): Promise
   }
 
   // Regex prefix fallback (anchored, escaped).
-  const safe = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const docs = await col
-    .find({ ...match, name: { $regex: `^${safe}`, $options: "i" } } as Parameters<
+    .find({ ...match, name: { $regex: `^${escapeRegex(q)}`, $options: "i" } } as Parameters<
       typeof col.find
     >[0])
     .limit(cap)
