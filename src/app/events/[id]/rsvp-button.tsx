@@ -5,11 +5,17 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { NyuchiRSVPButton } from "@/components/ui/nyuchi-rsvp-button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { trackEventViewAction } from "@/app/actions/discovery";
 import { rsvpToEvent } from "@/app/actions/registrations";
 import { useAuth } from "@/components/auth/auth-context";
 import { NamePrompt } from "@/components/prompts/name-prompt";
-import { LogIn } from "lucide-react";
+import { Bell, LogIn } from "lucide-react";
 
 interface RSVPButtonProps {
   eventId: string;
@@ -101,20 +107,44 @@ export function RSVPButton({ eventId, price, spotsRemaining }: RSVPButtonProps) 
     );
   }
 
-  // Confirmed — the branded pill reflects the rsvp_action state.
+  // Confirmed — the branded pill reflects the rsvp_action state, plus the
+  // subscription note (RSVPs subscribe to host updates by default).
   if (registered) {
-    return <NyuchiRSVPButton status="confirmed" />;
+    return (
+      <div>
+        <NyuchiRSVPButton status="confirmed" />
+        <p className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+          <Bell className="w-3.5 h-3.5" aria-hidden />
+          Subscribed to host updates —{" "}
+          <Link href="/profile/edit" className="underline hover:text-foreground">
+            manage in preferences
+          </Link>
+        </p>
+      </div>
+    );
   }
 
   return (
     <div>
-      <NyuchiRSVPButton
-        status="none"
-        price={price?.price ?? 0}
-        spotsRemaining={spotsRemaining ?? undefined}
-        loading={loading}
-        onRSVP={handleRSVP}
-      />
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>
+              <NyuchiRSVPButton
+                status="none"
+                price={price?.price ?? 0}
+                spotsRemaining={spotsRemaining ?? undefined}
+                loading={loading}
+                onRSVP={handleRSVP}
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            RSVPing subscribes you to updates from the host — you can turn this
+            off in your profile preferences.
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       {error && (
         <div className="flex items-center gap-2 mt-2 p-2 bg-red-500/10 rounded-lg">
           <span className="text-red-400 text-sm">{error}</span>

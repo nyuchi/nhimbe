@@ -108,7 +108,7 @@ export default function OverviewClient({
       {/* Page Header */}
       <div>
         <h1 className="text-2xl font-bold">Overview</h1>
-        <p className="text-muted-foreground">Welcome to the nhimbe admin dashboard</p>
+        <p className="text-muted-foreground">Welcome to the Mukoko Events Admin dashboard</p>
       </div>
 
       {/* Flagship engagement metric — the branded hero stat. */}

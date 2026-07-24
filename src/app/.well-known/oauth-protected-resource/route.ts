@@ -6,7 +6,12 @@
 // issue the tokens accepted here, plus supported scopes and bearer methods.
 // Served statically at /.well-known/oauth-protected-resource.
 
-export const dynamic = "force-static";
+import { workosAuthMetadata } from "@/lib/auth/workos-metadata";
+
+// force-dynamic: the authorization server is derived at request time from the
+// same runtime env (WORKOS_API_HOSTNAME) the verifier uses, so it always matches
+// the AS metadata doc. Cached 1h below.
+export const dynamic = "force-dynamic";
 
 // Small self-contained helper: JSON body + the shared discovery headers.
 function metadata(body: unknown): Response {
@@ -21,9 +26,10 @@ function metadata(body: unknown): Response {
 }
 
 export async function GET(): Promise<Response> {
+  const workos = workosAuthMetadata();
   return metadata({
     resource: "https://nhimbe.com",
-    authorization_servers: ["https://api.workos.com"],
+    authorization_servers: [workos.issuer],
     scopes_supported: ["openid", "profile", "email", "offline_access"],
     bearer_methods_supported: ["header"],
     resource_documentation: "https://nhimbe.com/auth.md",

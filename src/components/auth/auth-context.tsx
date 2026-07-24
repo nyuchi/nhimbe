@@ -28,6 +28,8 @@ export interface NhimbeUser {
   // WorkOS user id (kept for audit / migration). Replaces the old stytchUserId field.
   workosUserId: string;
   role: UserRole;
+  /** Event-update notifications (opt-out; absent means subscribed). */
+  subscribedToEventUpdates?: boolean;
 }
 
 export interface ProfileCompleteness {

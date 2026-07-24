@@ -13,6 +13,7 @@ import { Rating } from "@/components/ui/rating";
 import { NyuchiAlertBanner, type AlertSeverity } from "@/components/ui/nyuchi-alert-banner";
 import { NyuchiMetaTile } from "@/components/ui/nyuchi-meta-tile";
 import { AddToCalendarButton, GetDirectionsButton } from "./event-actions";
+import { LikeButton } from "./like-button";
 import { EventThemeWrapper } from "./event-theme-wrapper";
 import { EventMap } from "./event-map";
 import { EventWeather } from "./event-weather";
@@ -421,7 +422,8 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
       {/* Sticky Mobile RSVP + Bookmark Bar */}
       <div className="fixed bottom-0 left-0 right-0 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-background/90 backdrop-blur-xl border-t border-elevated z-40 lg:hidden">
         <div className="max-w-250 mx-auto flex items-center gap-2.5">
-          {/* Bookmark / Interested button — persists to events.save_action */}
+          <LikeButton eventId={event.id} />
+          {/* Bookmark / Interested button — persists to the shared engagement substrate */}
           <button
             onClick={() => canSaveEvent && toggleSaved()}
             disabled={!canSaveEvent}

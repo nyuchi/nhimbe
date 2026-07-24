@@ -5,13 +5,15 @@
  *  - Runs BEFORE any client admin bundle ships: anonymous visitors are
  *    bounced into the WorkOS hosted sign-in (with a return_to back to the
  *    requested admin path) by `withAuth({ ensureSignedIn: true })`.
- *  - The requester must be an ACTIVE member of the nyuchi WorkOS organization
- *    (require-org via `requireNyuchiOrgMembership`). Anyone who authenticates
- *    but isn't in that org is denied regardless of role — org membership is
- *    necessary, not sufficient. Fail-closed: an unresolvable org or a WorkOS
- *    lookup error denies.
- *  - The requester's `identity.persons.role` decides access on top of the org
- *    gate; suspended accounts and everyone below the required role are denied.
+ *  - The requester must hold an ACTIVE staff membership on the Nyuchi entity
+ *    in `entity.memberships` (`requireNyuchiMembership` — the platform's own
+ *    RBAC, replacing the former WorkOS org-membership API check). Anyone who
+ *    authenticates without one is denied regardless of role — membership is
+ *    necessary, not sufficient. Fail-closed: an unresolvable entity or a
+ *    cluster lookup error denies. WorkOS is authentication-only.
+ *  - The requester's `identity.persons.role` decides access on top of the
+ *    membership gate; suspended accounts and everyone below the required role
+ *    are denied.
  *  - Lookup failures are treated as forbidden — better to bounce a real
  *    admin once than to leak the admin shell when the cluster is wobbly.
  *
@@ -26,7 +28,7 @@ import { redirect } from "next/navigation";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { getPersonByWorkosId } from "@/lib/mongo/users";
 import { isDevBypass, DEV_WORKOS_ID } from "@/lib/auth/dev";
-import { requireNyuchiOrgMembership } from "./workos-org";
+import { requireNyuchiMembership } from "./nyuchi-membership";
 import { hasRole, normaliseRole, type UserRole } from "./roles";
 
 export { hasRole, normaliseRole };
@@ -102,24 +104,11 @@ export async function requireAdmin(
     };
   }
 
-  const { user, accessToken, organizationId } = await withAuth({
+  const { user, accessToken } = await withAuth({
     ensureSignedIn: true,
   });
   // ensureSignedIn:true redirects unauthenticated users to the AuthKit flow,
   // so by the time we reach here both user and accessToken are present.
-
-  // Organization gate — the requester must be an ACTIVE member of the nyuchi
-  // WorkOS org, checked BEFORE the identity.persons role lookup so a
-  // non-member is denied regardless of role (and never touches the cluster).
-  // Fail-closed: requireNyuchiOrgMembership returns null on an unresolvable
-  // org or any WorkOS lookup error.
-  const allowedOrgId = await requireNyuchiOrgMembership({
-    workosUserId: user.id,
-    sessionOrganizationId: organizationId,
-  });
-  if (allowedOrgId === null) {
-    redirect("/denied");
-  }
 
   let person: Awaited<ReturnType<typeof getPersonByWorkosId>>;
   try {
@@ -128,9 +117,24 @@ export async function requireAdmin(
     console.error("[mukoko] requireAdmin: identity.persons lookup failed", err);
     redirect("/denied");
   }
+  if (!person) {
+    redirect("/denied");
+  }
+
+  // Membership gate — the requester must hold an ACTIVE staff membership on
+  // the Nyuchi entity (entity.memberships, keyed by personId — hence after
+  // the person lookup). Denied regardless of role without one. Fail-closed:
+  // requireNyuchiMembership returns null on an unresolvable entity or any
+  // cluster lookup error.
+  const allowedEntityId = await requireNyuchiMembership({
+    personId: person.personId,
+  });
+  if (allowedEntityId === null) {
+    redirect("/denied");
+  }
 
   const role = resolveAdminGate(person, requiredRole);
-  if (!person || role === null) {
+  if (role === null) {
     redirect("/denied");
   }
 

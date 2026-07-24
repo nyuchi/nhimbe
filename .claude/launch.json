@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nhimbe",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 11825
+    },
+    {
+      "name": "nhimbe-admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=admin"],
+      "port": 11826
+    },
+    {
+      "name": "nhimbe-mcp",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "worker"],
+      "port": 8787
+    }
+  ]
+}

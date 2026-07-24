@@ -7,7 +7,12 @@
 // the id_token signing algorithm — WorkOS JWKS is RS256).
 // Served statically at /.well-known/openid-configuration.
 
-export const dynamic = "force-static";
+import { workosAuthMetadata } from "@/lib/auth/workos-metadata";
+
+// force-dynamic: endpoints are derived at request time from the same runtime env
+// (WORKOS_CLIENT_ID / WORKOS_API_HOSTNAME) the token verifier reads — no drift,
+// no empty client id baked when build-time env is absent. Cached 1h below.
+export const dynamic = "force-dynamic";
 
 // Small self-contained helper: JSON body + the shared discovery headers.
 function metadata(body: unknown): Response {
@@ -22,11 +27,12 @@ function metadata(body: unknown): Response {
 }
 
 export async function GET(): Promise<Response> {
+  const workos = workosAuthMetadata();
   return metadata({
-    issuer: "https://api.workos.com",
-    authorization_endpoint: "https://api.workos.com/user_management/authorize",
-    token_endpoint: "https://api.workos.com/user_management/authenticate",
-    jwks_uri: "https://api.workos.com/sso/jwks/client_01KQBBSMQTSMTBN7HEC9KQBJC0",
+    issuer: workos.issuer,
+    authorization_endpoint: workos.authorizationEndpoint,
+    token_endpoint: workos.tokenEndpoint,
+    jwks_uri: workos.jwksUri,
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],

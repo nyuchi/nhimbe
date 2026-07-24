@@ -19,12 +19,13 @@ vi.mock("@/lib/mongo/users", () => ({
   getPersonByWorkosId: (...args: unknown[]) => getPersonByWorkosId(...args),
 }));
 
-// The org gate is exercised in full by workos-org.test.ts; here it is mocked
-// so we can assert require-admin LAYERS role on top of org membership.
-const requireNyuchiOrgMembership = vi.fn();
-vi.mock("./workos-org", () => ({
-  requireNyuchiOrgMembership: (...args: unknown[]) =>
-    requireNyuchiOrgMembership(...args),
+// The membership gate is exercised in full by nyuchi-membership.test.ts; here
+// it is mocked so we can assert require-admin LAYERS role on top of the
+// entity membership.
+const requireNyuchiMembership = vi.fn();
+vi.mock("./nyuchi-membership", () => ({
+  requireNyuchiMembership: (...args: unknown[]) =>
+    requireNyuchiMembership(...args),
 }));
 
 import { requireAdmin, resolveAdminGate, hasRole, normaliseRole } from "./require-admin";
@@ -44,11 +45,10 @@ beforeEach(() => {
   withAuth.mockResolvedValue({
     user: WORKOS_USER,
     accessToken: "token-abc",
-    organizationId: "org_nyuchi",
   });
-  // Default: the requester is an active member of the nyuchi org, so the
-  // existing role-gate tests below assert role behaviour in isolation.
-  requireNyuchiOrgMembership.mockResolvedValue("org_nyuchi");
+  // Default: the requester holds an active staff membership on the Nyuchi
+  // entity, so the role-gate tests below assert role behaviour in isolation.
+  requireNyuchiMembership.mockResolvedValue("entity_nyuchi");
 });
 
 describe("resolveAdminGate (pure deny semantics)", () => {
@@ -105,37 +105,30 @@ describe("requireAdmin", () => {
     expect(getPersonByWorkosId).toHaveBeenCalledWith("workos_user_123");
   });
 
-  it("passes the AuthKit session org id through to the org gate", async () => {
+  it("passes the requester's personId to the membership gate", async () => {
     getPersonByWorkosId.mockResolvedValue(person());
     await requireAdmin();
-    expect(requireNyuchiOrgMembership).toHaveBeenCalledWith({
-      workosUserId: "workos_user_123",
-      sessionOrganizationId: "org_nyuchi",
+    expect(requireNyuchiMembership).toHaveBeenCalledWith({
+      personId: "person-1",
     });
   });
 
-  it("denies an authenticated user who is NOT in the nyuchi org — regardless of role", async () => {
-    // A bona fide super_admin who is not an org member is still denied.
+  it("denies an authenticated user with NO Nyuchi staff membership — regardless of role", async () => {
+    // A bona fide super_admin who is not a staff member is still denied.
     getPersonByWorkosId.mockResolvedValue(person({ role: "super_admin" }));
-    requireNyuchiOrgMembership.mockResolvedValue(null);
+    requireNyuchiMembership.mockResolvedValue(null);
     await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/denied");
   });
 
-  it("denies non-members BEFORE the identity.persons lookup (org gate first)", async () => {
-    requireNyuchiOrgMembership.mockResolvedValue(null);
-    await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/denied");
-    expect(getPersonByWorkosId).not.toHaveBeenCalled();
-  });
-
-  it("denies (fail-closed) when the org gate can't resolve the org", async () => {
-    // requireNyuchiOrgMembership returns null on an unresolvable org / WorkOS error.
+  it("denies (fail-closed) when the membership gate can't resolve the entity", async () => {
+    // requireNyuchiMembership returns null on an unresolvable entity / cluster error.
     getPersonByWorkosId.mockResolvedValue(person());
-    requireNyuchiOrgMembership.mockResolvedValue(null);
+    requireNyuchiMembership.mockResolvedValue(null);
     await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/denied");
   });
 
-  it("still enforces role tiers for a bona fide org member", async () => {
-    // Org member, but only a plain user → denied by the role gate.
+  it("still enforces role tiers for a bona fide staff member", async () => {
+    // Staff member, but only a plain user → denied by the role gate.
     getPersonByWorkosId.mockResolvedValue(person({ role: "user" }));
     await expect(requireAdmin()).rejects.toThrow("NEXT_REDIRECT:/denied");
   });

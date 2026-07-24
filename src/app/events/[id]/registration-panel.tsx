@@ -102,7 +102,7 @@ export function RegistrationPanel({ eventId, price, spotsRemaining }: Registrati
     return (
       <div
         data-slot="registration-confirmed"
-        className="flex items-center justify-center gap-2 rounded-full px-4 py-3 text-[15px] font-semibold"
+        className="flex flex-wrap items-center justify-center gap-2 rounded-3xl px-4 py-3 text-[15px] font-semibold"
         style={{
           backgroundColor: "color-mix(in srgb, var(--event-primary) 14%, transparent)",
           color: "var(--event-primary)",
@@ -110,6 +110,12 @@ export function RegistrationPanel({ eventId, price, spotsRemaining }: Registrati
       >
         <Check className="size-5" aria-hidden />
         {quantity > 1 ? `You're going · party of ${quantity}` : "You're going"}
+        <p className="basis-full text-center text-xs font-normal text-muted-foreground">
+          Subscribed to host updates —{" "}
+          <Link href="/profile/edit" className="underline hover:text-foreground">
+            manage in preferences
+          </Link>
+        </p>
       </div>
     );
   }

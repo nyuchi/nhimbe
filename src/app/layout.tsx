@@ -32,6 +32,16 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+// Default social/preview image (N11 discovery). Nhimbe has no static
+// `/og-image.png` — the site's preview card is the ONE shared, dynamic
+// OpenGraph template at `/api/og`, brand-parameterised via query params. Using
+// it here means every route that doesn't set its own image still resolves to a
+// real 1200×630 card instead of a 404 (the N11 "biggest discoverability
+// no-go"). `metadataBase` makes this relative URL absolute in the rendered tags.
+const DEFAULT_OG_IMAGE =
+  "/api/og?type=default&title=Nhimbe&subtitle=" +
+  encodeURIComponent("Together we gather, together we grow");
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://nhimbe.com"),
   title: {
@@ -89,7 +99,7 @@ export const metadata: Metadata = {
     siteName: "Nhimbe",
     images: [
       {
-        url: "/og-image.png",
+        url: DEFAULT_OG_IMAGE,
         width: 1200,
         height: 630,
         alt: "Nhimbe - African Events Platform",
@@ -103,7 +113,7 @@ export const metadata: Metadata = {
       "Discover events and gatherings across Africa. A Mukoko product.",
     site: "@nhimbe_app",
     creator: "@mukoko_app",
-    images: ["/og-image.png"],
+    images: [DEFAULT_OG_IMAGE],
   },
   robots: {
     index: true,

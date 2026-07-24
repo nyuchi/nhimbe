@@ -5,7 +5,8 @@ import { useAuth } from "@/components/auth/auth-context";
 import { isEventSaved, saveEvent, unsaveEvent } from "@/app/actions/saves";
 
 /**
- * Persists event bookmarks to `events.savedEvents` in MongoDB (Mukoko v3.1).
+ * Persists event bookmarks to the SHARED `engagement.interactions` collection
+ * (`interactionType: "save"`) — the cross-product Mukoko substrate, no silos.
  *
  * The browser never touches Mongo — every read/write goes through the server
  * actions in `@/app/actions/saves`, which resolve the acting person via AuthKit

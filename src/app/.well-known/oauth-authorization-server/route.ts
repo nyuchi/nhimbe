@@ -6,7 +6,14 @@
 // authorization/token/JWKS endpoints directly from the nhimbe origin.
 // Served statically at /.well-known/oauth-authorization-server.
 
-export const dynamic = "force-static";
+import { workosAuthMetadata } from "@/lib/auth/workos-metadata";
+
+// force-dynamic: endpoints are derived at request time from the SAME runtime env
+// (WORKOS_CLIENT_ID / WORKOS_API_HOSTNAME) the token verifier reads, so this
+// document can never advertise a different client id or host than the app
+// actually verifies against — not even if build-time env differs or is absent.
+// The 1-hour Cache-Control below still lets CDNs/agents cache the result.
+export const dynamic = "force-dynamic";
 
 // Small self-contained helper: JSON body + the shared discovery headers.
 function metadata(body: unknown): Response {
@@ -21,11 +28,12 @@ function metadata(body: unknown): Response {
 }
 
 export async function GET(): Promise<Response> {
+  const workos = workosAuthMetadata();
   return metadata({
-    issuer: "https://api.workos.com",
-    authorization_endpoint: "https://api.workos.com/user_management/authorize",
-    token_endpoint: "https://api.workos.com/user_management/authenticate",
-    jwks_uri: "https://api.workos.com/sso/jwks/client_01KQBBSMQTSMTBN7HEC9KQBJC0",
+    issuer: workos.issuer,
+    authorization_endpoint: workos.authorizationEndpoint,
+    token_endpoint: workos.tokenEndpoint,
+    jwks_uri: workos.jwksUri,
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],
