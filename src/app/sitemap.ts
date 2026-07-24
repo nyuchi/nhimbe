@@ -49,18 +49,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "daily",
       priority: 0.7,
     },
-    {
-      url: `${BASE_URL}/my-events`,
-      lastModified: new Date(),
-      changeFrequency: "daily",
-      priority: 0.6,
-    },
-    {
-      url: `${BASE_URL}/profile`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.5,
-    },
+    // /my-events and /profile are intentionally omitted — they are private,
+    // per-user pages disallowed in robots.ts, so they don't belong in the
+    // sitemap. Individual public calendars (/calendars/<slug>) are appended
+    // dynamically below; there is no /calendars index route.
     {
       url: `${BASE_URL}/about`,
       lastModified: new Date(),

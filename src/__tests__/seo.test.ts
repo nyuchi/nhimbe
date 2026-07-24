@@ -7,6 +7,12 @@
 
 import { describe, it, expect } from 'vitest';
 
+// Default preview image (N11): the shared dynamic OG template at /api/og, never
+// a static file. Kept in sync with DEFAULT_OG_IMAGE in layout.tsx.
+const DEFAULT_OG_IMAGE =
+  '/api/og?type=default&title=Nhimbe&subtitle=' +
+  encodeURIComponent('Together we gather, together we grow');
+
 // Metadata from layout.tsx
 const metadata = {
   metadataBase: 'https://nhimbe.com',
@@ -27,14 +33,14 @@ const metadata = {
     locale: 'en_US',
     url: 'https://nhimbe.com',
     siteName: 'Nhimbe',
-    images: [{ url: '/og-image.png', width: 1200, height: 630 }],
+    images: [{ url: DEFAULT_OG_IMAGE, width: 1200, height: 630 }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Nhimbe - Together we gather, together we grow',
     site: '@nhimbe_app',
     creator: '@mukoko_app',
-    images: ['/og-image.png'],
+    images: [DEFAULT_OG_IMAGE],
   },
   robots: {
     index: true,
@@ -114,10 +120,19 @@ describe('SEO: Open Graph', () => {
 
   it('has og:image with recommended dimensions', () => {
     const image = metadata.openGraph.images[0];
-    expect(image.url).toBe('/og-image.png');
+    expect(image.url).toBe(DEFAULT_OG_IMAGE);
     // Facebook recommends 1200x630
     expect(image.width).toBe(1200);
     expect(image.height).toBe(630);
+  });
+
+  it('og:image is the dynamic /api/og template, never a static file (N11)', () => {
+    // A missing /og-image.png resolved to a 404 preview card — the N11
+    // "biggest discoverability no-go". The default must be the dynamic route.
+    const image = metadata.openGraph.images[0];
+    expect(image.url).toMatch(/^\/api\/og\?/);
+    expect(metadata.twitter.images[0]).toMatch(/^\/api\/og\?/);
+    expect(image.url).not.toContain('/og-image.png');
   });
 });
 
@@ -143,7 +158,7 @@ describe('SEO: Twitter Cards', () => {
   });
 
   it('has twitter:image', () => {
-    expect(metadata.twitter.images).toContain('/og-image.png');
+    expect(metadata.twitter.images).toContain(DEFAULT_OG_IMAGE);
   });
 });
 

@@ -65,5 +65,57 @@ export default async function HomePage() {
   }
 
   const [featuredEvent, cities] = await Promise.all([fetchFeaturedEvent(), fetchCities()]);
-  return <HomeLanding featuredEvent={featuredEvent} cities={cities} />;
+  return (
+    <>
+      {/*
+        N11 discovery — schema.org JSON-LD for the site's primary entity, emitted
+        on the public (indexable) landing. The Organization + WebSite graph gives
+        search engines and AI agents Nhimbe's identity, publisher, and a working
+        SearchAction (sitelinks searchbox) that deep-links /search?q=<term>.
+      */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(HOME_JSON_LD) }}
+      />
+      <HomeLanding featuredEvent={featuredEvent} cities={cities} />
+    </>
+  );
 }
+
+const HOME_JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://nhimbe.com/#organization",
+      name: "Nhimbe",
+      url: "https://nhimbe.com",
+      logo: "https://nhimbe.com/app-icon-512.png",
+      description:
+        "Nhimbe is a community events discovery and management platform connecting communities across Africa. A Mukoko product.",
+      parentOrganization: {
+        "@type": "Organization",
+        name: "Mukoko",
+        url: "https://mukoko.com",
+      },
+      sameAs: ["https://mukoko.com"],
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://nhimbe.com/#website",
+      url: "https://nhimbe.com",
+      name: "Nhimbe",
+      description: "Together we gather, together we grow",
+      publisher: { "@id": "https://nhimbe.com/#organization" },
+      inLanguage: "en",
+      potentialAction: {
+        "@type": "SearchAction",
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: "https://nhimbe.com/search?q={search_term_string}",
+        },
+        "query-input": "required name=search_term_string",
+      },
+    },
+  ],
+};
