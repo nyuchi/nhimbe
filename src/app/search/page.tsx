@@ -98,7 +98,11 @@ export default function SearchPage() {
     setSearching(true);
     const handle = setTimeout(async () => {
       try {
-        const result = await searchEventsAction({ query: q, limit: 30 });
+        // Push a single active category into the server query so filtering
+        // happens in the index, not only in the client refinement below.
+        // (Multi-select still narrows client-side.)
+        const category = activeCategories.length === 1 ? activeCategories[0] : undefined;
+        const result = await searchEventsAction({ query: q, limit: 30, category });
         if (cancelled) return;
         setSemanticEvents(result.events);
         setAiSummary(result.events.length > 0 ? result.aiSummary : "");
@@ -115,7 +119,7 @@ export default function SearchPage() {
       cancelled = true;
       clearTimeout(handle);
     };
-  }, [searchQuery]);
+  }, [searchQuery, activeCategories]);
 
   // Prefer server (semantic/text) results; fall back to the local substring
   // filter. When there's no query, category chips narrow the full catalogue.
