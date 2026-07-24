@@ -21,7 +21,7 @@ npm run lint         # ESLint
 
 # Tests (Vitest)
 npm run test         # Watch mode
-npm run test:run     # Run once (~682 tests)
+npm run test:run     # Run once (~694 tests)
 npm run test:coverage
 npx vitest run src/lib/api.test.ts   # Single test file
 
@@ -112,7 +112,9 @@ Mutations and client-invoked reads: `auth`, `events`, `event-updates`, `discover
 
 ### Route Handlers (`src/app/api/`)
 
-Same-origin fallback endpoints: `events`, `events/[id]` (both also take bearer-authed `POST`/`PATCH` for the MCP), `categories`, `cities`, `community/stats`, `og` (OG image), `media/upload` (WorkOS-gated cover-image upload to R2), and `auth/dev-login` (local dev bypass only). Auth itself is handled by the hosted-AuthKit entry route `/auth/hosted` (redirects to WorkOS) and `/callback` — see the Authentication Flow section.
+Same-origin fallback endpoints: `events`, `events/[id]` (both also take bearer-authed `POST`/`PATCH` for the MCP), `categories`, `cities`, `community/stats`, `og` (OG image), `media/upload` (WorkOS-gated cover-image upload to R2), `webhooks/workos` (guaranteed user provisioning — see Authentication Flow), and `auth/dev-login` (local dev bypass only). Auth itself is handled by the hosted-AuthKit entry route `/auth/hosted` (redirects to WorkOS) and `/callback` — see the Authentication Flow section.
+
+**Agent-readiness discovery** — three static `.well-known` route handlers (`src/app/.well-known/*/route.ts`, all `force-static`, `Access-Control-Allow-Origin: *`) mirror the WorkOS AuthKit metadata from the Nhimbe origin so MCP agents/clients can run standard discovery: `oauth-authorization-server` (RFC 8414 — authorize/token/JWKS endpoints), `oauth-protected-resource` (RFC 9728 — Nhimbe as resource server, pointing at `/auth.md`), and `openid-configuration` (OIDC Discovery 1.0, RS256). WorkOS remains the real authorization server; these endpoints just advertise it.
 
 ### Authentication Flow (WorkOS AuthKit — hosted UI)
 
@@ -184,7 +186,7 @@ The admin dashboard is a **standalone Next.js 16 app in `admin/`**, deployed as 
 - Calendars (NYU-25): `/calendars/[slug]` — SSR page for a followable curated event stream (washed-theme ground, Follow pill, NyuchiTimeline of its upcoming events, "from \<circle\>" provenance when circle-owned; private calendars 404 to non-owners, unlisted render but are noindexed and excluded from discover/sitemap), plus `/calendars/[slug]/ics` (route handler serving the `text/calendar` feed — public+unlisted only).
 - Circles (communities; renamed from "Kraal" — UI/route/i18n only, the DB was already `circles.*`): `/circles`, `/circles/[id]`. Permanent redirects `/kraal*` → `/circles*` live in `next.config.ts`. The circle page leads with an **Events tab** (timeline of the circle's upcoming events); the light posts stream is kept as-is — community features belong to the Circles/Campfire sibling products.
 - Signage/kiosk: `/signage`, plus event sub-pages `/events/[id]/kiosk` and `/events/[id]/signage`.
-- Agent auth guide: `/auth.md` (`src/app/auth.md/route.ts`) — a static `text/markdown` page describing how AI agents authenticate to the protected write APIs with WorkOS bearer tokens (the `auth.md` discovery convention).
+- Agent auth guide: `/auth.md` (`src/app/auth.md/route.ts`) — a static `text/markdown` page describing how AI agents authenticate to the protected write APIs with WorkOS bearer tokens (the `auth.md` discovery convention). Paired with the `.well-known` OAuth/OIDC discovery route handlers (see Route Handlers) for machine-readable agent onboarding.
 - SEO: `robots.ts`, `sitemap.ts`; error boundaries `error.tsx`, `global-error.tsx`, `not-found.tsx`, `loading.tsx`.
 
 ### UI Components (Mukoko Registry)
@@ -215,6 +217,14 @@ The mzizi events-domain brand components, ported into `src/components/ui/` and e
 
 Per-event mineral accents come from **`src/lib/category-mineral.ts`** (`categoryToMineral`), keyword-matched with a **tanzanite** default so the brand lead is always the fallback face. `nyuchi-forecast-card` was intentionally **not** ported: Nhimbe's weather is the Mukoko iframe embed (`weather-embed.tsx`, `src/lib/weather.ts`) — a presentational forecast shell has no structured data to bind, so duplicating it was skipped.
 
+#### nyuchi identity / community / trust components (ported from mzizi)
+
+Beyond the event-domain cards, the wider mzizi brand library now lives in `src/components/ui/` (all `nyuchi-*`, each colocated with a `.test.tsx` and wired through the harness). Identity & profile: `nyuchi-profile-header`, `nyuchi-profile-block`, `nyuchi-profile-settings`, `nyuchi-user-card`, `nyuchi-user-menu`, `nyuchi-avatar-stack`, `nyuchi-onboarding-step`. Community & content: `nyuchi-group-card`, `nyuchi-article-card`, `nyuchi-review-card`, `nyuchi-content-composer`, `nyuchi-search-view` (`NyuchiSearchView`), `nyuchi-sidebar-nav`, `nyuchi-notification-item`, `nyuchi-action-sheet`, `nyuchi-alert-banner`, `nyuchi-feedback`, `nyuchi-empty-state`, `nyuchi-success-screen`. Trust & verification: `verified-badge` (the mineral-tier badge), `nyuchi-trust-meter`, `nyuchi-source-badge`, `nyuchi-badge-display`, `nyuchi-leaderboard-row`. Cover & stats: `nyuchi-cover-header`, `nyuchi-cover-wash-header`, `nyuchi-hero-stat`, `nyuchi-stats-row`, `nyuchi-share-card`. Commerce/place: `nyuchi-offer-card`, `nyuchi-place-card`, `nyuchi-registration-card`. Not every component is wired into a live surface yet — the library is adopted incrementally, page by page.
+
+#### Venue verification (Kweli) — `src/lib/kweli.ts`
+
+Nhimbe **never writes or implements** venue verification — **Mukoko Kweli** (`kweli.mukoko.com`) is the ecosystem's single verification surface. `src/lib/kweli.ts` only (a) READS a place's `bundu.verificationTier` (numeric 0–4, defensively coerced; anything unparseable degrades to 0 = unverified) and renders the mineral-tiered `verified-badge` (0 none · 1 community/terracotta · 2 otp/cobalt · 3 government/gold · 4 licensed/tanzanite), and (b) deep-links unverified venues to `KWELI_VERIFY_URL` (`https://kweli.mukoko.com/en/verify`) via the manage-page CTA (`src/app/events/[id]/manage/venue-verify-cta.tsx`).
+
 ### Components (`src/components/`)
 
 - `ui/` — primitives + domain composites.
@@ -235,6 +245,7 @@ Per-event mineral accents come from **`src/lib/category-mineral.ts`** (`category
 - `email/` — Resend transactional email client + templates (`server-only`).
 - `security/` — input-validation helpers: `image.ts` (upload MIME/size checks) and `request.ts` (request-shape guards).
 - `ics.ts` — RFC 5545 `text/calendar` feed generation for the calendars `/ics` feed and event export (+ tests).
+- `kweli.ts` — Mukoko Kweli venue-verification helpers: coerce `bundu.verificationTier` → 0–4 tier level and build the `kweli.mukoko.com/en/verify` deep-link. Read-only; Nhimbe never verifies venues itself (+ tests).
 - `auth/` — auth helpers: `dev.ts` (dev bypass), `current-person.ts` (`resolveActingPerson` session→person + lazy sync), `return-to.ts` (`safeReturnTo` open-redirect clamp), `workos-token.ts` (bearer-token verify for the MCP write path), `mcp-actor.ts`.
 - `shamwari.ts` — Shamwari assistant helpers.
 - `map/tiles.ts` — shared OpenStreetMap base-layer config (Leaflet tiles + attribution), used by the discovery map and the per-event venue map.
@@ -262,7 +273,7 @@ React Context only — `AuthProvider` (user state) and `ThemeProvider` (dark/lig
 
 ## Testing
 
-Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/setup.ts`). Tests colocate with modules or live in `src/__tests__/`. Run with `npm run test:run` (~682 tests across ~90 files). Covered areas include the API client, utils, calendar/timezone/ICS, auth context/guard + `return-to`, SEO metadata, accessibility, the design-token guard (`src/__tests__/design-tokens.test.ts`), and the Mongo layer (mappers, calendars, planner, campfire, entities, stats, settings, event-filters, users, ids). The standalone `admin/` app carries its own Vitest suite (~63 tests: gate, shell, section renders, admin actions) run via `npm run test:run --workspace=admin`.
+Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/setup.ts`). Tests colocate with modules or live in `src/__tests__/`. Run with `npm run test:run` (~694 tests across ~95 files). Covered areas include the API client, utils, calendar/timezone/ICS, kweli tier coercion, auth context/guard + `return-to`, SEO metadata, accessibility, the design-token guard (`src/__tests__/design-tokens.test.ts`), the Mongo layer (mappers, calendars, planner, campfire, entities, stats, settings, event-filters, users, ids), and the `nyuchi-*` brand components (each colocated with a `.test.tsx`). The standalone `admin/` app carries its own Vitest suite (~58 tests: gate, shell, section renders, admin actions) run via `npm run test:run --workspace=admin`.
 
 ## Key Files
 
