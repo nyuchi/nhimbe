@@ -13,7 +13,7 @@ truth — the canonical, always-current docs live at the repository root.
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Local setup, conventions, and the PR process |
 | [`../SECURITY.md`](../SECURITY.md) | Security policy and vulnerability reporting |
 | [`../RELEASES.md`](../RELEASES.md) | Changelog and release process |
-| [`../worker/README.md`](../worker/README.md) | The `nhimbe-mcp` server (task-based MCP at `nhimbe.com/mcp`) |
+| [`../worker/README.md`](../worker/README.md) | The `nhimbe-mcp` server (task-based MCP at `events.mukoko.com/mcp`) |
 
 **Architecture in one line:** Nhimbe is a single **Next.js 16** app on **Vercel**
 that reads and writes **MongoDB server-side** (SSR-first, Server Actions), with

@@ -5,7 +5,7 @@ import type { Env } from "../types";
 const env: Env = { APP_API_URL: "https://app.test", MCP_SERVER_NAME: "nhimbe" };
 
 function rpc(body: unknown, headers: Record<string, string> = {}): Request {
-  return new Request("https://nhimbe.com/mcp", {
+  return new Request("https://events.mukoko.com/mcp", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
@@ -26,6 +26,22 @@ describe("MCP server — handshake", () => {
     expect(body.result.serverInfo.name).toBe("nhimbe");
     expect(body.result.capabilities.tools).toBeDefined();
     expect(body.result.protocolVersion).toBe("2025-06-18");
+  });
+
+  it("negotiates an unsupported requested version down to the latest legacy revision", async () => {
+    const res = await handleMcpRequest(
+      rpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "1999-01-01" } }),
+      env,
+    );
+    expect((await json(res)).result.protocolVersion).toBe("2025-06-18");
+  });
+
+  it("negotiates a modern version requested via initialize down to legacy (dual-era)", async () => {
+    const res = await handleMcpRequest(
+      rpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2026-07-28" } }),
+      env,
+    );
+    expect((await json(res)).result.protocolVersion).toBe("2025-06-18");
   });
 
   it("lists the task tools", async () => {
@@ -56,7 +72,7 @@ describe("MCP server — handshake", () => {
   });
 
   it("rejects GET with 405", async () => {
-    const res = await handleMcpRequest(new Request("https://nhimbe.com/mcp", { method: "GET" }), env);
+    const res = await handleMcpRequest(new Request("https://events.mukoko.com/mcp", { method: "GET" }), env);
     expect(res.status).toBe(405);
   });
 });
