@@ -46,6 +46,15 @@ export default function SearchPage() {
     }
   }, []);
 
+  // Deep-link support: seed the query from `?q=` so /search?q=<term> works for
+  // shared links, the homepage WebSite SearchAction (sitelinks searchbox), and
+  // AI agents deep-linking a search. Read from window.location (client-only) to
+  // avoid a useSearchParams Suspense boundary on this leaf page.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) setSearchQuery(q);
+  }, []);
+
   const saveSearch = (query: string) => {
     if (!query.trim()) return;
     setRecentSearches((prev) => {

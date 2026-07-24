@@ -1,12 +1,12 @@
-# nhimbe - African Events Platform
+# Nhimbe - African Events Platform
 
 > Together we gather, together we grow
 
-nhimbe (pronounced /ˈnhimbɛ/) is an events and gatherings platform connecting communities across Africa. The name comes from the Shona tradition of communal work, embodying the Ubuntu philosophy: "I am because we are."
+Nhimbe (pronounced /ˈnhimbɛ/) is a community events discovery and management platform connecting communities across Africa. The name comes from the Shona tradition of communal work, embodying the Ubuntu philosophy: "I am because we are."
 
 ## About
 
-nhimbe is part of the Mukoko ecosystem, developed by Nyuchi Web Services. We help people discover events, connect with communities, and celebrate together across African cities including:
+Nhimbe is part of the Mukoko ecosystem, developed by Nyuchi Web Services. We help people discover events, connect with communities, and celebrate together across African cities including:
 
 - Harare, Zimbabwe
 - Bulawayo, Zimbabwe
@@ -21,11 +21,13 @@ nhimbe is part of the Mukoko ecosystem, developed by Nyuchi Web Services. We hel
 
 - **Event Discovery**: Browse events by category, city, or search
 - **Event Creation**: Host your own gatherings with AI-powered description assistance (Shamwari)
-- **RSVP & Registration**: Easy event registration and ticketing
-- **Calendar Integration**: Add events to your calendar
-- **QR Code Sharing**: Share events easily with short URLs
-- **Weather Integration**: See weather forecasts for event locations
-- **Map Integration**: View venues on Google Maps
+- **RSVP & Registration**: Easy event registration, waitlists, and ticketing
+- **Calendars**: Follow curated event streams (`/calendars/<slug>`, with an ICS feed)
+- **Circles**: Community groups that host events together
+- **Calendar Integration**: Add events to your calendar via ICS export
+- **QR Code Sharing**: Share events easily with short URLs (`/e/<code>`)
+- **Maps**: View venues on OpenStreetMap (Leaflet), no API key required
+- **Weather**: Forecasts for event locations via the shared Mukoko weather embed
 
 ## Event Categories
 
@@ -42,17 +44,27 @@ nhimbe is part of the Mukoko ecosystem, developed by Nyuchi Web Services. We hel
 
 ## AI Features
 
-nhimbe includes an AI assistant called **Shamwari** (meaning "friend" in Shona) that helps event hosts create compelling descriptions through a guided wizard.
+Nhimbe includes an AI assistant called **Shamwari** (meaning "friend" in Shona) that helps event hosts create compelling descriptions through a guided wizard, and powers semantic event search.
 
-## API
+## Public API
 
-nhimbe provides a public API for event discovery:
+Nhimbe exposes a same-origin read API for event discovery (JSON):
 
-- `GET /api/events` - List all events
+- `GET /api/events` - List published events
 - `GET /api/events/:id` - Get event details
 - `GET /api/categories` - List event categories
 - `GET /api/cities` - List available cities
-- `POST /api/search` - AI-powered semantic search
+- `GET /api/community/stats` - Community statistics
+
+Writes (`POST /api/events`, `PATCH /api/events/:id`) require a WorkOS bearer token — see the agent authentication guide below.
+
+## For AI Agents
+
+- **Agent auth guide**: https://nhimbe.com/auth.md (how to authenticate with WorkOS AuthKit bearer tokens)
+- **OAuth authorization server metadata**: https://nhimbe.com/.well-known/oauth-authorization-server
+- **OAuth protected resource metadata**: https://nhimbe.com/.well-known/oauth-protected-resource
+- **OpenID configuration**: https://nhimbe.com/.well-known/openid-configuration
+- **MCP server** (task-based, Streamable HTTP): https://events.mukoko.com/mcp (legacy: https://nhimbe.com/mcp) — tools: `events_near_me`, `events_matching_interests`, `get_event` (anonymous reads); `create_event`, `update_event` (bearer-authed writes)
 
 ## Contact
 
@@ -61,7 +73,9 @@ nhimbe provides a public API for event discovery:
 
 ## Useful Links
 
+- Discover: https://nhimbe.com/discover
 - Events: https://nhimbe.com/events
 - Create Event: https://nhimbe.com/events/create
 - Search: https://nhimbe.com/search
+- Circles: https://nhimbe.com/circles
 - About: https://nhimbe.com/about
