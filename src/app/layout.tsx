@@ -19,6 +19,7 @@ import { LiveRegionProvider } from "@/components/ui/live-region";
 import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { IntercomLoader } from "@/components/intercom/intercom-loader";
+import { SITE_URL } from "@/lib/site-url";
 
 // Local-dev only (Vercel builds run as production, so this never shows on a
 // deployed environment). A red frame makes it obvious you're on localhost.
@@ -43,7 +44,7 @@ const DEFAULT_OG_IMAGE =
   encodeURIComponent("Together we gather, together we grow");
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://nhimbe.com"),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Nhimbe - Together we gather, together we grow",
     template: "%s | Nhimbe",
@@ -95,7 +96,7 @@ export const metadata: Metadata = {
       "Discover events and gatherings across Africa. Connect with your community and celebrate together.",
     type: "website",
     locale: "en_US",
-    url: "https://nhimbe.com",
+    url: SITE_URL,
     siteName: "Nhimbe",
     images: [
       {
@@ -127,7 +128,7 @@ export const metadata: Metadata = {
     },
   },
   alternates: {
-    canonical: "https://nhimbe.com",
+    canonical: SITE_URL,
   },
   category: "events",
 };

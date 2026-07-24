@@ -26,6 +26,7 @@ import { stampNew } from "@/lib/mongo/ids";
 import { notifyAttendeesViaCampfire } from "@/lib/mongo/campfire";
 import { listHostEntitiesForPerson } from "@/lib/mongo/entities";
 import { listUpdateSubscribers } from "@/lib/mongo/update-subscribers";
+import { SITE_URL } from "@/lib/site-url";
 import { sendEmail } from "@/lib/email/resend";
 import { eventUpdatePosted } from "@/lib/email/templates";
 import { isDevBypass, DEV_WORKOS_ID } from "@/lib/auth/dev";
@@ -168,7 +169,7 @@ export async function postEventUpdate(
         excludePersonId: person._id,
       });
       if (recipients.length > 0) {
-        const eventUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://nhimbe.com"}/events/${eventId}`;
+        const eventUrl = `${SITE_URL}/events/${eventId}`;
         const template = eventUpdatePosted({ eventName: event.name, updateText: text, eventUrl });
         const results = await Promise.allSettled(
           recipients.map((r) =>

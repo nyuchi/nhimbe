@@ -6,6 +6,7 @@ import { listEvents } from "@/lib/mongo/events";
 import { listCitiesWithCounts, type CityWithCount } from "@/lib/mongo/lookups";
 import { isDevBypass, DEV_NAME } from "@/lib/auth/dev";
 import type { Event } from "@/lib/api";
+import { SITE_URL } from "@/lib/site-url";
 
 /**
  * Home (NYU-24 IA refresh) — a simple surface, split server-side on auth:
@@ -87,10 +88,10 @@ const HOME_JSON_LD = {
   "@graph": [
     {
       "@type": "Organization",
-      "@id": "https://nhimbe.com/#organization",
+      "@id": `${SITE_URL}/#organization`,
       name: "Nhimbe",
-      url: "https://nhimbe.com",
-      logo: "https://nhimbe.com/app-icon-512.png",
+      url: SITE_URL,
+      logo: `${SITE_URL}/app-icon-512.png`,
       description:
         "Nhimbe is a community events discovery and management platform connecting communities across Africa. A Mukoko product.",
       parentOrganization: {
@@ -102,17 +103,17 @@ const HOME_JSON_LD = {
     },
     {
       "@type": "WebSite",
-      "@id": "https://nhimbe.com/#website",
-      url: "https://nhimbe.com",
+      "@id": `${SITE_URL}/#website`,
+      url: SITE_URL,
       name: "Nhimbe",
       description: "Together we gather, together we grow",
-      publisher: { "@id": "https://nhimbe.com/#organization" },
+      publisher: { "@id": `${SITE_URL}/#organization` },
       inLanguage: "en",
       potentialAction: {
         "@type": "SearchAction",
         target: {
           "@type": "EntryPoint",
-          urlTemplate: "https://nhimbe.com/search?q={search_term_string}",
+          urlTemplate: `${SITE_URL}/search?q={search_term_string}`,
         },
         "query-input": "required name=search_term_string",
       },

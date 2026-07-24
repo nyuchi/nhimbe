@@ -4,6 +4,7 @@
 // APIs via WorkOS AuthKit bearer tokens.
 
 import { workosAuthMetadata } from "@/lib/auth/workos-metadata";
+import { SITE_URL } from "@/lib/site-url";
 
 // force-dynamic: derived at request time from the same runtime env
 // (WORKOS_CLIENT_ID / WORKOS_API_HOSTNAME) the token verifier reads, so the
@@ -16,7 +17,7 @@ function buildAuthMd(): string {
   return `# auth.md
 
 Nhimbe is a community events discovery and management platform, part of the
-Mukoko ecosystem by Nyuchi Web Services (https://nhimbe.com). AI agents
+Mukoko ecosystem by Nyuchi Web Services (${SITE_URL}). AI agents
 authenticate to Nhimbe's protected APIs using WorkOS AuthKit bearer tokens:
 present a WorkOS-issued access token (a JWT) in the \`Authorization: Bearer\`
 header on write/protected requests.
@@ -26,8 +27,8 @@ header on write/protected requests.
 Machine-readable authorization metadata is published at these well-known
 endpoints:
 
-- Authorization server metadata: https://nhimbe.com/.well-known/oauth-authorization-server
-- Protected resource metadata: https://nhimbe.com/.well-known/oauth-protected-resource
+- Authorization server metadata: ${SITE_URL}/.well-known/oauth-authorization-server
+- Protected resource metadata: ${SITE_URL}/.well-known/oauth-protected-resource
 
 ## Authentication
 
@@ -54,7 +55,7 @@ The \`register_uri\` below is the WorkOS AuthKit dynamic-client-registration
 authorization flow.
 
 \`\`\`yaml
-resource: https://nhimbe.com
+resource: ${SITE_URL}
 authorization_servers:
   - ${workos.issuer}
 scopes_supported: [openid, profile, email, offline_access]

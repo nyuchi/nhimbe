@@ -15,7 +15,7 @@ const DEFAULT_OG_IMAGE =
 
 // Metadata from layout.tsx
 const metadata = {
-  metadataBase: 'https://nhimbe.com',
+  metadataBase: 'https://events.mukoko.com',
   title: {
     default: 'Nhimbe - Together we gather, together we grow',
     template: '%s | Nhimbe',
@@ -31,7 +31,7 @@ const metadata = {
     description: 'Discover events and gatherings across Africa. Connect with your community and celebrate together.',
     type: 'website',
     locale: 'en_US',
-    url: 'https://nhimbe.com',
+    url: 'https://events.mukoko.com',
     siteName: 'Nhimbe',
     images: [{ url: DEFAULT_OG_IMAGE, width: 1200, height: 630 }],
   },
@@ -54,7 +54,7 @@ const metadata = {
     },
   },
   alternates: {
-    canonical: 'https://nhimbe.com',
+    canonical: 'https://events.mukoko.com',
   },
 };
 
@@ -85,7 +85,7 @@ describe('SEO: Basic Metadata', () => {
   });
 
   it('has canonical URL', () => {
-    expect(metadata.alternates.canonical).toBe('https://nhimbe.com');
+    expect(metadata.alternates.canonical).toBe('https://events.mukoko.com');
   });
 });
 
@@ -107,7 +107,7 @@ describe('SEO: Open Graph', () => {
   });
 
   it('has og:url', () => {
-    expect(metadata.openGraph.url).toBe('https://nhimbe.com');
+    expect(metadata.openGraph.url).toBe('https://events.mukoko.com');
   });
 
   it('has og:site_name', () => {
@@ -201,7 +201,7 @@ describe('SEO: Brand Consistency', () => {
   });
 
   it('metadataBase uses production URL', () => {
-    expect(metadata.metadataBase).toBe('https://nhimbe.com');
+    expect(metadata.metadataBase).toBe('https://events.mukoko.com');
   });
 });
 

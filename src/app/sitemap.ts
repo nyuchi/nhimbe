@@ -1,8 +1,9 @@
 import { MetadataRoute } from "next";
 import { listEvents } from "@/lib/mongo/events";
 import { listPublicCalendars } from "@/lib/mongo/calendars";
+import { SITE_URL } from "@/lib/site-url";
 
-const BASE_URL = "https://nhimbe.com";
+const BASE_URL = SITE_URL;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Static pages

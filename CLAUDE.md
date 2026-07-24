@@ -55,6 +55,10 @@ The internal API at **`nhimbe.com/api`** (route handlers in `src/app/api/`) is a
 
 **Realtime** read/sync (live engagement, kiosk pairing, QR check-in, live online-event counts) is a **future** addition — it is not viable on Vercel serverless yet, so those surfaces currently use SSR plus polling.
 
+### Dual-domain (nhimbe.com + events.mukoko.com)
+
+Production is **dual-domain**: both `nhimbe.com` and `events.mukoko.com` fully serve the app (Vercel serves both). Runtime behaviour is identical on either host because the browser always talks to its own origin — client calls are same-origin (`NEXT_PUBLIC_API_URL` unset; `src/lib/api.ts` and share/tracked links use `window.location.origin`). What is **consolidated onto one primary origin** is every self-referential URL search engines and scrapers consume — canonical tags, OpenGraph/Twitter image URLs, `sitemap.xml`, `robots.txt`, schema.org JSON-LD, and the `.well-known` OAuth `resource` — so SEO signals don't split across both domains (duplicate content). That primary origin is **`events.mukoko.com`**, resolved once in **`src/lib/site-url.ts`** (`SITE_URL` / `absoluteUrl()`, overridable via `NEXT_PUBLIC_SITE_URL`); nothing else should hardcode a site origin. Opaque stable identifiers are deliberately **not** routed through it (iCalendar UIDs stay `…@nhimbe.com`; the Nominatim `User-Agent` stays a fixed contact string). Operationally: both domains must be added to the Vercel project, and both `…/callback` URLs registered in WorkOS, with `NEXT_PUBLIC_WORKOS_REDIRECT_URI` pointing at the primary.
+
 ### MongoDB layer (`src/lib/mongo/`)
 
 Connection lives in `client.ts` — a cached `MongoClient` (no caching of rejected connection promises). Documents follow the Mukoko v3.1 conventions: string-UUID `_id`, `_schemaVersion`, camelCase fields, BSON dates, and JSON-Schema validators enforced by the cluster.
@@ -340,7 +344,7 @@ Set in Vercel (prod + preview) and locally in `.env.local`:
 - `SHAMWARI_AI_GATEWAY_URL`, `SHAMWARI_AI_GATEWAY_TOKEN` — Cloudflare AI Gateway base + provider bearer; optional `SHAMWARI_AI_GATEWAY_AUTH_TOKEN` for the authenticated gateway.
 - `RESEND_API_KEY` — server-only; used for transactional email via Resend (`src/lib/email/`). Sends from the verified `notify.mukoko.com` domain (`events@notify.mukoko.com`). When unset, email sends are skipped (never throw).
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — server-only R2 S3 API credentials for cover-image uploads (`src/lib/r2.ts`). `R2_BUCKET` *(optional)* defaults to `mukoko-storage`. When unset, `/api/media/upload` returns 503 and uploads fall back to a gradient cover.
-- `NEXT_PUBLIC_SITE_URL` — public site URL.
+- `NEXT_PUBLIC_SITE_URL` — the **primary/canonical** public origin (default `https://events.mukoko.com`). See "Dual-domain" below — this is the single origin all self-referential URLs (canonical tags, OG images, sitemap, robots, JSON-LD, `.well-known` resource) point at, resolved once in `src/lib/site-url.ts` (`SITE_URL`).
 - `NEXT_PUBLIC_ASSETS_URL` *(optional)* — override the R2 assets host (defaults to `https://assets-s001.mukoko.com`).
 - `ADMIN_URL` *(optional)* — where `/admin*` redirects (defaults to `https://admin.events.mukoko.com`). The admin app itself is a separate Vercel project with its own env — see `admin/README.md`.
 - `WORKOS_ADMIN_ORG_ID` *(admin app only; optional)* — the nyuchi WorkOS **organization id** (`org_…`) used only to org-scope the hosted sign-in screen (a UX hint, not the gate). Set on the **nhimbe-admin** Vercel project, not the public app.

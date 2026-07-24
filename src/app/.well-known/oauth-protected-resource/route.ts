@@ -7,6 +7,7 @@
 // Served statically at /.well-known/oauth-protected-resource.
 
 import { workosAuthMetadata } from "@/lib/auth/workos-metadata";
+import { SITE_URL } from "@/lib/site-url";
 
 // force-dynamic: the authorization server is derived at request time from the
 // same runtime env (WORKOS_API_HOSTNAME) the verifier uses, so it always matches
@@ -28,10 +29,10 @@ function metadata(body: unknown): Response {
 export async function GET(): Promise<Response> {
   const workos = workosAuthMetadata();
   return metadata({
-    resource: "https://nhimbe.com",
+    resource: SITE_URL,
     authorization_servers: [workos.issuer],
     scopes_supported: ["openid", "profile", "email", "offline_access"],
     bearer_methods_supported: ["header"],
-    resource_documentation: "https://nhimbe.com/auth.md",
+    resource_documentation: `${SITE_URL}/auth.md`,
   });
 }

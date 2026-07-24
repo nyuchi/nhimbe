@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { findEventAction, getEventsAction } from "@/app/actions/discovery";
+import { SITE_URL } from "@/lib/site-url";
 
 interface ShortCodePageProps {
   params: Promise<{ shortCode: string }>;
@@ -29,7 +30,7 @@ export async function generateMetadata({ params }: ShortCodePageProps): Promise<
     };
   }
 
-  const eventUrl = `https://nhimbe.com/events/${event.id}`;
+  const eventUrl = `${SITE_URL}/events/${event.id}`;
   const description = `${event.name} on ${event.date.full} at ${event.location.name}, ${event.location.addressLocality}`;
 
   return {
