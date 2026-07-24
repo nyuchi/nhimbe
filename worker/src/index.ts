@@ -37,6 +37,8 @@ app.use(
 app.get("/", (c) =>
   c.json({
     name: c.env.MCP_SERVER_NAME || "nhimbe",
+    // Canonical MCP-registry identifier (see worker/server.json).
+    mcpName: "com.mukoko/nhimbe-events",
     description: "Nhimbe events — task-based MCP server",
     transport: "streamable-http",
     endpoint: "/mcp",

@@ -12,7 +12,7 @@ nhimbe is a single full-stack **Next.js 16** app (App Router, React 19, TypeScri
 - **Frontend API client**: `src/lib/api.ts` — a same-origin REST client for the fallback path; `NEXT_PUBLIC_API_URL` is intentionally unset so calls hit the same origin.
 - **Storage**: Cloudflare **R2** (shared `mukoko-storage` bucket). Cover-image uploads go through `POST /api/media/upload` (WorkOS session-gated, validates image type + 4 MB) → `src/lib/r2.ts` (S3 SDK).
 - **AI**: **Shamwari** runs through the Cloudflare AI Gateway, server-side only (`src/lib/ai/gateway.ts`).
-- **MCP**: the `worker/` directory is the stateless **`nhimbe-mcp`** server at `nhimbe.com/mcp` — it owns no data and calls the app's `/api/events*` endpoints, forwarding the caller's WorkOS bearer token. The app is the single trust boundary.
+- **MCP**: the `worker/` directory is the stateless **`nhimbe-mcp`** server at `events.mukoko.com/mcp` — it owns no data and calls the app's `/api/events*` endpoints, forwarding the caller's WorkOS bearer token. The app is the single trust boundary.
 
 ## Review Focus Areas
 
