@@ -4,9 +4,61 @@ import { useState, useEffect, useSyncExternalStore, useMemo, useCallback } from 
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Plus, Search, LogIn, User, Ticket, Heart, Settings } from "lucide-react";
+import {
+  Plus,
+  Search,
+  LogIn,
+  User,
+  Ticket,
+  Heart,
+  Settings,
+  Compass,
+  CalendarDays,
+  Users,
+  Info,
+} from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
 import { NyuchiUserMenu, type UserMenuItem } from "@/components/ui/nyuchi-user-menu";
+import {
+  NyuchiCommandPalette,
+  type CommandPaletteItem,
+} from "@/components/ui/nyuchi-command-palette";
+import { searchEventsAction } from "@/app/actions/search";
+import { categoryToMineral } from "@/lib/category-mineral";
+
+/** Curated "Go to" navigation for the ⌘K command palette. */
+const PALETTE_NAV: CommandPaletteItem[] = [
+  { id: "nav:discover", label: "Discover", href: "/discover", group: "Go to", icon: Compass },
+  { id: "nav:events", label: "All Events", href: "/events", group: "Go to", icon: CalendarDays },
+  { id: "nav:my-events", label: "My Events", href: "/my-events", group: "Go to", icon: Ticket },
+  { id: "nav:calendar", label: "Calendar", href: "/calendar", group: "Go to", icon: CalendarDays },
+  { id: "nav:create", label: "Create an Event", href: "/events/create", group: "Go to", icon: Plus },
+  { id: "nav:circles", label: "Circles", href: "/circles", group: "Go to", icon: Users },
+  { id: "nav:profile", label: "Profile", href: "/profile", group: "Go to", icon: User },
+  { id: "nav:about", label: "About", href: "/about", group: "Go to", icon: Info },
+];
+
+const RECENT_KEY = "nhimbe-recent-searches";
+
+/** Live palette search — top few events, mapped to command items. */
+async function searchPalette(query: string): Promise<CommandPaletteItem[]> {
+  try {
+    const { events } = await searchEventsAction({ query, limit: 6 });
+    return events.map((e) => ({
+      id: `event:${e.id}`,
+      label: e.name,
+      description: [e.date?.full, e.location?.name || e.location?.addressLocality]
+        .filter(Boolean)
+        .join(" · "),
+      href: `/events/${e.id}`,
+      group: "Events",
+      mineral: categoryToMineral(e.category),
+      badge: e.category || "Event",
+    }));
+  } catch {
+    return [];
+  }
+}
 
 const navLinks = [
   { href: "/discover", label: "Discover" },
@@ -68,7 +120,35 @@ export function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const [isScrolled, setIsScrolled] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [recentQueries, setRecentQueries] = useState<string[]>([]);
   const { user, isAuthenticated, isLoading, signOut } = useAuth();
+
+  // Load recent searches (shared key with the /search page) when the palette opens.
+  useEffect(() => {
+    if (!paletteOpen) return;
+    try {
+      const stored = localStorage.getItem(RECENT_KEY);
+      if (stored) setRecentQueries(JSON.parse(stored));
+    } catch {
+      /* ignore malformed storage */
+    }
+  }, [paletteOpen]);
+
+  const commitQuery = useCallback(
+    (q: string) => {
+      const query = q.trim();
+      if (!query) return;
+      try {
+        const next = [query, ...recentQueries.filter((s) => s !== query)].slice(0, 5);
+        localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      router.push(`/search?q=${encodeURIComponent(query)}`);
+    },
+    [recentQueries, router],
+  );
 
   const userName = user?.name;
 
@@ -116,7 +196,7 @@ export function Header() {
     (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        router.push("/search");
+        setPaletteOpen((o) => !o);
       }
     },
     [router]
@@ -209,13 +289,14 @@ export function Header() {
           >
             <Plus className="w-6 h-6 text-primary-foreground" />
           </Link>
-          <Link
-            href="/search"
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
             className="flex items-center justify-center w-11 h-11 rounded-full bg-background/10 hover:bg-background/20 transition-colors"
-            aria-label="Search events"
+            aria-label="Search events (⌘K)"
           >
             <Search className="w-6 h-6 text-primary-foreground" />
-          </Link>
+          </button>
 
           {/* Profile / Sign In button */}
           {isLoading ? (
@@ -243,6 +324,16 @@ export function Header() {
           )}
         </div>
       </div>
+
+      <NyuchiCommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        navItems={PALETTE_NAV}
+        onSearch={searchPalette}
+        recentQueries={recentQueries}
+        onSelect={(item) => router.push(item.href)}
+        onSubmitQuery={commitQuery}
+      />
     </header>
   );
 }
