@@ -35,19 +35,19 @@ invocation_logs = true
 
 # ============================================
 # PRODUCTION
-# Canonical route: events.mukoko.com/mcp/* (nhimbe's alternative domain on the
-# mukoko.com zone). The legacy nhimbe.com/mcp/* routes stay live during the
-# transition. Both zones must be Cloudflare-proxied in front of Vercel so the
-# Worker route can intercept /mcp/* while everything else passes through.
+# The ONLY MCP route: events.mukoko.com/mcp/* on the mukoko.com zone (which must
+# be Cloudflare-proxied in front of Vercel so this Worker route can intercept
+# /mcp/* while everything else passes through). The MCP is deliberately NOT
+# served on nhimbe.com — the app is dual-domain, the MCP endpoint is not.
+# ALLOWED_ORIGINS still lists both app domains: either can host a client that
+# calls the MCP. APP_API_URL points at the app (dual-domain; nhimbe.com serves).
 # ============================================
 [env.production]
 name = "nhimbe-mcp"
 vars = { ENVIRONMENT = "production", ALLOWED_ORIGINS = "https://nhimbe.com,https://www.nhimbe.com,https://mukoko.com,https://www.mukoko.com,https://events.mukoko.com", APP_API_URL = "https://nhimbe.com", MCP_SERVER_NAME = "nhimbe" }
 routes = [
   { pattern = "events.mukoko.com/mcp", zone_name = "mukoko.com" },
-  { pattern = "events.mukoko.com/mcp/*", zone_name = "mukoko.com" },
-  { pattern = "nhimbe.com/mcp", zone_name = "nhimbe.com" },
-  { pattern = "nhimbe.com/mcp/*", zone_name = "nhimbe.com" }
+  { pattern = "events.mukoko.com/mcp/*", zone_name = "mukoko.com" }
 ]
 
 [env.production.observability]

@@ -119,3 +119,28 @@ through Cloudflare (orange cloud)** — not DNS-only — with Vercel as the orig
 
 > The worker calling `https://nhimbe.com/api/...` is not intercepted by the
 > `/mcp/*` route, so tool requests reach Vercel normally.
+
+**Single MCP domain.** The MCP is served **only** on `events.mukoko.com`. The
+app itself is dual-domain (`nhimbe.com` + `events.mukoko.com` both serve it),
+but there is deliberately no `nhimbe.com/mcp` route.
+
+## MCP registry
+
+The server is declared for the [MCP registry](https://registry.modelcontextprotocol.io)
+in [`server.json`](./server.json) (name `com.mukoko/nhimbe-events`, a
+`streamable-http` remote at `https://events.mukoko.com/mcp`). It is **not yet
+published** to the registry.
+
+To publish (one-time, requires the `mcp-publisher` CLI and control of the
+`mukoko.com` DNS zone for the `com.mukoko` namespace):
+
+```bash
+# 1. Verify the com.mukoko namespace via a DNS TXT record on mukoko.com
+#    (mcp-publisher prints the exact record to add), then:
+mcp-publisher login dns --domain mukoko.com
+# 2. Validate + publish server.json:
+cd worker && mcp-publisher publish
+```
+
+Bump `version` in both `server.json` and `package.json` together on each
+release; re-run `mcp-publisher publish` to update the registry entry.

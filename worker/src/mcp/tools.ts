@@ -38,10 +38,30 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+/**
+ * MCP tool behavioural hints (2025-06-18 `annotations`). Hints, not security
+ * guarantees — clients use them to label tools and gate confirmations.
+ */
+export interface ToolAnnotations {
+  /** Human-readable display title (mirrors the top-level `title`). */
+  title: string;
+  /** Tool does not modify its environment. */
+  readOnlyHint: boolean;
+  /** Tool may perform destructive updates (only meaningful when not read-only). */
+  destructiveHint: boolean;
+  /** Repeated calls with the same args have no additional effect. */
+  idempotentHint: boolean;
+  /** Tool interacts with external entities (the live Nhimbe catalogue). */
+  openWorldHint: boolean;
+}
+
 export interface ToolDefinition {
   name: string;
+  /** Human-readable display title (MCP 2025-06-18). */
+  title: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  annotations: ToolAnnotations;
   handler: (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>;
 }
 
@@ -92,8 +112,16 @@ function summarize(events: AppEvent[], lead: string): string {
 export const TOOLS: ToolDefinition[] = [
   {
     name: "events_near_me",
+    title: "Find events near me",
     description:
       "Find upcoming Nhimbe events near a place. Pass a city (recommended). Returns a carousel of event cards.",
+    annotations: {
+      title: "Find events near me",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -111,8 +139,16 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "events_matching_interests",
+    title: "Find events matching interests",
     description:
       "Find Nhimbe events matching one or more interests/categories (e.g. \"Music\", \"Tech\"). Optionally scope to a city. Returns a carousel.",
+    annotations: {
+      title: "Find events matching interests",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -155,7 +191,15 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "get_event",
+    title: "Get an event",
     description: "Look up a single Nhimbe event by id, slug, or short code. Returns one event card.",
+    annotations: {
+      title: "Get an event",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -176,8 +220,16 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "create_event",
+    title: "Create an event",
     description:
       "Create a new Nhimbe event as the signed-in host. Requires the caller to be authenticated with WorkOS. Returns the created event card.",
+    annotations: {
+      title: "Create an event",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -231,8 +283,17 @@ export const TOOLS: ToolDefinition[] = [
   },
   {
     name: "update_event",
+    title: "Update or manage an event",
     description:
       "Update or manage an event you host — edit details or change its status (e.g. cancel). Requires WorkOS authentication. Returns the updated event card.",
+    annotations: {
+      title: "Update or manage an event",
+      readOnlyHint: false,
+      // Can change lifecycle status (e.g. cancel), so treat as destructive.
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -275,7 +336,13 @@ const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 
 /** Public tool descriptors for `tools/list` (no handler). */
 export function listToolDescriptors() {
-  return TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }));
+  return TOOLS.map(({ name, title, description, inputSchema, annotations }) => ({
+    name,
+    title,
+    description,
+    inputSchema,
+    annotations,
+  }));
 }
 
 /** Dispatch a `tools/call`. Maps AppApiError to a clean, user-facing error result. */
