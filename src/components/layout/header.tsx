@@ -156,16 +156,19 @@ export function Header() {
               className="zebra zebra-dark"
             />
           </div>
-          <div className="relative h-8.5 flex items-center">
-            {/* Logo text - visible when not scrolled */}
+          <div className="relative min-h-8.5 flex items-center">
+            {/* Wordmark lockup — "Nhimbe by Mukoko Events" (visible when not scrolled) */}
             <span
-              className={`text-[24px] font-bold text-primary transition-all duration-300 ${
+              className={`flex flex-col leading-none transition-all duration-300 ${
                 isScrolled && pageTitle
                   ? "opacity-0 absolute"
                   : "opacity-100"
               }`}
             >
-              Nhimbe
+              <span className="text-[24px] font-bold text-primary">Nhimbe</span>
+              <span className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
+                by Mukoko Events
+              </span>
             </span>
             {/* Page title - visible when scrolled */}
             {pageTitle && (
