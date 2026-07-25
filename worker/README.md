@@ -62,8 +62,11 @@ Deliberate scope decisions for the beta:
 
 ## Tools
 
-Task-based, not a CRUD mirror. Every result carries **inline HTML** (a carousel
-for several events, a card for one) plus a plain-text fallback.
+Task-based, not a CRUD mirror. Every result carries three layers: **inline HTML**
+(a carousel for several events, a card for one), a plain-text fallback, and
+**`structuredContent`** — machine-readable event fields (`id`, `name`, `url`,
+`startDate`, `category`, `city`, `isOnline`, …) matching each tool's advertised
+`outputSchema`, so an agent consumes typed data instead of scraping the card.
 
 | Tool                         | Auth        | Task                                       |
 | ---------------------------- | ----------- | ------------------------------------------ |
