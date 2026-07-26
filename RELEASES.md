@@ -16,6 +16,7 @@ Nhimbe uses **continuous deployment** with manual version tags for milestones. T
 - Added followable **calendars** (NYU-25) — `events.calendars` + `calendarFollows`, `/calendars/[slug]` pages and `/ics` feeds, featured calendars on discover, and host attach.
 - Added **cross-product write-through** (NYU-26) — RSVP → `planner.reservations` and event update → `campfire.conversations` mirrors that run after the primary write and never throw.
 - Extracted the admin dashboard into a **standalone `admin/` app** (its own Vercel project) scoped to the **nyuchi WorkOS organization**; the public app now only redirects `/admin*`.
+- Split the Mukoko Events MCP server and the Mukoko Events Admin app out of this repo into their own repos — **`nyuchi/mukoko-events-mcp`** (the former `worker/` directory plus its distribution surfaces: Claude Code plugin, marketplace, ChatGPT connector, consumer Agent Skills) and **`nyuchi/mukoko-events-admin`** (the former `admin/` app). Nhimbe is now the public app alone; the shared Mongo admin-read layer (`src/lib/mongo/admin.ts`) stays here for the admin app to consume, and `/admin*` still redirects via `ADMIN_URL`.
 
 ## Deployment
 

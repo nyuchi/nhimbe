@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "mukoko-events": {
-      "type": "http",
-      "url": "https://events.mukoko.com/mcp"
-    }
-  }
-}

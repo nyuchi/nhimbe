@@ -16,9 +16,10 @@ deploy step** — Vercel builds and deploys **every push**:
 - **Production** on merge to `main`
 
 So "deploying" is really: get the branch green, open/merge the PR, and let
-Vercel ship it. The `worker/` directory is the separate **`nhimbe-mcp`** server
-(the MCP at `events.mukoko.com/mcp`) — it is not part of an app deploy and ships on its
-own via `wrangler deploy --env production` from `worker/`.
+Vercel ship it. The Mukoko Events MCP server (the MCP at `events.mukoko.com/mcp`)
+and the Mukoko Events Admin app now live in their own repos
+(`nyuchi/mukoko-events-mcp`, `nyuchi/mukoko-events-admin`) and deploy from
+there — they are not part of a Nhimbe app deploy.
 
 ## Current state
 
