@@ -177,9 +177,9 @@ The admin dashboard — **Mukoko Events Admin** — is a **standalone Next.js ap
 - Agent auth guide: `/auth.md` (`src/app/auth.md/route.ts`) — a static `text/markdown` page describing how AI agents authenticate to the protected write APIs with WorkOS bearer tokens (the `auth.md` discovery convention). Paired with the `.well-known` OAuth/OIDC discovery route handlers (see Route Handlers) for machine-readable agent onboarding.
 - SEO: `robots.ts`, `sitemap.ts`; error boundaries `error.tsx`, `global-error.tsx`, `not-found.tsx`, `loading.tsx`.
 
-### UI Components (Mukoko Registry)
+### UI Components (Mzizi Registry)
 
-shadcn/Radix primitives installed from the Mukoko registry (`registry.mukoko.com`), configured in `components.json` (new-york style, RSC, Tailwind v4, Lucide icons). All primitives use `data-slot` attributes, CVA variants, and Radix for accessibility. In `src/components/ui/`: core primitives (button, card, dialog, drawer, tabs, select, form, table, empty, …) plus Mukoko-exclusive composites (rating, stats-card, filter-bar, status-indicator, timeline, copy-button, file-upload, share-dialog, lazy-section, detail-layout, responsive-modal, share-button, QR code, community-insights, city-dropdown, theme-toggle, verified-badge, …).
+shadcn/Radix primitives installed from the Mzizi design-system registry (`mzizi.dev`, shadcn-compatible — `components.json` registers it as `@mzizi` → `https://mzizi.dev/api/v1/ui/{name}`; the `mzizi add` CLI / Mzizi MCP resolver serve the same source), configured in `components.json` (new-york style, RSC, Tailwind v4, Lucide icons). All primitives use `data-slot` attributes, CVA variants, and Radix for accessibility. In `src/components/ui/`: core primitives (button, card, dialog, drawer, tabs, select, form, table, empty, …) plus Mzizi-registry composites (rating, stats-card, filter-bar, status-indicator, timeline, copy-button, file-upload, share-dialog, lazy-section, detail-layout, responsive-modal, share-button, QR code, community-insights, city-dropdown, theme-toggle, verified-badge, …).
 
 #### nyuchi-harness (`src/components/ui/harness.tsx`)
 
