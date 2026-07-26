@@ -18,7 +18,13 @@ when the skill triggers. They are grounded in the live MCP tool surface
 
 ## Using them
 
-- **In a client that supports Agent Skills**, install/point it at these folders; the client loads a skill when its `description` matches the task.
+- **As a Claude Code plugin** — the [`mukoko-events` plugin](../plugins/mukoko-events/)
+  bundles copies of these skills alongside the MCP server, installable via the
+  repo marketplace (`/plugin marketplace add nyuchi/nhimbe` → `/plugin install
+  mukoko-events@mukoko`). The plugin's `skills/` are copies of these (a plugin
+  must contain its own skills — they're cached on install and can't reference
+  files outside the plugin dir); keep the two in sync.
+- **In another client that supports Agent Skills**, install/point it at these folders; the client loads a skill when its `description` matches the task.
 - **As plain guidance**, the `SKILL.md` bodies double as human-readable playbooks for the Mukoko Events MCP.
 
 ## Keeping them accurate

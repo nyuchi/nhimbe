@@ -1,0 +1,24 @@
+{
+  "name": "mukoko",
+  "owner": {
+    "name": "Nyuchi / Mukoko",
+    "url": "https://events.mukoko.com"
+  },
+  "metadata": {
+    "description": "Mukoko plugins for Claude Code — starting with Mukoko Events (Nhimbe): community events discovery + hosting over the events.mukoko.com/mcp server.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "mukoko-events",
+      "source": "./plugins/mukoko-events",
+      "description": "Discover and manage community events across Africa on Mukoko Events (Nhimbe): the events.mukoko.com/mcp server plus discovery + hosting skills.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Nyuchi / Mukoko",
+        "url": "https://events.mukoko.com"
+      },
+      "keywords": ["mcp", "events", "nhimbe", "mukoko", "africa"]
+    }
+  ]
+}

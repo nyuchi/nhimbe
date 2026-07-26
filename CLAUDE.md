@@ -303,6 +303,16 @@ Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/se
 
 > **Agents:** [`AGENTS.md`](./AGENTS.md) is the tool-agnostic subset of these rules for any runner, and reusable task routines live in [`.claude/skills/`](./.claude/skills/) (e.g. `release-check`, `db-seed-verify`, `verify`) — these are **repo dev workflows**. Distinct from those, [`skills/`](./skills/) holds **distributable Agent Skills for Mukoko Events consumers** — `mukoko-events-discovery` and `mukoko-events-hosting`, each a `SKILL.md` teaching an agent to use the Mukoko Events MCP (`events.mukoko.com/mcp`); keep them in step with `worker/src/mcp/tools.ts`.
 
+### Distribution: plugin, marketplace, connectors
+
+The Mukoko Events MCP ships to end users through three self-contained surfaces (all extract cleanly with the worker to its own repo later):
+
+- **Claude Code plugin** — [`plugins/mukoko-events/`](./plugins/mukoko-events/): a `.claude-plugin/plugin.json` manifest plus a bundled **`.mcp.json`** declaring the remote server (`{"type":"http","url":"https://events.mukoko.com/mcp"}`) and **`skills/`** (copies of the top-level `skills/` — a plugin must contain its own skills, cached on install). Components live at the plugin root; only `plugin.json` sits in `.claude-plugin/`.
+- **Marketplace** — repo-root [`.claude-plugin/marketplace.json`](./.claude-plugin/marketplace.json) (name `mukoko`) lists the plugin with `source: ./plugins/mukoko-events`, so the repo is installable via `/plugin marketplace add nyuchi/nhimbe` → `/plugin install mukoko-events@mukoko`.
+- **ChatGPT connector** — [`connectors/chatgpt/`](./connectors/chatgpt/): setup guide + a `mukoko-events.connector.json` descriptor for adding the same `events.mukoko.com/mcp` server to ChatGPT as a custom MCP connector (reads anonymous; writes via WorkOS OAuth advertised at the Nhimbe `/.well-known/*`).
+
+Keep all three in step with `worker/src/mcp/tools.ts` and the single MCP endpoint (`events.mukoko.com/mcp`, never `nhimbe.com/mcp`).
+
 - **Big PR, multiple commits** — the Nyuchi house style. Related work lands in one pull request as a sequence of focused, independently readable commits. Don't open a second PR for "just one more cleanup" — append a commit to the active branch.
 - **Branches** — work on `claude/<topic>-<slug>` branches; push with `-u origin <branch>` and open the PR as a draft until ready for review.
 
