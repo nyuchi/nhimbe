@@ -38,7 +38,7 @@ Per the issue's instruction, the swap was therefore **not** applied.
 
 Confirm the #93 action's return shape still exposes an `events: Event[]` field
 (the palette maps `events` → `CommandPaletteItem[]`); adjust the destructure if
-#93 names it differently. The full `/search` page (`src/app/search/page.tsx`)
+that action names it differently. The full `/search` page (`src/app/search/page.tsx`)
 should keep using `searchEventsAction` — it wants the semantic results and the
 AI summary.
 
