@@ -5,6 +5,16 @@ server, and the only thing that runs on Cloudflare Workers. It owns no data:
 every tool reads and writes through the nhimbe app API. Everything else
 (events, auth, email, AI) lives on the Vercel app.
 
+> **Standalone workspace.** Unlike `admin/` (a hoisted npm workspace member),
+> `worker/` is a **self-contained package** with its own `package.json`,
+> `package-lock.json`, `tsconfig.json`, and `vitest.config.ts`. It installs,
+> tests, typechecks, and deploys entirely from this directory (`cd worker &&
+> npm ci`), and CI treats it as its own project (`Worker Tests` /
+> `Worker Type Check`). It shares no code with the app — the only coupling is
+> the app's public HTTP API — so it can be lifted into its own repository with
+> no source changes (only `server.json` / `package.json` `repository` fields
+> would update). Deployed to Cloudflare, **not** Vercel.
+
 ## Protocol support (dual-era)
 
 The server speaks two MCP protocol eras on the same `/mcp` endpoint, the
@@ -62,8 +72,11 @@ Deliberate scope decisions for the beta:
 
 ## Tools
 
-Task-based, not a CRUD mirror. Every result carries **inline HTML** (a carousel
-for several events, a card for one) plus a plain-text fallback.
+Task-based, not a CRUD mirror. Every result carries three layers: **inline HTML**
+(a carousel for several events, a card for one), a plain-text fallback, and
+**`structuredContent`** — machine-readable event fields (`id`, `name`, `url`,
+`startDate`, `category`, `city`, `isOnline`, …) matching each tool's advertised
+`outputSchema`, so an agent consumes typed data instead of scraping the card.
 
 | Tool                         | Auth        | Task                                       |
 | ---------------------------- | ----------- | ------------------------------------------ |
@@ -82,6 +95,21 @@ authorization. No autonomous/agent tools are exposed yet — that is future work
 
 Tools call `${APP_API_URL}/api/...`. `APP_API_URL` defaults to `https://nhimbe.com`
 in production and `http://localhost:11825` in dev.
+
+## Environment
+
+The server holds **no secrets** — write auth is the caller's WorkOS bearer token,
+forwarded to the app, which is the trust boundary. Config lives in `wrangler.toml`
+`[vars]` (per-env) and, locally, in `.dev.vars` (copied from `.dev.vars.example`).
+
+| Variable          | Purpose                                                        | Default (dev)            |
+| ----------------- | -------------------------------------------------------------- | ------------------------ |
+| `APP_API_URL`     | Base origin of the nhimbe app the tools call.                  | `http://localhost:11825` |
+| `MCP_SERVER_NAME` | Display name advertised in the `initialize` handshake.         | `nhimbe`                 |
+| `ENVIRONMENT`     | `development` \| `staging` \| `production` (set per wrangler env). | `development`         |
+| `ALLOWED_ORIGINS` | Comma-separated extra CORS origins beyond the built-in allowlist. | `http://localhost:11825` |
+
+No API keys, database URLs, or provider tokens are required to run or deploy it.
 
 ## Develop
 

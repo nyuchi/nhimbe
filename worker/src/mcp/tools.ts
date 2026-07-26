@@ -35,8 +35,84 @@ type ContentBlock =
 
 export interface ToolResult {
   content: ContentBlock[];
+  /**
+   * Machine-readable result matching the tool's `outputSchema` (MCP structured
+   * output). Lets an agent consume typed event fields instead of scraping the
+   * HTML/text. Omitted on error results.
+   */
+  structuredContent?: Record<string, unknown>;
   isError?: boolean;
 }
+
+/** A structured event as advertised by every tool's `outputSchema`. */
+export interface StructuredEvent {
+  id: string;
+  name: string;
+  url: string;
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  category?: string;
+  attendanceMode?: string;
+  status?: string;
+  venue?: string;
+  city?: string;
+  country?: string;
+  isOnline: boolean;
+  isFree?: boolean;
+  price?: number | string;
+  priceCurrency?: string;
+  ticketUrl?: string;
+  attendeeCount?: number;
+  maximumAttendeeCapacity?: number;
+}
+
+/** JSON-Schema for one {@link StructuredEvent}; reused across tool outputSchemas. */
+const EVENT_SCHEMA = {
+  type: "object",
+  properties: {
+    id: { type: "string", description: "Stable event id." },
+    name: { type: "string" },
+    url: { type: "string", description: "Canonical public event page." },
+    description: { type: "string" },
+    startDate: { type: "string", description: "ISO-8601 start instant." },
+    endDate: { type: "string", description: "ISO-8601 end instant." },
+    category: { type: "string" },
+    attendanceMode: {
+      type: "string",
+      description: "schema.org attendance mode (online/offline/mixed).",
+    },
+    status: { type: "string", description: "Lifecycle status, e.g. published or cancelled." },
+    venue: { type: "string" },
+    city: { type: "string" },
+    country: { type: "string" },
+    isOnline: { type: "boolean" },
+    isFree: { type: "boolean" },
+    price: { type: ["number", "string"] },
+    priceCurrency: { type: "string" },
+    ticketUrl: { type: "string" },
+    attendeeCount: { type: "integer" },
+    maximumAttendeeCapacity: { type: "integer" },
+  },
+  required: ["id", "name", "url"],
+} as const;
+
+/** outputSchema for the list tools: `{ events: [...], count }`. */
+const EVENT_LIST_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    events: { type: "array", items: EVENT_SCHEMA },
+    count: { type: "integer", description: "Number of events returned." },
+  },
+  required: ["events", "count"],
+} as const;
+
+/** outputSchema for the single-event tools: `{ event }`. */
+const EVENT_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: { event: EVENT_SCHEMA },
+  required: ["event"],
+} as const;
 
 /**
  * MCP tool behavioural hints (2025-06-18 `annotations`). Hints, not security
@@ -61,19 +137,72 @@ export interface ToolDefinition {
   title: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  /** Structured-output contract; `structuredContent` results validate against it. */
+  outputSchema: Record<string, unknown>;
   annotations: ToolAnnotations;
   handler: (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>;
 }
 
 const HTML_URI = "ui://nhimbe/events";
 
-function htmlResult(text: string, html: string, isError = false): ToolResult {
+/** Canonical public site for event page URLs (events.mukoko.com is the MCP's origin). */
+const PUBLIC_SITE = "https://events.mukoko.com";
+
+/** Public event-page URL, preferring the shortest stable handle. */
+function eventUrl(ev: AppEvent): string {
+  const handle = ev.slug || ev.shortCode || ev.id;
+  return `${PUBLIC_SITE}/events/${encodeURIComponent(handle)}`;
+}
+
+/** Project the app's event shape onto the stable {@link StructuredEvent} contract. */
+function toStructuredEvent(ev: AppEvent): StructuredEvent {
+  const mode = ev.eventAttendanceMode;
+  return {
+    id: ev.id,
+    name: ev.name,
+    url: eventUrl(ev),
+    description: ev.description,
+    startDate: ev.startDate,
+    endDate: ev.endDate,
+    category: ev.category,
+    attendanceMode: mode,
+    status: ev.eventStatus,
+    venue: ev.location?.name,
+    city: ev.location?.addressLocality,
+    country: ev.location?.addressCountry,
+    isOnline: typeof mode === "string" ? /online/i.test(mode) : Boolean(ev.location?.url),
+    isFree: ev.offers ? !ev.offers.price || Number(ev.offers.price) === 0 : undefined,
+    price: ev.offers?.price,
+    priceCurrency: ev.offers?.priceCurrency,
+    ticketUrl: ev.offers?.url,
+    attendeeCount: ev.attendeeCount,
+    maximumAttendeeCapacity: ev.maximumAttendeeCapacity,
+  };
+}
+
+/** `{ events, count }` structured payload for the list tools. */
+function structuredList(events: AppEvent[]): Record<string, unknown> {
+  const mapped = events.map(toStructuredEvent);
+  return { events: mapped, count: mapped.length };
+}
+
+/** `{ event }` structured payload for the single-event tools. */
+function structuredOne(event: AppEvent): Record<string, unknown> {
+  return { event: toStructuredEvent(event) };
+}
+
+function htmlResult(
+  text: string,
+  html: string,
+  structuredContent?: Record<string, unknown>,
+): ToolResult {
   return {
     content: [
       { type: "text", text },
       { type: "resource", resource: { uri: HTML_URI, mimeType: "text/html", text: html } },
     ],
-    isError,
+    structuredContent,
+    isError: false,
   };
 }
 
@@ -129,12 +258,13 @@ export const TOOLS: ToolDefinition[] = [
         limit: { type: "integer", description: "Max events to return (default 12).", minimum: 1, maximum: 40 },
       },
     },
+    outputSchema: EVENT_LIST_OUTPUT_SCHEMA,
     handler: async (args, ctx) => {
       const city = str(args.city);
       const limit = num(args.limit) ?? 12;
       const events = await listEvents(ctx.env, { city, limit });
       const lead = city ? `Events near ${city}` : "Upcoming events";
-      return htmlResult(summarize(events, lead), renderEventCarousel(events, lead));
+      return htmlResult(summarize(events, lead), renderEventCarousel(events, lead), structuredList(events));
     },
   },
   {
@@ -162,6 +292,7 @@ export const TOOLS: ToolDefinition[] = [
       },
       required: ["interests"],
     },
+    outputSchema: EVENT_LIST_OUTPUT_SCHEMA,
     handler: async (args, ctx) => {
       const interests = Array.isArray(args.interests)
         ? (args.interests as unknown[]).map(str).filter((s): s is string => Boolean(s))
@@ -186,7 +317,7 @@ export const TOOLS: ToolDefinition[] = [
       }
       const events = merged.slice(0, limit);
       const lead = `Events matching ${interests.join(", ")}${city ? ` in ${city}` : ""}`;
-      return htmlResult(summarize(events, lead), renderEventCarousel(events, lead));
+      return htmlResult(summarize(events, lead), renderEventCarousel(events, lead), structuredList(events));
     },
   },
   {
@@ -207,6 +338,7 @@ export const TOOLS: ToolDefinition[] = [
       },
       required: ["eventId"],
     },
+    outputSchema: EVENT_OUTPUT_SCHEMA,
     handler: async (args, ctx) => {
       const eventId = str(args.eventId);
       if (!eventId) return errorResult("Provide an event id, slug, or short code.");
@@ -215,6 +347,7 @@ export const TOOLS: ToolDefinition[] = [
       return htmlResult(
         `${event.name} — ${event.date?.full ?? event.startDate ?? ""}`.trim(),
         renderEventCard(event),
+        structuredOne(event),
       );
     },
   },
@@ -251,6 +384,7 @@ export const TOOLS: ToolDefinition[] = [
       },
       required: ["name", "startDate"],
     },
+    outputSchema: EVENT_OUTPUT_SCHEMA,
     handler: async (args, ctx) => {
       const token = requireToken(ctx);
       const name = str(args.name);
@@ -278,7 +412,7 @@ export const TOOLS: ToolDefinition[] = [
         hostMode: "person",
       };
       const event = await createEvent(ctx.env, token, payload);
-      return htmlResult(`Created "${event.name}".`, renderEventCard(event));
+      return htmlResult(`Created "${event.name}".`, renderEventCard(event), structuredOne(event));
     },
   },
   {
@@ -310,6 +444,7 @@ export const TOOLS: ToolDefinition[] = [
       },
       required: ["eventId"],
     },
+    outputSchema: EVENT_OUTPUT_SCHEMA,
     handler: async (args, ctx) => {
       const token = requireToken(ctx);
       const eventId = str(args.eventId);
@@ -327,7 +462,7 @@ export const TOOLS: ToolDefinition[] = [
 
       const event = await updateEvent(ctx.env, token, eventId, patch);
       const verb = patch.status === "cancelled" ? "Cancelled" : "Updated";
-      return htmlResult(`${verb} "${event.name}".`, renderEventCard(event));
+      return htmlResult(`${verb} "${event.name}".`, renderEventCard(event), structuredOne(event));
     },
   },
 ];
@@ -336,11 +471,12 @@ const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 
 /** Public tool descriptors for `tools/list` (no handler). */
 export function listToolDescriptors() {
-  return TOOLS.map(({ name, title, description, inputSchema, annotations }) => ({
+  return TOOLS.map(({ name, title, description, inputSchema, outputSchema, annotations }) => ({
     name,
     title,
     description,
     inputSchema,
+    outputSchema,
     annotations,
   }));
 }

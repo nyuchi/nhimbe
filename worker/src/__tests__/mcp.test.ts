@@ -55,6 +55,16 @@ describe("MCP server — handshake", () => {
     expect(names).toContain("update_event");
   });
 
+  it("advertises an outputSchema + annotations on every tool", async () => {
+    const res = await handleMcpRequest(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" }), env);
+    const body = await json(res);
+    for (const tool of body.result.tools) {
+      expect(tool.outputSchema, `${tool.name} outputSchema`).toBeDefined();
+      expect(tool.outputSchema.type).toBe("object");
+      expect(tool.annotations.readOnlyHint, `${tool.name} readOnlyHint`).toBeTypeOf("boolean");
+    }
+  });
+
   it("answers ping", async () => {
     const res = await handleMcpRequest(rpc({ jsonrpc: "2.0", id: 3, method: "ping" }), env);
     expect((await json(res)).result).toEqual({});
@@ -120,6 +130,25 @@ describe("MCP server — tools/call", () => {
     const resource = content.find((c: { type: string }) => c.type === "resource");
     expect(resource.resource.mimeType).toBe("text/html");
     expect(resource.resource.text).toContain("Sunset Sessions");
+  });
+
+  it("events_near_me also returns structuredContent matching the outputSchema", async () => {
+    const res = await handleMcpRequest(
+      rpc({
+        jsonrpc: "2.0",
+        id: 6,
+        method: "tools/call",
+        params: { name: "events_near_me", arguments: { city: "Harare" } },
+      }),
+      env,
+    );
+    const { structuredContent } = (await json(res)).result;
+    expect(structuredContent.count).toBe(1);
+    const [event] = structuredContent.events;
+    expect(event.id).toBe("evt_1");
+    expect(event.name).toBe("Sunset Sessions");
+    expect(event.city).toBe("Harare");
+    expect(event.url).toBe("https://events.mukoko.com/events/sunset");
   });
 
   it("create_event without a bearer token is an auth error, not a crash", async () => {
