@@ -1,42 +1,67 @@
 /**
- * Canonical WorkOS AuthKit endpoint metadata.
+ * Canonical WorkOS AuthKit endpoint metadata for agent/MCP discovery.
  *
- * Derived from the SAME environment variables the bearer-token verifier uses
- * (`src/lib/auth/workos-token.ts` → `jwksUrl()`): `WORKOS_CLIENT_ID` and
- * `WORKOS_API_HOSTNAME`. Every published discovery document — the three
- * `.well-known/*` route handlers and `/auth.md` — MUST build its endpoints
- * from here rather than hardcoding a client id or host.
+ * These endpoints describe the **AuthKit OAuth 2.1 authorization server** that
+ * MCP clients run standard discovery against (RFC 8414 / RFC 9728 / OIDC
+ * Discovery). Every published discovery document — the three `.well-known/*`
+ * route handlers and `/auth.md` — MUST build its endpoints from here rather
+ * than hardcoding a host, so a single edit keeps all four coherent.
  *
- * Why this exists: WorkOS publishes JWKS signing keys *per client id*, and the
- * app fetches keys from `https://${WORKOS_API_HOSTNAME}/sso/jwks/${WORKOS_CLIENT_ID}`.
- * If discovery advertises a different client id or host than the verifier uses,
- * an agent obtains a token issued under the advertised client while the app
- * looks up keys for a different one — the token's `kid` is absent from that key
- * set and every MCP write fails with 401. Keeping discovery and verification on
- * one code path makes that drift structurally impossible.
+ * Two distinct WorkOS domains are in play, and getting them right is the whole
+ * point of this file:
  *
- * `WORKOS_API_HOSTNAME` is the WorkOS **API** domain (authorize/token/JWKS —
- * `authenticate.nyuchi.com` in production, default `api.workos.com`). This is
- * deliberately NOT the hosted-UI domain (`identity.nyuchi.com`), which serves
- * the sign-in screen, not the token/JWKS API.
+ * - `WORKOS_AUTHKIT_DOMAIN` — the hosted **AuthKit** domain
+ *   (`identity.nyuchi.com` in production). This is the OAuth 2.1 authorization
+ *   server: it serves its own self-consistent `/.well-known/oauth-authorization-server`
+ *   and hosts the `/oauth2/{authorize,token,register,jwks}` endpoints, including
+ *   **dynamic client registration** (`/oauth2/register`) and client-id metadata
+ *   documents. This is what an MCP client must be pointed at — the API domain
+ *   below serves NO authorization-server metadata (a client that follows the
+ *   RFC 9728 `authorization_servers` pointer there gets a 404 and the flow
+ *   dead-ends). So discovery advertises the AuthKit domain.
+ *
+ * - `WORKOS_API_HOSTNAME` — the WorkOS **API** domain (`authenticate.nyuchi.com`
+ *   in production; the `api.workos.com` custom-domain stand-in). This is what
+ *   the bearer-token verifier (`src/lib/auth/workos-token.ts`) fetches JWKS from
+ *   at `/sso/jwks/${WORKOS_CLIENT_ID}`.
+ *
+ * Why advertising a different host than the verifier reads is SAFE here: a WorkOS
+ * environment signs all access tokens — whether issued via the legacy
+ * User-Management flow or the OAuth 2.1 `/oauth2/token` flow — with a single
+ * environment key, and publishes that same key (identical `kid`) at BOTH the
+ * AuthKit domain's `/oauth2/jwks` and the API domain's per-client
+ * `/sso/jwks/{clientId}`. So a token minted through the OAuth2/connect-app flow
+ * the discovery documents point agents at verifies cleanly against the JWKS the
+ * app already trusts. The verifier checks signature + expiry + subject only (no
+ * `aud`/`iss` pinning), so the issuer we advertise never has to equal the host
+ * the verifier reads keys from.
  */
 
-/** WorkOS API host (authorize/token/JWKS). Mirrors `workos-token.ts`. */
+/** WorkOS API host (JWKS the verifier reads). Mirrors `workos-token.ts`. */
 export function workosApiHost(): string {
   return process.env.WORKOS_API_HOSTNAME || "api.workos.com";
 }
 
-/** WorkOS client id — the JWKS key-set selector. Empty when unset. */
+/**
+ * Hosted AuthKit domain — the OAuth 2.1 authorization server MCP clients
+ * discover and authenticate against. Defaults to the production domain; override
+ * per environment (e.g. a WorkOS-hosted `*.authkit.app` domain) via env.
+ */
+export function workosAuthkitDomain(): string {
+  return process.env.WORKOS_AUTHKIT_DOMAIN || "identity.nyuchi.com";
+}
+
+/** WorkOS client id — the JWKS key-set selector the verifier uses. Empty when unset. */
 export function workosClientId(): string {
   return process.env.WORKOS_CLIENT_ID ?? "";
 }
 
 export interface WorkosAuthMetadata {
-  /** OAuth/OIDC issuer — the API host origin. */
+  /** OAuth/OIDC issuer — the AuthKit (authorization-server) domain origin. */
   issuer: string;
   authorizationEndpoint: string;
   tokenEndpoint: string;
-  /** Per-client JWKS URL the verifier fetches keys from. */
+  /** Authorization-server JWKS URL (same signing key as the verifier's per-client JWKS). */
   jwksUri: string;
   /** Dynamic-client-registration (DCR) endpoint. */
   registrationEndpoint: string;
@@ -45,15 +70,13 @@ export interface WorkosAuthMetadata {
 
 /** The one place discovery endpoints are computed. */
 export function workosAuthMetadata(): WorkosAuthMetadata {
-  const host = workosApiHost();
-  const clientId = workosClientId();
-  const base = `https://${host}`;
+  const base = `https://${workosAuthkitDomain()}`;
   return {
     issuer: base,
-    authorizationEndpoint: `${base}/user_management/authorize`,
-    tokenEndpoint: `${base}/user_management/authenticate`,
-    jwksUri: `${base}/sso/jwks/${clientId}`,
+    authorizationEndpoint: `${base}/oauth2/authorize`,
+    tokenEndpoint: `${base}/oauth2/token`,
+    jwksUri: `${base}/oauth2/jwks`,
     registrationEndpoint: `${base}/oauth2/register`,
-    clientId,
+    clientId: workosClientId(),
   };
 }

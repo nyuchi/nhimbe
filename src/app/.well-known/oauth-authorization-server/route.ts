@@ -8,11 +8,10 @@
 
 import { workosAuthMetadata } from "@/lib/auth/workos-metadata";
 
-// force-dynamic: endpoints are derived at request time from the SAME runtime env
-// (WORKOS_CLIENT_ID / WORKOS_API_HOSTNAME) the token verifier reads, so this
-// document can never advertise a different client id or host than the app
-// actually verifies against — not even if build-time env differs or is absent.
-// The 1-hour Cache-Control below still lets CDNs/agents cache the result.
+// force-dynamic: endpoints are derived at request time from runtime env
+// (WORKOS_AUTHKIT_DOMAIN), so the document can never advertise a stale host even
+// if build-time env differs or is absent. The 1-hour Cache-Control below still
+// lets CDNs/agents cache the result.
 export const dynamic = "force-dynamic";
 
 // Small self-contained helper: JSON body + the shared discovery headers.
@@ -34,10 +33,11 @@ export async function GET(): Promise<Response> {
     authorization_endpoint: workos.authorizationEndpoint,
     token_endpoint: workos.tokenEndpoint,
     jwks_uri: workos.jwksUri,
+    registration_endpoint: workos.registrationEndpoint,
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],
-    token_endpoint_auth_methods_supported: ["client_secret_post", "none"],
+    token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic", "none"],
     scopes_supported: ["openid", "profile", "email", "offline_access"],
   });
 }
