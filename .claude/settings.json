@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'F=$(jq -r \".file_path // empty\" 2>/dev/null); if [[ \"$F\" =~ \\.(tsx?|jsx?|mjs)$ ]] && [[ \"$F\" != *node_modules* ]] && [[ \"$F\" != *worker/* ]]; then npx eslint --fix --no-warn-ignored \"$F\" 2>/dev/null; fi; exit 0'"
+            "command": "bash -c 'F=$(jq -r \".file_path // empty\" 2>/dev/null); if [[ \"$F\" =~ \\.(tsx?|jsx?|mjs)$ ]] && [[ \"$F\" != *node_modules* ]]; then npx eslint --fix --no-warn-ignored \"$F\" 2>/dev/null; fi; exit 0'"
           }
         ]
       }
