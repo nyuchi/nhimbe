@@ -44,6 +44,15 @@ describe("workos-metadata (AuthKit OAuth2 discovery)", () => {
     expect(workosAuthkitDomain()).toBe("example.authkit.app");
   });
 
+  it("normalises a WORKOS_AUTHKIT_DOMAIN supplied with a scheme and/or trailing slash", () => {
+    process.env.WORKOS_AUTHKIT_DOMAIN = "https://identity.nyuchi.com/";
+    expect(workosAuthkitDomain()).toBe("identity.nyuchi.com");
+    // and the built endpoints don't double the scheme
+    const m = workosAuthMetadata();
+    expect(m.issuer).toBe("https://identity.nyuchi.com");
+    expect(m.registrationEndpoint).toBe("https://identity.nyuchi.com/oauth2/register");
+  });
+
   it("reads the client id from WORKOS_CLIENT_ID (empty when unset)", () => {
     expect(workosClientId()).toBe("");
     process.env.WORKOS_CLIENT_ID = "client_ABC";

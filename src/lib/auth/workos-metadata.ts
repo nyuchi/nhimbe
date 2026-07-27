@@ -48,7 +48,11 @@ export function workosApiHost(): string {
  * per environment (e.g. a WorkOS-hosted `*.authkit.app` domain) via env.
  */
 export function workosAuthkitDomain(): string {
-  return process.env.WORKOS_AUTHKIT_DOMAIN || "identity.nyuchi.com";
+  const raw = process.env.WORKOS_AUTHKIT_DOMAIN || "identity.nyuchi.com";
+  // Callers prepend `https://`, so accept a value supplied with a scheme and/or
+  // trailing slash (the sibling MCP workers store it as `https://identity.nyuchi.com`)
+  // and normalise to a bare host — otherwise it would double to `https://https://…`.
+  return raw.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
 }
 
 /** WorkOS client id — the JWKS key-set selector the verifier uses. Empty when unset. */
