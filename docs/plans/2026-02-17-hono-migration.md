@@ -3,8 +3,9 @@
 > **⚠️ Archived plan — historical record (2026-02-17).** This plan targeted the
 > old standalone REST worker (`worker/src/index.ts`). That backend has since been
 > **retired**: nhimbe is now a single Next.js 16 app on Vercel with data read and
-> written server-side against MongoDB, and the `worker/` directory is now the
-> task-based `nhimbe-mcp` server (it owns no data and is not on the request path).
+> written server-side against MongoDB, and the former `worker/` directory became
+> the task-based MCP server (it owns no data and was not on the request path),
+> since extracted to its own repo (`nyuchi/mukoko-events-mcp`).
 > The Hono routing described below was never adopted as the app backend. Kept for
 > historical context only — see [`../README.md`](../README.md) and the root
 > `CLAUDE.md` for the current architecture.

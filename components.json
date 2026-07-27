@@ -18,5 +18,7 @@
     "lib": "@/lib",
     "hooks": "@/hooks"
   },
-  "registries": {}
+  "registries": {
+    "@mzizi": "https://mzizi.dev/api/v1/ui/{name}"
+  }
 }

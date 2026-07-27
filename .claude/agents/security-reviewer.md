@@ -8,11 +8,11 @@ nhimbe is a single full-stack **Next.js 16** app (App Router, React 19, TypeScri
 
 - **Data**: **MongoDB** (the Mukoko v3.1 cluster), read/written **server-side only** via the official `mongodb` driver in `src/lib/mongo/`. The layer is guarded by `import "server-only"` — the browser never connects to MongoDB. Connection is a cached `MongoClient` in `src/lib/mongo/client.ts`.
 - **Data path**: SSR-first — React Server Components read MongoDB directly; mutations go through **Server Actions** in `src/app/actions/`. The same-origin route handlers in `src/app/api/` (`nhimbe.com/api`) are a **fallback**, not the primary path.
-- **Auth**: **WorkOS AuthKit**, self-hosted UI (`src/app/auth/signin/`) talking to WorkOS's headless User Management API. Session cookies are managed by the Next.js proxy `src/proxy.ts`; `withAuth()` from `@workos-inc/authkit-nextjs` gives server components/actions the current user. Bearer access tokens (used by the MCP write endpoints) are verified via JWKS in `src/lib/auth/workos-token.ts` (issuer/audience checks).
+- **Auth**: **WorkOS AuthKit** with the hosted sign-in UI — the entry route `src/app/auth/hosted/route.ts` redirects to WorkOS and `/callback` (`src/app/callback/`) exchanges the code. Session cookies are managed by the Next.js proxy `src/proxy.ts`; `withAuth()` from `@workos-inc/authkit-nextjs` gives server components/actions the current user. Bearer access tokens (used by the MCP write endpoints) are verified via JWKS in `src/lib/auth/workos-token.ts` (issuer/audience checks).
 - **Frontend API client**: `src/lib/api.ts` — a same-origin REST client for the fallback path; `NEXT_PUBLIC_API_URL` is intentionally unset so calls hit the same origin.
 - **Storage**: Cloudflare **R2** (shared `mukoko-storage` bucket). Cover-image uploads go through `POST /api/media/upload` (WorkOS session-gated, validates image type + 4 MB) → `src/lib/r2.ts` (S3 SDK).
 - **AI**: **Shamwari** runs through the Cloudflare AI Gateway, server-side only (`src/lib/ai/gateway.ts`).
-- **MCP**: the `worker/` directory is the stateless **`nhimbe-mcp`** server at `events.mukoko.com/mcp` — it owns no data and calls the app's `/api/events*` endpoints, forwarding the caller's WorkOS bearer token. The app is the single trust boundary.
+- **MCP**: the Mukoko Events MCP server (a separate repo, `nyuchi/mukoko-events-mcp`, deployed at `events.mukoko.com/mcp`) owns no data and calls the app's `/api/events*` endpoints, forwarding the caller's WorkOS bearer token. The app is the single trust boundary.
 
 ## Review Focus Areas
 
@@ -20,7 +20,7 @@ nhimbe is a single full-stack **Next.js 16** app (App Router, React 19, TypeScri
 
 - Verify protected Server Actions and route handlers resolve the current user (`withAuth()` server-side, or bearer verification via `verifyBearer` / `verifyWorkosAccessToken` in `src/lib/auth/workos-token.ts`) before reading/writing.
 - Check that the dev auth bypass (`src/lib/auth/dev.ts`) can only engage in development, never in production.
-- Verify the fallback/anonymous user path doesn't grant unintended access (e.g. admin gating in `src/app/admin/require-admin.ts`).
+- Verify the fallback/anonymous user path doesn't grant unintended access (the admin surface now lives in the separate `nyuchi/mukoko-events-admin` app; the public app only redirects `/admin*`).
 - Check bearer JWT validation (`verifyWorkosAccessToken`) covers expiry, issuer, audience, and signature (JWKS).
 - Confirm ownership checks on mutations (e.g. a host can only manage their own event/registrations).
 

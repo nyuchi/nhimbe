@@ -76,7 +76,7 @@ The full environment-variable list and architecture reference live in **[CLAUDE.
 | Calendar | `/calendar` | Branded month view + agenda; followable calendars and ICS export |
 | Search | `/search` | Interest, place, and time search |
 | Signage / kiosk | `/signage`, `/events/[id]/kiosk` | Live event displays and on-site check-in |
-| Admin | `/admin` | Operator dashboard — a **separate app** (`admin/`); `/admin*` redirects there |
+| Admin | `/admin` | Operator dashboard — a **separate app** (`nyuchi/mukoko-events-admin`); `/admin*` redirects there |
 
 ## Working with agents
 
