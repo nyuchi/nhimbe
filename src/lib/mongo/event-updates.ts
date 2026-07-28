@@ -19,6 +19,7 @@ import { notifyAttendeesViaCampfire } from "./campfire";
 import { listUpdateSubscribers } from "./update-subscribers";
 import { sendEmail } from "@/lib/email/resend";
 import { eventUpdatePosted } from "@/lib/email/templates";
+import { SITE_URL } from "@/lib/site-url";
 import { createLogger } from "@/lib/observability";
 import type { EventDoc, EventUpdateDoc, PersonDoc } from "./types";
 
@@ -124,7 +125,7 @@ export async function writeEventUpdateForHost(
         excludePersonId: person._id,
       });
       if (recipients.length > 0) {
-        const eventUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://nhimbe.com"}/events/${event._id}`;
+        const eventUrl = `${SITE_URL}/events/${event._id}`;
         const template = eventUpdatePosted({ eventName: event.name, updateText: text, eventUrl });
         const results = await Promise.allSettled(
           recipients.map((r) =>

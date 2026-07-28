@@ -208,7 +208,7 @@ describe("generateMetadata", () => {
     expect(metadata.title).toBe("Harare Live Music - Nhimbe");
     expect(metadata.description).toBe("Every gig worth catching.");
     expect(metadata.alternates?.canonical).toBe(
-      "https://nhimbe.com/calendars/harare-live-music-abc123",
+      "https://events.mukoko.com/calendars/harare-live-music-abc123",
     );
     expect(metadata.robots).toBeUndefined();
   });

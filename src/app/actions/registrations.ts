@@ -23,6 +23,7 @@ import {
   writeThroughReservation,
 } from "@/lib/mongo/planner";
 import { ensureHostEntityForPerson, getHostContactForEntity } from "@/lib/mongo/entities";
+import { SITE_URL } from "@/lib/site-url";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { sendEmail } from "@/lib/email/resend";
 import { hostNewRegistration, registrationConfirmed } from "@/lib/email/templates";
@@ -188,7 +189,7 @@ export async function rsvpToEvent(input: RsvpActionInput): Promise<RsvpActionRes
   // because Vercel serverless may freeze the function once the response is
   // returned — fire-and-forget sends could be dropped mid-flight.
   try {
-    const eventUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://nhimbe.com"}/events/${eventId}`;
+    const eventUrl = `${SITE_URL}/events/${eventId}`;
     const eventDate = event.startDate.toLocaleString("en-US", {
       dateStyle: "full",
       timeStyle: "short",

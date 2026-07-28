@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Share2, Calendar, Download, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SITE_URL } from "@/lib/site-url";
 import {
   downloadICS,
   getGoogleCalendarUrl,
@@ -42,7 +43,7 @@ function createCalendarEvent(event: EventActionsProps["event"]): CalendarEvent {
   // Build a rich description that links back to nhimbe
   const descLines = [event.description.slice(0, 500)];
   descLines.push("");
-  descLines.push(`View event details, RSVP, and explore more: ${eventPageUrl || "https://nhimbe.com"}`);
+  descLines.push(`View event details, RSVP, and explore more: ${eventPageUrl || SITE_URL}`);
   descLines.push("Powered by Nhimbe — Together we gather, together we grow");
 
   return {

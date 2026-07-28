@@ -10,6 +10,7 @@ import {
 import { getEntityById } from "@/lib/mongo/entities";
 import { getCircleSummary } from "@/lib/mongo/circles";
 import { resolveActingPerson } from "@/lib/auth/current-person";
+import { SITE_URL } from "@/lib/site-url";
 import { CalendarView, type CalendarViewData } from "./calendar-view";
 
 /**
@@ -51,12 +52,12 @@ export async function generateMetadata({ params }: CalendarPageProps): Promise<M
     // Unlisted calendars render for anyone with the link, but stay out of
     // search indexes (mirroring their exclusion from /discover + sitemap).
     robots: calendar.visibility === "unlisted" ? { index: false } : undefined,
-    alternates: { canonical: `https://nhimbe.com/calendars/${calendar.slug}` },
+    alternates: { canonical: `${SITE_URL}/calendars/${calendar.slug}` },
     openGraph: {
       title: calendar.name,
       description,
       type: "website",
-      url: `https://nhimbe.com/calendars/${calendar.slug}`,
+      url: `${SITE_URL}/calendars/${calendar.slug}`,
       siteName: "Nhimbe",
     },
   };

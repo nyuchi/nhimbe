@@ -3,6 +3,8 @@
  * Handles all communication with the Cloudflare Workers backend
  */
 
+import { SITE_URL } from "./site-url";
+
 // Default to same-origin (Vercel route handlers) — the Cloudflare Worker is
 // being retired. Set NEXT_PUBLIC_API_URL only to point at an external API.
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -623,7 +625,9 @@ export async function createTrackedLink(data: {
 
 // Get the full tracked URL for a code
 export function getTrackedUrl(code: string): string {
-  const siteUrl = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || "https://nhimbe.com");
+  // On the client, share from whatever domain the user is on (dual-domain);
+  // on the server, fall back to the primary origin.
+  const siteUrl = typeof window !== "undefined" ? window.location.origin : SITE_URL;
   return `${siteUrl}/r/${code}`;
 }
 

@@ -123,7 +123,7 @@ describe("buildCalendarDoc", () => {
     expect(doc.followerCount).toBe(0);
     expect(doc.eventCount).toBe(0);
     expect(doc.slug).toMatch(/^harare-live-music-/);
-    expect(doc.url).toBe(`https://nhimbe.com/calendars/${doc.slug}`);
+    expect(doc.url).toBe(`https://events.mukoko.com/calendars/${doc.slug}`);
     expect(doc.description).toBe("Gigs and jam sessions around Harare.");
     expect(doc.theme).toBe("malachite");
     expect(doc.circleId).toBeNull();

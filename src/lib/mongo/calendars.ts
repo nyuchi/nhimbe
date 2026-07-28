@@ -31,6 +31,7 @@ import { WRITE_SCHEMA_VERSION, newId, slugify } from "./ids";
 import { listEvents } from "./events";
 import type { CalendarDoc, CalendarFollowDoc, CalendarVisibility, EventDoc } from "./types";
 import type { Event } from "@/lib/api";
+import { SITE_URL } from "@/lib/site-url";
 
 // ── create ───────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ export function buildCalendarDoc(input: CreateCalendarInput): CalendarDoc {
     inLanguage: "en",
     tags: [],
     translations: {},
-    url: `https://nhimbe.com/calendars/${slug}`,
+    url: `${SITE_URL}/calendars/${slug}`,
     createdAt: now,
     updatedAt: now,
   };

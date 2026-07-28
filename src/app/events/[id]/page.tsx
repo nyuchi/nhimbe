@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import type { Metadata } from "next";
 import { getEventByIdOrSlug } from "@/lib/mongo/events";
+import { SITE_URL } from "@/lib/site-url";
 import { EventDetailContent } from "./event-detail-content";
 
 interface EventDetailPageProps {
@@ -40,8 +41,8 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
     };
   }
 
-  const eventUrl = `https://nhimbe.com/events/${event.id}`;
-  const shortUrl = `https://nhimbe.com/e/${event.shortCode}`;
+  const eventUrl = `${SITE_URL}/events/${event.id}`;
+  const shortUrl = `${SITE_URL}/e/${event.shortCode}`;
   const description = `${event.name} on ${event.date.full} at ${event.location.name}, ${event.location.addressLocality}. ${event.description.slice(0, 150)}...`;
 
   // Generate dynamic OG image URL with mineral gradient
@@ -54,7 +55,7 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
     gradient: "mixed",
     type: "event",
   });
-  const ogImageUrl = `https://nhimbe.com/api/og?${ogImageParams.toString()}`;
+  const ogImageUrl = `${SITE_URL}/api/og?${ogImageParams.toString()}`;
 
   // Use cover image if available, otherwise use dynamic OG image
   const imageUrl = event.image || ogImageUrl;
@@ -109,7 +110,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     notFound();
   }
 
-  const eventUrl = `https://nhimbe.com/e/${event.shortCode}`;
+  const eventUrl = `${SITE_URL}/e/${event.shortCode}`;
 
   // JSON-LD structured data for SEO
   const jsonLd = {
@@ -140,7 +141,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     organizer: {
       "@type": "Organization",
       name: event.organizer.name,
-      url: `https://nhimbe.com/${(event.organizer.identifier || "").replace("@", "")}`,
+      url: `${SITE_URL}/${(event.organizer.identifier || "").replace("@", "")}`,
     },
     offers: event.offers?.price
       ? {

@@ -10,6 +10,7 @@
 import { getCalendarBySlug, listCalendarEventDocs } from "@/lib/mongo/calendars";
 import { buildCalendarIcs, type IcsEventInput } from "@/lib/ics";
 import { resolveEventCity } from "@/lib/mongo/event-filters";
+import { SITE_URL } from "@/lib/site-url";
 import type { EventDoc } from "@/lib/mongo/types";
 
 export const runtime = "nodejs";
@@ -39,7 +40,7 @@ function toIcsEvent(doc: EventDoc): IcsEventInput {
     end: doc.endDate ?? null,
     summary: doc.name,
     location: eventLocationText(doc),
-    url: `https://nhimbe.com/events/${doc._id}`,
+    url: `${SITE_URL}/events/${doc._id}`,
     description: doc.description ?? null,
   };
 }
