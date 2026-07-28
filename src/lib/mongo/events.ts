@@ -154,7 +154,9 @@ export async function getTrendingEvents(limit = 10): Promise<Event[]> {
  */
 export async function getEventByIdOrSlug(idOrSlug: string): Promise<Event | null> {
   const col = await eventsCollection();
-  const doc = await col.findOne({ $or: [{ _id: idOrSlug }, { slug: idOrSlug }] });
+  const doc = await col.findOne({
+    $or: [{ _id: idOrSlug }, { slug: idOrSlug }, { "mukoko.shortCode": idOrSlug }],
+  });
   if (!doc) return null;
   const [mapped] = await mapEventsWithRelations([doc]);
   return mapped ?? null;

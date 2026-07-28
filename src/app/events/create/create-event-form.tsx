@@ -158,7 +158,7 @@ export default function CreateEventForm() {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
+  const [created, setCreated] = useState<{ id: string; name: string; shortCode?: string } | null>(null);
 
   // Hosting (step 3)
   const [hostMode, setHostMode] = useState<HostMode>("person");
@@ -299,7 +299,7 @@ export default function CreateEventForm() {
   const formatDateForDisplay = () => {
     if (!eventDate) return "Select Date & Time";
     const date = new Date(eventDate);
-    return date.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" });
+    return date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   };
 
   const validateStep = useCallback(
@@ -402,7 +402,11 @@ export default function CreateEventForm() {
       });
 
       setFormTouched(false);
-      setCreated({ id: result.id, name: eventName.trim() || "Your event" });
+      setCreated({
+        id: result.id,
+        name: eventName.trim() || "Your event",
+        shortCode: result.event?.shortCode,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create event. Please try again.");
     } finally {
@@ -421,7 +425,8 @@ export default function CreateEventForm() {
           message={`${created.name} is live. Share it with your community to start getting RSVPs.`}
           primaryAction={{
             label: "View event",
-            onClick: () => router.push(`/events/${created.id}`),
+            onClick: () =>
+              router.push(created.shortCode ? `/e/${created.shortCode}` : `/events/${created.id}`),
           }}
           secondaryAction={{ label: "My events", onClick: () => router.push("/my-events") }}
         />
@@ -430,8 +435,12 @@ export default function CreateEventForm() {
   }
 
   return (
-    <div className="max-w-150 mx-auto px-4 pb-28">
-      <div className="mt-2 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+    // Full-bleed SOLID surface behind the whole wizard so nothing (page washes,
+    // entry animations, anything rendered underneath) bleeds through and
+    // distracts while creating an event.
+    <div className="min-h-dvh bg-background">
+      <div className="max-w-150 mx-auto px-4 pb-28">
+        <div className="mt-2 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
         <WizardStepIndicator currentStep={step} steps={STEPS} />
 
       {step === 1 && (
@@ -630,6 +639,7 @@ export default function CreateEventForm() {
       <DescriptionModal isOpen={showDescriptionModal} onClose={() => { setShowDescriptionModal(false); touchForm(); }} description={description} setDescription={setDescription} eventName={eventName} category={category} isOnline={isOnline} />
       <TicketingModal isOpen={showPriceModal} onClose={() => { setShowPriceModal(false); touchForm(); }} isFree={isFree} setIsFree={setIsFree} ticketUrl={ticketUrl} setTicketUrl={setTicketUrl} />
       <CapacityModal isOpen={showCapacityModal} onClose={() => { setShowCapacityModal(false); touchForm(); }} capacity={capacity} setCapacity={setCapacity} />
+      </div>
     </div>
   );
 }

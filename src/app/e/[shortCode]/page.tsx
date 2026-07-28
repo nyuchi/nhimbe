@@ -1,22 +1,16 @@
 import { redirect, notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { findEventAction, getEventsAction } from "@/app/actions/discovery";
+import { findEventAction } from "@/app/actions/discovery";
 
 interface ShortCodePageProps {
   params: Promise<{ shortCode: string }>;
 }
 
-// Generate static params for all short codes (fetched at build time)
-export async function generateStaticParams() {
-  try {
-    const response = await getEventsAction({ limit: 100 });
-    return response.events.map((event) => ({
-      shortCode: event.shortCode,
-    }));
-  } catch {
-    return [];
-  }
-}
+// Render on demand. The root layout reads request cookies (withAuth), so any
+// route that opts into static generation flips static→dynamic at runtime and
+// throws a hard 500. This route only resolves a code and redirects, so dynamic
+// rendering is the correct and only safe mode.
+export const dynamic = "force-dynamic";
 
 // Dynamic metadata for short URL sharing
 export async function generateMetadata({ params }: ShortCodePageProps): Promise<Metadata> {

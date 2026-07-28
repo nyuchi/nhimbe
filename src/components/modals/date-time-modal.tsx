@@ -44,7 +44,7 @@ export function DateTimeModal({
   today.setHours(0, 0, 0, 0);
 
   const selectedLabel = selectedDate
-    ? selectedDate.toLocaleDateString("en-US", {
+    ? selectedDate.toLocaleDateString("en-GB", {
         weekday: "long",
         day: "numeric",
         month: "long",

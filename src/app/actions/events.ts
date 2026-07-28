@@ -17,7 +17,7 @@
 
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { eventsCollection, personsCollection } from "@/lib/mongo/databases";
-import { newId, slugify, stampNew } from "@/lib/mongo/ids";
+import { newId, slugify, stampNew, shortLinkSlug } from "@/lib/mongo/ids";
 import { ensureHostEntityForPerson, getEntityById, listHostEntitiesForPerson } from "@/lib/mongo/entities";
 import { attachEventToCalendar, getCalendarById } from "@/lib/mongo/calendars";
 import { indexEventEmbedding } from "@/lib/ai/event-index";
@@ -233,6 +233,9 @@ export async function createEventForPerson(
       requiresApproval: Boolean(input.requiresApproval),
       coverGradient: input.coverGradient ?? null,
       category: input.category ?? null,
+      // Short, human-friendly share code powering /e/<code>. 7 chars from the
+      // Crockford-ish alphabet (~34 bits) — resolved by getEventByIdOrSlug.
+      shortCode: shortLinkSlug(7),
     },
   } as EventDoc;
 

@@ -59,6 +59,7 @@ import {
   getEventRegistrationsAction,
   updateRegistrationStatusAction,
   checkinRegistrationAction,
+  canManageEventAction,
 } from "@/app/actions/host-registrations";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { PairKiosk } from "../kiosk/pair-kiosk";
@@ -119,12 +120,11 @@ function ManageEventContent() {
         setEvent(eventData);
 
         if (eventData && user) {
-          // Verify ownership - check if current user is the event organizer
-          const userNameLower = user.name?.toLowerCase() || "";
-          const organizerNameLower = eventData.organizer.name.toLowerCase();
-          const ownerCheck =
-            organizerNameLower === userNameLower ||
-            eventData.organizer.identifier === `@${userNameLower.replace(/\s+/g, '')}`;
+          // Ownership is entity-centric: the acting person must be able to host
+          // through the event's host entity (founder/admin/manager/rep). Resolved
+          // server-side — a name-string comparison locked out anyone hosting via
+          // an organisation/family entity (their personal name ≠ the org name).
+          const ownerCheck = await canManageEventAction(eventData.id);
 
           setIsOwner(ownerCheck);
 
@@ -136,9 +136,9 @@ function ManageEventContent() {
               name: r.userName || "Unknown User",
               email: r.userEmail || r.userId,
               status: r.status,
-              date: new Date(r.registeredAt).toLocaleDateString("en-US", {
-                month: "short",
+              date: new Date(r.registeredAt).toLocaleDateString("en-GB", {
                 day: "numeric",
+                month: "short",
                 year: "numeric",
               }),
               avatar: (r.userName || "U")
