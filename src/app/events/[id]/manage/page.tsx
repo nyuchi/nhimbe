@@ -89,6 +89,11 @@ function ManageEventContent() {
   const params = useParams();
   const router = useRouter();
   const { user, accessToken, getAccessToken } = useAuth();
+  // Stable identity for the data-loading effect. Depending on the whole `user`
+  // object re-ran the fetch on every render (new object reference each time),
+  // which re-fetched the event + registrations constantly and made the page
+  // feel like it reloaded on every interaction.
+  const userId = user?.id ?? null;
   const { toast } = useToast();
 
   // Helper: lazily fetch a fresh JWT for each write so an idle tab doesn't
@@ -119,7 +124,7 @@ function ManageEventContent() {
         const eventData = await findEventAction(params.id as string);
         setEvent(eventData);
 
-        if (eventData && user) {
+        if (eventData && userId) {
           // Ownership is entity-centric: the acting person must be able to host
           // through the event's host entity (founder/admin/manager/rep). Resolved
           // server-side — a name-string comparison locked out anyone hosting via
@@ -159,7 +164,7 @@ function ManageEventContent() {
       }
     }
     fetchData();
-  }, [params.id, user]);
+  }, [params.id, userId]);
 
   if (loading) {
     return (
@@ -608,9 +613,10 @@ function ManageEventContent() {
               Invite Guests
             </Button>
             <Button asChild variant="secondary" className="gap-2">
-              <Link href={`/events/${event.id}/kiosk/host`}>
+              <Link href={`/events/${event.id}/kiosk/host`} target="_blank" rel="noopener noreferrer">
                 <QrCode className="w-4 h-4" />
                 Check In Guests
+                <ExternalLink className="w-3.5 h-3.5" aria-hidden />
               </Link>
             </Button>
             <Button variant="secondary" className="gap-2">

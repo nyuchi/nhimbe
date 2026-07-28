@@ -4,9 +4,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // org-membership mirror can be unit-tested with fake collections.
 vi.mock("server-only", () => ({}));
 
-const entities = { findOne: vi.fn(), findOneAndUpdate: vi.fn(), insertOne: vi.fn() };
+const entities = {
+  findOne: vi.fn(),
+  findOneAndUpdate: vi.fn(),
+  insertOne: vi.fn(),
+  find: vi.fn(),
+};
 const memberships = { updateOne: vi.fn(), insertOne: vi.fn(), find: vi.fn() };
 const persons = { findOne: vi.fn(), updateOne: vi.fn(), findOneAndUpdate: vi.fn() };
+
+/** A minimal Mongo cursor stand-in returning `arr` from `.toArray()`. */
+function cursor<T>(arr: T[]) {
+  return { toArray: async () => arr };
+}
 
 vi.mock("@/lib/mongo/databases", () => ({
   entitiesCollection: vi.fn(async () => entities),
@@ -16,9 +26,14 @@ vi.mock("@/lib/mongo/databases", () => ({
 
 import {
   buildWorkosMembershipWrite,
+  canManageHostEntity,
   endWorkosOrganizationMembership,
   ensureEntityForWorkosOrg,
+  getPersonHostRoleForEntity,
+  listHostEntitiesWithRoleForPerson,
   mirrorWorkosOrganizationMembership,
+  renameHostEntityForPerson,
+  setDefaultHostEntityForPerson,
   workosRoleToMembershipRole,
 } from "./entities";
 
@@ -209,5 +224,142 @@ describe("endWorkosOrganizationMembership", () => {
     expect(update.$set.endedAt).toBeInstanceOf(Date);
     // Deleting a membership that was never mirrored must not create a row.
     expect(options?.upsert).toBeUndefined();
+  });
+});
+
+// ── Entity management (account preferences) ────────────────────────────
+
+describe("canManageHostEntity", () => {
+  it("allows manage-level roles on a family entity", () => {
+    expect(canManageHostEntity("founder", "family")).toBe(true);
+    expect(canManageHostEntity("admin", "family")).toBe(true);
+    expect(canManageHostEntity("manager", "family")).toBe(true);
+  });
+
+  it("denies non-manage roles even on a family entity", () => {
+    expect(canManageHostEntity("representative", "family")).toBe(false);
+    expect(canManageHostEntity("member", "family")).toBe(false);
+  });
+
+  it("denies every role on a non-family (WorkOS-owned) entity", () => {
+    expect(canManageHostEntity("founder", "organization")).toBe(false);
+    expect(canManageHostEntity("admin", "organization")).toBe(false);
+  });
+});
+
+describe("listHostEntitiesWithRoleForPerson", () => {
+  it("returns each hostable entity paired with the person's highest role", async () => {
+    memberships.find.mockReturnValue(
+      cursor([
+        { entityId: "e1", membershipRole: "manager" },
+        { entityId: "e1", membershipRole: "founder" },
+        { entityId: "e2", membershipRole: "representative" },
+      ]),
+    );
+    entities.find.mockReturnValue(
+      cursor([
+        { _id: "e1", name: "Family", entityType: "family" },
+        { _id: "e2", name: "Org", entityType: "organization" },
+      ]),
+    );
+
+    const rows = await listHostEntitiesWithRoleForPerson("person-1");
+    const byId = Object.fromEntries(rows.map((r) => [r.entity._id, r.role]));
+    // founder outranks manager on e1.
+    expect(byId.e1).toBe("founder");
+    expect(byId.e2).toBe("representative");
+
+    const [filter] = memberships.find.mock.calls[0];
+    expect(filter).toMatchObject({ personId: "person-1", isActive: true });
+  });
+
+  it("returns [] when the person hosts through nothing", async () => {
+    memberships.find.mockReturnValue(cursor([]));
+    const rows = await listHostEntitiesWithRoleForPerson("person-1");
+    expect(rows).toEqual([]);
+    expect(entities.find).not.toHaveBeenCalled();
+  });
+});
+
+describe("getPersonHostRoleForEntity", () => {
+  it("returns the highest active hostable role on the entity", async () => {
+    memberships.find.mockReturnValue(
+      cursor([
+        { membershipRole: "manager" },
+        { membershipRole: "admin" },
+      ]),
+    );
+    expect(await getPersonHostRoleForEntity("p1", "e1")).toBe("admin");
+  });
+
+  it("returns null when the person holds no hostable membership", async () => {
+    memberships.find.mockReturnValue(cursor([]));
+    expect(await getPersonHostRoleForEntity("p1", "e1")).toBeNull();
+  });
+});
+
+describe("renameHostEntityForPerson", () => {
+  it("renames a family entity for a manage-level member, regenerating the slug", async () => {
+    entities.findOne.mockResolvedValue({ _id: "e1", entityType: "family", name: "Old" });
+    memberships.find.mockReturnValue(cursor([{ membershipRole: "founder" }]));
+    entities.findOneAndUpdate.mockResolvedValue({ _id: "e1", name: "New name" });
+
+    await renameHostEntityForPerson({ personId: "p1", entityId: "e1", name: "  New name  " });
+
+    const [filter, update, options] = entities.findOneAndUpdate.mock.calls[0];
+    expect(filter).toEqual({ _id: "e1" });
+    expect(update.$set.name).toBe("New name");
+    expect(update.$set.slug).toMatch(/^new-name-/);
+    expect(update.$set.updatedAt).toBeInstanceOf(Date);
+    expect(options).toMatchObject({ returnDocument: "after" });
+  });
+
+  it("rejects a rename on an organisation entity (read-only here)", async () => {
+    entities.findOne.mockResolvedValue({ _id: "e2", entityType: "organization", name: "Org" });
+    memberships.find.mockReturnValue(cursor([{ membershipRole: "admin" }]));
+
+    await expect(
+      renameHostEntityForPerson({ personId: "p1", entityId: "e2", name: "Hacked" }),
+    ).rejects.toThrow(/permission/i);
+    expect(entities.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a rename from a non-manage member", async () => {
+    entities.findOne.mockResolvedValue({ _id: "e1", entityType: "family", name: "Fam" });
+    memberships.find.mockReturnValue(cursor([{ membershipRole: "representative" }]));
+
+    await expect(
+      renameHostEntityForPerson({ personId: "p1", entityId: "e1", name: "Nope" }),
+    ).rejects.toThrow(/permission/i);
+    expect(entities.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty name", async () => {
+    await expect(
+      renameHostEntityForPerson({ personId: "p1", entityId: "e1", name: "   " }),
+    ).rejects.toThrow(/name is required/i);
+  });
+});
+
+describe("setDefaultHostEntityForPerson", () => {
+  it("writes bundu.defaultFamilyEntityId when the person hosts through the entity", async () => {
+    memberships.find.mockReturnValue(cursor([{ membershipRole: "founder" }]));
+    persons.updateOne.mockResolvedValue({ acknowledged: true });
+
+    await setDefaultHostEntityForPerson({ personId: "p1", entityId: "e1" });
+
+    const [filter, update] = persons.updateOne.mock.calls[0];
+    expect(filter).toEqual({ _id: "p1" });
+    expect(update.$set["bundu.defaultFamilyEntityId"]).toBe("e1");
+    expect(update.$set.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it("refuses to default to an entity the person cannot host through", async () => {
+    memberships.find.mockReturnValue(cursor([]));
+
+    await expect(
+      setDefaultHostEntityForPerson({ personId: "p1", entityId: "e1" }),
+    ).rejects.toThrow(/host through/i);
+    expect(persons.updateOne).not.toHaveBeenCalled();
   });
 });

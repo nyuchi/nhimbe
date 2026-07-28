@@ -20,6 +20,7 @@ import {
   HelpCircle,
   ExternalLink,
   KeyRound,
+  Building2,
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { useT } from "@/lib/i18n/i18n-provider";
@@ -113,6 +114,7 @@ function ProfileContent() {
     {
       section: "Account",
       items: [
+        { icon: Building2, label: "Host Entities", href: "/profile/entities" },
         {
           icon: KeyRound,
           label: "Change password",
