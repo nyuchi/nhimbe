@@ -20,6 +20,7 @@ import {
   HelpCircle,
   ExternalLink,
   KeyRound,
+  MessageSquareWarning,
   Building2,
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
@@ -30,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProfileBadges } from "@/components/ui/profile-badges";
 import { NyuchiProfileBlock } from "@/components/ui/nyuchi-profile-block";
+import { useFeedback } from "@/components/feedback/feedback-provider";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 
 type MenuItem = {
@@ -55,6 +57,7 @@ function ProfileContent() {
   const { theme, cycleTheme, resolvedTheme } = useTheme();
   const { locale } = useT();
   const { user, signOut, profileCompleteness } = useAuth();
+  const { open: openFeedback } = useFeedback();
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   const dialogRef = useFocusTrap<HTMLDivElement>({
@@ -133,6 +136,7 @@ function ProfileContent() {
       section: "Support",
       items: [
         { icon: HelpCircle, label: "Help center", href: "/help" },
+        { icon: MessageSquareWarning, label: "Send feedback", onClick: () => openFeedback() },
         { icon: Shield, label: "Privacy policy", href: "/privacy" },
       ],
     },

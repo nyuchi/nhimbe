@@ -194,3 +194,46 @@ export function registrationCancelled(data: {
     text: `Hi ${data.userName},\n\nYour registration for ${data.eventName} (${data.eventDate}) has been cancelled.\n\n— Nhimbe`,
   };
 }
+
+// User feedback / error report → support inbox
+export function feedbackReceived(data: {
+  category: string;
+  message: string;
+  path?: string;
+  userAgent?: string;
+  errorDigest?: string;
+  reporter?: string;
+}): TemplateResult {
+  const safeMessage = escapeHtml(data.message).replace(/\n/g, "<br>");
+  const rows: string[] = [
+    `<p class="detail"><strong>Category:</strong> ${escapeHtml(data.category)}</p>`,
+    `<p class="detail"><strong>Reporter:</strong> ${escapeHtml(data.reporter || "Anonymous")}</p>`,
+  ];
+  if (data.path) rows.push(`<p class="detail"><strong>Path:</strong> ${escapeHtml(data.path)}</p>`);
+  if (data.errorDigest)
+    rows.push(`<p class="detail"><strong>Error digest:</strong> ${escapeHtml(data.errorDigest)}</p>`);
+  if (data.userAgent)
+    rows.push(`<p class="detail"><strong>User agent:</strong> ${escapeHtml(data.userAgent)}</p>`);
+
+  const textLines = [
+    `Category: ${data.category}`,
+    `Reporter: ${data.reporter || "Anonymous"}`,
+    data.path ? `Path: ${data.path}` : null,
+    data.errorDigest ? `Error digest: ${data.errorDigest}` : null,
+    data.userAgent ? `User agent: ${data.userAgent}` : null,
+    "",
+    data.message,
+  ].filter((l): l is string => l !== null);
+
+  return {
+    subject: `New ${data.category} feedback from Nhimbe`,
+    html: wrapHtml(`
+      <div class="content">
+        <p class="event-name">New feedback</p>
+        ${rows.join("\n        ")}
+        <p style="margin: 16px 0 0; font-size: 15px;">${safeMessage}</p>
+      </div>
+    `),
+    text: `${textLines.join("\n")}\n\n— Nhimbe`,
+  };
+}
