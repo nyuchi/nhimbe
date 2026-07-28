@@ -40,7 +40,7 @@ export function DescriptionModal({
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Describe your event..."
           rows={6}
-          className="w-full px-4 py-3 bg-surface rounded-xl border-none outline-none resize-none text-base"
+          className="w-full px-4 py-3 bg-surface text-foreground placeholder:text-text-tertiary rounded-xl border border-border outline-none focus-visible:ring-2 focus-visible:ring-ring/50 resize-none text-base"
         />
         <p className="text-xs text-text-tertiary">
           Tip: Click &quot;Ask Shamwari&quot; to let our AI friend help write your description

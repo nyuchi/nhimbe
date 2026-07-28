@@ -1,12 +1,21 @@
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import type { Metadata } from "next";
-import { getEventByIdOrSlug, listEvents } from "@/lib/mongo/events";
+import { getEventByIdOrSlug } from "@/lib/mongo/events";
 import { EventDetailContent } from "./event-detail-content";
 
 interface EventDetailPageProps {
   params: Promise<{ id: string }>;
 }
+
+// The root layout reads request cookies via `withAuth()` (WorkOSProvider), which
+// makes every route in the app dynamic. This page must therefore render on demand
+// too — opting into static generation (a bare `generateStaticParams`) makes Next
+// prerender it as SSG, then the runtime cookie read flips it static→dynamic and
+// throws "Page changed from static to dynamic at runtime" (HTTP 500). Force
+// dynamic so the SEO/detail render always runs per-request, consistent with
+// `/events` and the rest of the app.
+export const dynamic = "force-dynamic";
 
 // Direct Mongo read on the server — events created via the createEvent server
 // action are immediately visible here (no dependency on NEXT_PUBLIC_API_URL /
@@ -19,19 +28,6 @@ const loadEvent = cache(async (id: string) => {
     return null;
   }
 });
-
-// Generate static params for upcoming events (fetched at build time; empty
-// when the cluster isn't reachable from the build, e.g. CI).
-export async function generateStaticParams() {
-  try {
-    const { events } = await listEvents({ limit: 100 });
-    return events.map((event) => ({
-      id: event.id,
-    }));
-  } catch {
-    return [];
-  }
-}
 
 // Dynamic OpenGraph metadata
 export async function generateMetadata({ params }: EventDetailPageProps): Promise<Metadata> {

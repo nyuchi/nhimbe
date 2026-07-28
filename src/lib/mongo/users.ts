@@ -41,9 +41,16 @@ export interface AppUser {
   suspended: boolean;
   /** Event-update notifications (opt-out; absent on the doc means ON). */
   subscribedToEventUpdates?: boolean;
+  /** Preferred UI language — "en" (default) or "sn" (Shona). Mirrors the OIDC
+   *  `locale` claim on the person doc; unknown/absent values fall back to "en". */
+  locale: AppLocale;
 }
 
+export type AppLocale = "en" | "sn";
+
 const KNOWN_ROLES: ReadonlySet<string> = new Set(["user", "moderator", "admin", "super_admin"]);
+
+const KNOWN_LOCALES: ReadonlySet<string> = new Set(["en", "sn"]);
 
 export function mapPersonToAppUser(doc: PersonDoc): AppUser {
   return {
@@ -65,6 +72,8 @@ export function mapPersonToAppUser(doc: PersonDoc): AppUser {
     suspended: doc.isActive === false,
     // Opt-out preference: only an explicit false means unsubscribed.
     subscribedToEventUpdates: doc.mukoko?.notifications?.eventUpdates !== false,
+    // Preferred language — validated against the known set, English by default.
+    locale: doc.locale && KNOWN_LOCALES.has(doc.locale) ? (doc.locale as AppLocale) : "en",
   };
 }
 

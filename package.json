@@ -2,9 +2,6 @@
   "name": "nhimbe",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "admin"
-  ],
   "scripts": {
     "dev": "next dev -p 11825",
     "build": "next build",

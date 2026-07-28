@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Nhimbe** (pronounced /ˈnhimbɛ/) — community events discovery and management platform, part of the Mukoko ecosystem. It is a single full-stack **Next.js 16** app (App Router, React 19, TypeScript strict, Tailwind v4) deployed on **Vercel** — there is no separate application backend. Data lives in **MongoDB** (the Mukoko v3.1 cluster) and is read/written **server-side only** via the official `mongodb` driver. Auth is **WorkOS AuthKit** end-to-end. AI ("Shamwari") runs through the **Cloudflare AI Gateway**; media is stored in **Cloudflare R2**.
 
-Worker note: the `worker/` directory is now the **`nhimbe-mcp`** server — a task-based MCP at `events.mukoko.com/mcp` (canonical; `nhimbe.com/mcp` stays live as a legacy route) and the only thing that runs on Cloudflare Workers. It is **not** part of the app request path (feature work lives in `src/`); see "Nhimbe MCP" below.
+MCP note: the **Mukoko Events MCP** server — a task-based MCP served **only** at `events.mukoko.com/mcp` — now lives in its **own repo, `nyuchi/mukoko-events-mcp`** (it was extracted from this repo's former `worker/` directory in issue #100). It is **not** part of the app request path (feature work lives in `src/`); it calls the app's public `/api/events*` endpoints and forwards WorkOS bearer tokens for writes. The distributable consumer surfaces (Claude Code plugin, marketplace, ChatGPT connector, and the consumer Agent Skills) travel with that repo.
 
-Admin note: the admin dashboard — **Mukoko Events Admin** — is a **separate Next.js app in `admin/`**, deployed as its **own Vercel project** (root directory `admin`, canonical domain `admin.events.mukoko.com`; `admin.nhimbe.com` stays as a legacy alias). The public app has **no `/admin` routes** — `/admin*` redirects there. See "Nhimbe admin" below.
+Admin note: the admin dashboard — **Mukoko Events Admin** — is a **separate Next.js app in its own repo, `nyuchi/mukoko-events-admin`** (extracted in issue #100), deployed as its **own Vercel project** (canonical domain `admin.events.mukoko.com`; `admin.nhimbe.com` stays as a legacy alias). The public app has **no `/admin` routes** — `/admin*` redirects there (see the `ADMIN_URL` redirect in `next.config.ts`).
 
 ## Build & Dev Commands
 
@@ -24,14 +24,11 @@ npm run test         # Watch mode
 npm run test:run     # Run once (~694 tests)
 npm run test:coverage
 npx vitest run src/lib/api.test.ts   # Single test file
-
-# Admin app (npm workspace — install always runs at the repo root)
-cd admin
-npm run dev          # Admin dev server at http://localhost:11826
-npm run build        # Standalone production build
-npm run lint
-npm run test:run     # Admin vitest suite
 ```
+
+The Mukoko Events MCP server (`nyuchi/mukoko-events-mcp`) and the Mukoko Events
+Admin app (`nyuchi/mukoko-events-admin`) are separate repos with their own
+build/dev/test commands — they are no longer part of this repo.
 
 Database: MongoDB collections/validators are owned by the Mukoko platform, not this repo. Nhimbe only reads/writes documents via the `mongodb` driver (`src/lib/mongo/`). There are no migrations in this repo.
 
@@ -40,7 +37,7 @@ Database: MongoDB collections/validators are owned by the Mukoko platform, not t
 GitHub Actions:
 
 - **`lint.yml`** — org reusable lint workflow (actionlint, JSON validity, prettier, markdownlint, yamllint).
-- **`ci.yml`** — Lint & Build (`npm run lint` + `npm run build` with placeholder env vars) and Frontend Tests (`npm run test:run`). Admin jobs (`Admin Lint & Build`, `Admin Tests`) cover the `admin/` app via `npm run <script> --workspace=admin` after a root `npm ci`. Worker jobs cover the `nhimbe-mcp` server in `worker/` (its own vitest suite).
+- **`ci.yml`** — Lint & Build (`npm run lint` + `npm run build` with placeholder env vars) and Frontend Tests (`npm run test:run`). Covers the public Nhimbe app only; the Mukoko Events MCP server and Admin app have their own CI in their own repos.
 - **CodeQL** — security scanning.
 
 Vercel builds and deploys every commit (preview per branch, production on `main`).
@@ -74,7 +71,7 @@ Connection lives in `client.ts` — a cached `MongoClient` (no caching of reject
 | `stats.ts`              | Aggregated analytics                                                    |
 | `kiosk.ts`              | Kiosk/device pairing                                                    |
 | `host-registrations.ts` | Host-side registration reads                                            |
-| `admin.ts`              | Admin dashboard queries (consumed by the standalone `admin/` app)      |
+| `admin.ts`              | Admin dashboard queries (consumed by the standalone `nyuchi/mukoko-events-admin` app) |
 | `admin-types.ts`        | Client-safe admin row/tile types (no `server-only`)                     |
 | `settings.ts`           | `system.platformSettings` singleton (Nhimbe-owned platform config)     |
 | `entities.ts`           | Host entities and memberships                                           |
@@ -114,7 +111,7 @@ Mutations and client-invoked reads: `auth`, `events`, `event-updates`, `discover
 
 Same-origin fallback endpoints: `events`, `events/[id]` (both also take bearer-authed `POST`/`PATCH` for the MCP), `categories`, `cities`, `community/stats`, `og` (OG image), `media/upload` (WorkOS-gated cover-image upload to R2), `webhooks/workos` (guaranteed user provisioning — see Authentication Flow), and `auth/dev-login` (local dev bypass only). Auth itself is handled by the hosted-AuthKit entry route `/auth/hosted` (redirects to WorkOS) and `/callback` — see the Authentication Flow section.
 
-**Agent-readiness discovery** — three static `.well-known` route handlers (`src/app/.well-known/*/route.ts`, all `force-static`, `Access-Control-Allow-Origin: *`) mirror the WorkOS AuthKit metadata from the Nhimbe origin so MCP agents/clients can run standard discovery: `oauth-authorization-server` (RFC 8414 — authorize/token/JWKS endpoints), `oauth-protected-resource` (RFC 9728 — Nhimbe as resource server, pointing at `/auth.md`), and `openid-configuration` (OIDC Discovery 1.0, RS256). WorkOS remains the real authorization server; these endpoints just advertise it.
+**Agent-readiness discovery** — three `.well-known` route handlers (`src/app/.well-known/*/route.ts`, all `force-dynamic`, `Access-Control-Allow-Origin: *`) advertise the **WorkOS AuthKit OAuth 2.1 authorization server** (`identity.nyuchi.com/oauth2/*`) from the Nhimbe origin so MCP agents/clients can run standard discovery: `oauth-authorization-server` (RFC 8414 — authorize/token/JWKS **plus the DCR `registration_endpoint`**), `oauth-protected-resource` (RFC 9728 — Nhimbe as resource server, pointing at `/auth.md`; its `resource` is derived from the request host so the doc self-identifies correctly whether served on `nhimbe.com` or `events.mukoko.com`), and `openid-configuration` (OIDC Discovery 1.0, RS256). All four surfaces (these three + `/auth.md`) derive their endpoints from the single helper `src/lib/auth/workos-metadata.ts` (`WORKOS_AUTHKIT_DOMAIN`, default `identity.nyuchi.com`) — the AuthKit domain that serves its own self-consistent metadata and DCR. This is deliberately **not** the API domain in the RFC 9728 `authorization_servers` pointer: `authenticate.nyuchi.com` serves no authorization-server metadata (a client following a pointer there 404s and the flow dead-ends). WorkOS remains the real authorization server; these endpoints just advertise it. The bearer-token **verifier** (`workos-token.ts`) independently reads JWKS from the **API** domain (`WORKOS_API_HOSTNAME` → `/sso/jwks/{clientId}`); advertising the AuthKit domain while verifying against the API domain is safe because a WorkOS environment signs every access token with one key, published (identical `kid`) at both hosts, and the verifier pins only signature + expiry + subject.
 
 ### Authentication Flow (WorkOS AuthKit — hosted UI)
 
@@ -151,27 +148,18 @@ Env: `SHAMWARI_AI_GATEWAY_URL`, `SHAMWARI_AI_GATEWAY_TOKEN`, and optional `SHAMW
 
 Media lives in the **shared** Mukoko bucket `mukoko-storage`, served at `assets-s001.mukoko.com` (`getMediaUrl` in `src/lib/api.ts`, overridable via `NEXT_PUBLIC_ASSETS_URL`) — **not** a per-app silo. Reads need no credentials. **Uploads** (event cover images) go through `POST /api/media/upload` (WorkOS session-gated; validates image type + 4 MB) which writes to `mukoko-storage` via `src/lib/r2.ts` (the AWS S3 SDK pointed at the R2 endpoint). Uploads need an R2 S3 API token — `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (defaults to `mukoko-storage`); when unset the route returns 503 and the create-event form falls back to a gradient cover.
 
-### Nhimbe MCP (`worker/` → `nhimbe-mcp`)
+### Mukoko Events MCP (separate repo: `nyuchi/mukoko-events-mcp`)
 
-The `worker/` directory is now a single-purpose **task-based MCP server** (`nhimbe-mcp`) — the legacy REST backend, Supabase reads, Paynow, Resend email and queues were all stripped out. It is a stateless Streamable-HTTP MCP server (JSON-RPC 2.0, fetch-native, `hono`; no data of its own) deployed at **`events.mukoko.com/mcp/*`** (canonical, on the mukoko.com zone; the legacy `nhimbe.com/mcp/*` routes stay live) — both zones are Cloudflare-proxied (orange cloud) in front of Vercel, and the Worker route intercepts `/mcp/*` while everything else passes through to the app. `events.mukoko.com` is Nhimbe's alternative domain.
+The task-based MCP server that ships to agents at **`events.mukoko.com/mcp`** lives in its **own repo, `nyuchi/mukoko-events-mcp`** (extracted from this repo's former `worker/` directory in issue #100, along with its distribution surfaces — the Claude Code plugin, the `.claude-plugin/marketplace.json`, the ChatGPT connector, and the consumer Agent Skills). It owns no data: every tool calls the Nhimbe app API — reads hit the public `/api/events*` endpoints; writes hit `POST /api/events` / `PATCH /api/events/:id`, forwarding the caller's WorkOS **bearer** token. **The app is the single trust boundary** — it verifies the token (`src/lib/auth/workos-token.ts` → JWKS). Nhimbe's only responsibility here is to keep those API endpoints and the `.well-known` / `auth.md` agent-discovery surfaces stable; the tool definitions, protocol handling, and deploy all live in the MCP repo.
 
-- **Tools** (`worker/src/mcp/`): `events_near_me`, `events_matching_interests`, `get_event` (anonymous reads) and `create_event`, `update_event` (WorkOS-gated). Each returns **inline HTML** — a carousel for multiple events, a single card for one — plus a text fallback.
-- **No data ownership.** Every tool calls the Nhimbe app API (`APP_API_URL`, `https://nhimbe.com`). Reads hit the public `/api/events*` endpoints; writes hit `POST /api/events` / `PATCH /api/events/:id`, which the worker reaches by forwarding the caller's WorkOS **bearer** token. The app verifies the token (`src/lib/auth/workos-token.ts` → JWKS) and is the single trust boundary. **No autonomous/agent tools yet** — deliberately future work.
+Cloudflare is otherwise used only for R2 storage and the Shamwari AI Gateway. Transactional email runs **on the app** (`src/lib/email/`, Resend). Supabase, PostgREST, and any dependency on `api.mukoko.com` were removed from the app.
 
-Cloudflare is otherwise used only for R2 storage and the Shamwari AI Gateway. Transactional email now runs **on the app** (`src/lib/email/`, Resend) — the worker no longer sends mail. Supabase, PostgREST, and any dependency on `api.mukoko.com` have been removed from the app.
+## Mukoko Events Admin (separate repo: `nyuchi/mukoko-events-admin`)
 
-## Nhimbe admin (`admin/` → separate Vercel project)
+The admin dashboard — **Mukoko Events Admin** — is a **standalone Next.js app in its own repo, `nyuchi/mukoko-events-admin`** (extracted in issue #100), deployed as its **own Vercel project** (canonical domain `admin.events.mukoko.com`; `admin.nhimbe.com` is a legacy alias). The public app ships **no admin surface** — `next.config.ts` redirects `/admin*` to the admin app (`ADMIN_URL`, default `https://admin.events.mukoko.com`; `/admin/users` maps to `/people`), and `src/__tests__/admin-redirect.test.ts` guards that redirect.
 
-The admin dashboard is a **standalone Next.js 16 app in `admin/`**, deployed as its **own Vercel project** (root directory `admin`, domain `admin.nhimbe.com`). The public app ships **no admin surface** — `next.config.ts` redirects `/admin*` to the admin app (`ADMIN_URL`, default `https://admin.nhimbe.com`; `/admin/users` maps to `/people`).
-
-- **Share, don't duplicate.** The repo root is an **npm workspace root** (`"workspaces": ["admin"]` — one hoisted `node_modules`, one lockfile; install always runs at the repo root). The admin app's tsconfig maps `@/*` → `../src/*`, so it imports the root Mongo layer (`src/lib/mongo/admin.ts`, `admin-types.ts`, `settings.ts`, `users.ts`, …), the nyuchi/Mukoko UI components and `src/app/globals.css` unchanged; `@admin/*` → its own `admin/src/*`. `outputFileTracingRoot` + `turbopack.root` point at the repo root so Vercel traces files outside the app dir; the admin `globals.css` registers `../src` as a Tailwind v4 `@source`. Admin-only code (shell, gate, section clients, actions) lives in `admin/src/`.
-- **Gate** — `admin/src/lib/require-admin.ts` preserves the old `src/app/admin/require-admin.ts` contract on **every route, server-side**: AuthKit `withAuth({ ensureSignedIn: true })` (anonymous → hosted sign-in with return path) → nyuchi org-membership gate (below) → `identity.persons` lookup → `resolveAdminGate` → role tier; denials land on `/denied`. Suspension is keyed on **activation, not a role literal** — `resolveAdminGate` denies when `isActive === false` (or the derived `suspended` flag) whatever role the account still carries; lookup failures are denied too. Shell layout **and** every `(admin)` page gate at `admin` (no moderator-accessible surface — settings at `super_admin`); the shell's role prop only drives locked-nav affordances. Granting admin/super_admin roles — **and suspending/reactivating an already-elevated account** — requires super_admin (enforced in the server actions `setUserRole`/`suspendUser`/`activateUser`).
-- **Nyuchi entity-membership scoping** (`admin/src/lib/nyuchi-membership.ts`) — layered on top of the role gate, grounded in the platform's **own RBAC** (`entity.memberships`) with WorkOS as authentication-only (no per-request WorkOS API call): every requester must hold an **active staff membership on the Nyuchi entity**, else denied (→ `/denied`) **regardless of role** (membership is *necessary*, not *sufficient*). The allowed entity is resolved from **`NYUCHI_ADMIN_ENTITY_ID`** when set (preferred — precise, no lookup), otherwise by the `nyuchi-africa` slug in `entity.entities` (cached per process, positives only). Membership is an `entity.memberships` row for (personId, entityId) with `isActive: true` and a **staff** `membershipRole` (founder/admin/manager/representative/member — follower/contributor/kin do not pass); keyed on `personId`, so it runs **after** the `identity.persons` lookup. **Fail closed** — an unresolvable entity or any cluster error denies. The `/denied` re-auth builds `getSignInUrl({ organizationId })` from `WORKOS_ADMIN_ORG_ID` when set, so the hosted sign-in screen is org-scoped (a pure UX hint; the server gate is the enforcement).
-- **Auth plumbing** — its own `proxy.ts` (503s everything on missing WorkOS env — no anonymous surface) and `/callback` (`handleAuth`), so the project needs its **own** `NEXT_PUBLIC_WORKOS_REDIRECT_URI` (`https://admin.nhimbe.com/callback`) registered in the same WorkOS environment.
-- **Sections** — Overview (hero RSVP stat + mineral stat tiles), Events (search/filter, publish/cancel/archive, `mukoko.featured` toggle), People (roles + suspension), Entities (+ memberships drill-down), Circles (visibility/member counts, read-only), Calendars (visibility/follower counts), Support (stub queue), Signage (kiosk wall), Settings (`system.platformSettings`). **Suspension is decoupled from role**: suspend writes `isActive: false` only and reactivate writes `isActive: true` only — neither touches `role`, so an account keeps its real role across a suspend/reactivate cycle (the People badge derives "suspended" from `isActive` via `userStatus`).
-- **Input validation** — admin server actions runtime-validate their inputs (types are erased at runtime): ids must be non-empty strings, `role` must be an assignable enum, `featured` a boolean; the shared read filters (`listAdminUsers`, siblings) coerce `limit`/`offset` to bounded integers and constrain `role`/`search` to typed values, so a crafted client cannot inject Mongo operator objects (`{$ne:null}`, `{$gt:""}`).
-- **Mongo admin reads** stay in the shared `src/lib/mongo/admin.ts`; the client-safe row types live in `src/lib/mongo/admin-types.ts` (no `server-only` — the admin app's client tables import them).
-- Deploy/env details: `admin/README.md`.
+- **Shared Mongo read layer stays here.** The admin app's admin *reads* are the shared `src/lib/mongo/admin.ts` (server-only) with client-safe row types in `src/lib/mongo/admin-types.ts` (no `server-only`); these remain in this repo and are consumed by the admin app. The admin gate, section shells, server actions, and its own auth plumbing (`proxy.ts`, `/callback`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI`, the nyuchi entity-membership scoping via `NYUCHI_ADMIN_ENTITY_ID` / `WORKOS_ADMIN_ORG_ID`) all live in the admin repo.
+- Deploy/env details live in the admin repo's README.
 
 ## Frontend Structure
 
@@ -179,7 +167,7 @@ The admin dashboard is a **standalone Next.js 16 app in `admin/`**, deployed as 
 
 - Home (`page.tsx`) — **split server-side on auth** (NYU-24 IA): logged out → a lean landing (`home-landing.tsx`: serif hero, one CTA into `/discover`, city chips, ≤1 featured event — no feed); signed in → "Your events" (`home-your-events.tsx`: Upcoming/Past segmented control over the member's RSVPs + hosted gatherings via `getMyEvents`).
 - Discover (`/discover`) — the **browse** surface: category tiles → featured circles → featured calendars → city cards (`discover-browse.tsx`), each linking into a scoped drill-down. Never a feed.
-- Events (`/events`) — the **all-events drill-down timeline**, scopeable via `?category=<slug>` / `?city=<addressLocality>` query params (the drill-down routing choice — no parallel `/discover/[category]` tree); plus create/detail/manage. Also my-events, profile, map. (Admin moved to the standalone `admin/` app — `/admin*` only redirects.)
+- Events (`/events`) — the **all-events drill-down timeline**, scopeable via `?category=<slug>` / `?city=<addressLocality>` query params (the drill-down routing choice — no parallel `/discover/[category]` tree); plus create/detail/manage. Also my-events, profile, map. (Admin moved to the standalone `nyuchi/mukoko-events-admin` app — `/admin*` only redirects.)
 - Auth: `/auth/*`, `/callback` (WorkOS post-auth landing), `/authenticate` (legacy redirect → `/`).
 - Info: search, calendar, about, help, privacy, terms.
 - Short links: `/e/[shortCode]` (events), `/r/[code]` (referral tracking).
@@ -189,9 +177,9 @@ The admin dashboard is a **standalone Next.js 16 app in `admin/`**, deployed as 
 - Agent auth guide: `/auth.md` (`src/app/auth.md/route.ts`) — a static `text/markdown` page describing how AI agents authenticate to the protected write APIs with WorkOS bearer tokens (the `auth.md` discovery convention). Paired with the `.well-known` OAuth/OIDC discovery route handlers (see Route Handlers) for machine-readable agent onboarding.
 - SEO: `robots.ts`, `sitemap.ts`; error boundaries `error.tsx`, `global-error.tsx`, `not-found.tsx`, `loading.tsx`.
 
-### UI Components (Mukoko Registry)
+### UI Components (Mzizi Registry)
 
-shadcn/Radix primitives installed from the Mukoko registry (`registry.mukoko.com`), configured in `components.json` (new-york style, RSC, Tailwind v4, Lucide icons). All primitives use `data-slot` attributes, CVA variants, and Radix for accessibility. In `src/components/ui/`: core primitives (button, card, dialog, drawer, tabs, select, form, table, empty, …) plus Mukoko-exclusive composites (rating, stats-card, filter-bar, status-indicator, timeline, copy-button, file-upload, share-dialog, lazy-section, detail-layout, responsive-modal, share-button, QR code, community-insights, city-dropdown, theme-toggle, verified-badge, …).
+shadcn/Radix primitives installed from the Mzizi design-system registry (`mzizi.dev`, shadcn-compatible — `components.json` registers it as `@mzizi` → `https://mzizi.dev/api/v1/ui/{name}`; the `mzizi add` CLI / Mzizi MCP resolver serve the same source), configured in `components.json` (new-york style, RSC, Tailwind v4, Lucide icons). All primitives use `data-slot` attributes, CVA variants, and Radix for accessibility. In `src/components/ui/`: core primitives (button, card, dialog, drawer, tabs, select, form, table, empty, …) plus Mzizi-registry composites (rating, stats-card, filter-bar, status-indicator, timeline, copy-button, file-upload, share-dialog, lazy-section, detail-layout, responsive-modal, share-button, QR code, community-insights, city-dropdown, theme-toggle, verified-badge, …).
 
 #### nyuchi-harness (`src/components/ui/harness.tsx`)
 
@@ -219,7 +207,7 @@ Per-event mineral accents come from **`src/lib/category-mineral.ts`** (`category
 
 #### nyuchi identity / community / trust components (ported from mzizi)
 
-Beyond the event-domain cards, the wider mzizi brand library now lives in `src/components/ui/` (all `nyuchi-*`, each colocated with a `.test.tsx` and wired through the harness). Identity & profile: `nyuchi-profile-header`, `nyuchi-profile-block`, `nyuchi-profile-settings`, `nyuchi-user-card`, `nyuchi-user-menu`, `nyuchi-avatar-stack`, `nyuchi-onboarding-step`. Community & content: `nyuchi-group-card`, `nyuchi-article-card`, `nyuchi-review-card`, `nyuchi-content-composer`, `nyuchi-search-view` (`NyuchiSearchView`), `nyuchi-sidebar-nav`, `nyuchi-notification-item`, `nyuchi-action-sheet`, `nyuchi-alert-banner`, `nyuchi-feedback`, `nyuchi-empty-state`, `nyuchi-success-screen`. Trust & verification: `verified-badge` (the mineral-tier badge), `nyuchi-trust-meter`, `nyuchi-source-badge`, `nyuchi-badge-display`, `nyuchi-leaderboard-row`. Cover & stats: `nyuchi-cover-header`, `nyuchi-cover-wash-header`, `nyuchi-hero-stat`, `nyuchi-stats-row`, `nyuchi-share-card`. Commerce/place: `nyuchi-offer-card`, `nyuchi-place-card`, `nyuchi-registration-card`. Not every component is wired into a live surface yet — the library is adopted incrementally, page by page.
+Beyond the event-domain cards, the wider mzizi brand library now lives in `src/components/ui/` (all `nyuchi-*`, each colocated with a `.test.tsx` and wired through the harness). Identity & profile: `nyuchi-profile-header`, `nyuchi-profile-block`, `nyuchi-profile-settings`, `nyuchi-user-card`, `nyuchi-user-menu`, `nyuchi-avatar-stack`, `nyuchi-onboarding-step`. Community & content: `nyuchi-group-card`, `nyuchi-article-card`, `nyuchi-review-card`, `nyuchi-content-composer`, `nyuchi-search-view` (`NyuchiSearchView`, the `/search` results view), `nyuchi-command-palette` (`NyuchiCommandPalette` — the ⌘K global palette wired into the header: grouped "Go to" nav + live event results, mineral chips, keyboard nav, `/search?q=` fallback), `nyuchi-sidebar-nav`, `nyuchi-notification-item`, `nyuchi-action-sheet`, `nyuchi-alert-banner`, `nyuchi-feedback`, `nyuchi-empty-state`, `nyuchi-success-screen`. Trust & verification: `verified-badge` (the mineral-tier badge), `nyuchi-trust-meter`, `nyuchi-source-badge`, `nyuchi-badge-display`, `nyuchi-leaderboard-row`. Cover & stats: `nyuchi-cover-header`, `nyuchi-cover-wash-header`, `nyuchi-hero-stat`, `nyuchi-stats-row`, `nyuchi-share-card`. Commerce/place: `nyuchi-offer-card`, `nyuchi-place-card`, `nyuchi-registration-card`. Not every component is wired into a live surface yet — the library is adopted incrementally, page by page.
 
 #### Venue verification (Kweli) — `src/lib/kweli.ts`
 
@@ -273,7 +261,7 @@ React Context only — `AuthProvider` (user state) and `ThemeProvider` (dark/lig
 
 ## Testing
 
-Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/setup.ts`). Tests colocate with modules or live in `src/__tests__/`. Run with `npm run test:run` (~694 tests across ~95 files). Covered areas include the API client, utils, calendar/timezone/ICS, kweli tier coercion, auth context/guard + `return-to`, SEO metadata, accessibility, the design-token guard (`src/__tests__/design-tokens.test.ts`), the Mongo layer (mappers, calendars, planner, campfire, entities, stats, settings, event-filters, users, ids), and the `nyuchi-*` brand components (each colocated with a `.test.tsx`). The standalone `admin/` app carries its own Vitest suite (~58 tests: gate, shell, section renders, admin actions) run via `npm run test:run --workspace=admin`.
+Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/setup.ts`). Tests colocate with modules or live in `src/__tests__/`. Run with `npm run test:run` (~694 tests across ~95 files). Covered areas include the API client, utils, calendar/timezone/ICS, kweli tier coercion, auth context/guard + `return-to`, SEO metadata, accessibility, the design-token guard (`src/__tests__/design-tokens.test.ts`), the Mongo layer (mappers, calendars, planner, campfire, entities, stats, settings, event-filters, users, ids), and the `nyuchi-*` brand components (each colocated with a `.test.tsx`). The Mukoko Events Admin app (`nyuchi/mukoko-events-admin`) carries its own Vitest suite in its own repo.
 
 ## Key Files
 
@@ -301,7 +289,11 @@ Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/se
 
 ## Workflow Conventions
 
-> **Agents:** [`AGENTS.md`](./AGENTS.md) is the tool-agnostic subset of these rules for any runner, and reusable task routines live in [`.claude/skills/`](./.claude/skills/) (e.g. `release-check`, `db-seed-verify`, `verify`).
+> **Agents:** [`AGENTS.md`](./AGENTS.md) is the tool-agnostic subset of these rules for any runner, and reusable task routines live in [`.claude/skills/`](./.claude/skills/) (e.g. `release-check`, `db-seed-verify`, `verify`) — these are **repo dev workflows**.
+
+### Distribution: plugin, marketplace, connectors
+
+The Mukoko Events MCP's distribution surfaces — the Claude Code plugin, the `.claude-plugin/marketplace.json`, the ChatGPT connector, and the consumer Agent Skills (`mukoko-events-discovery`, `mukoko-events-hosting`) — now live in the MCP repo (`nyuchi/mukoko-events-mcp`) alongside the server, so they stay in step with the tool definitions there. Nhimbe no longer carries them. The single MCP endpoint is `events.mukoko.com/mcp` (never `nhimbe.com/mcp`).
 
 - **Big PR, multiple commits** — the Nyuchi house style. Related work lands in one pull request as a sequence of focused, independently readable commits. Don't open a second PR for "just one more cleanup" — append a commit to the active branch.
 - **Branches** — work on `claude/<topic>-<slug>` branches; push with `-u origin <branch>` and open the PR as a draft until ready for review.
@@ -334,7 +326,8 @@ Set in Vercel (prod + preview) and locally in `.env.local`:
 - `WORKOS_CLIENT_ID` — WorkOS Client ID (server-only; no `NEXT_PUBLIC_` prefix).
 - `WORKOS_API_KEY` — server-only, used by the AuthKit proxy.
 - `WORKOS_COOKIE_PASSWORD` — server-only session-cookie encryption key (≥32 chars).
-- `WORKOS_API_HOSTNAME` *(optional)* — defaults to `api.workos.com`; set to `authenticate.nyuchi.com` (the custom **API** domain) to route WorkOS API calls — authorize/token/JWKS — through it. The hosted AuthKit sign-in **UI** is served separately from `identity.nyuchi.com` (configured in the WorkOS dashboard, not via this variable).
+- `WORKOS_API_HOSTNAME` *(optional)* — defaults to `api.workos.com`; set to `authenticate.nyuchi.com` (the custom **API** domain) to route WorkOS API calls — and the bearer-token verifier's JWKS fetch (`/sso/jwks/{clientId}`) — through it. This is the API surface, **not** the authorization-server or hosted-UI domain.
+- `WORKOS_AUTHKIT_DOMAIN` *(optional)* — the hosted **AuthKit** domain (`identity.nyuchi.com` in production; default), which is the OAuth 2.1 **authorization server** MCP clients discover and authenticate against (`/oauth2/{authorize,token,register,jwks}`, DCR enabled). Everything the `.well-known/*` discovery routes and `/auth.md` advertise is built from this via `src/lib/auth/workos-metadata.ts`. Override per environment (e.g. a WorkOS-hosted `*.authkit.app` domain).
 - `NEXT_PUBLIC_WORKOS_REDIRECT_URI` — usually `${NEXT_PUBLIC_SITE_URL}/callback`. The `NEXT_PUBLIC_` prefix is **required** — AuthKit reads it from the client bundle to form the OAuth start URL.
 - `WORKOS_WEBHOOK_SECRET` — server-only signing secret for the WorkOS event webhook (`POST /api/webhooks/workos`, guaranteed user provisioning). Create the webhook endpoint `https://nhimbe.com/api/webhooks/workos` in the WorkOS dashboard (user + organization_membership events) and copy its signing secret here. When unset the endpoint answers 503 and provisioning falls back to the callback + lazy sync.
 - `SHAMWARI_AI_GATEWAY_URL`, `SHAMWARI_AI_GATEWAY_TOKEN` — Cloudflare AI Gateway base + provider bearer; optional `SHAMWARI_AI_GATEWAY_AUTH_TOKEN` for the authenticated gateway.
@@ -342,9 +335,9 @@ Set in Vercel (prod + preview) and locally in `.env.local`:
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — server-only R2 S3 API credentials for cover-image uploads (`src/lib/r2.ts`). `R2_BUCKET` *(optional)* defaults to `mukoko-storage`. When unset, `/api/media/upload` returns 503 and uploads fall back to a gradient cover.
 - `NEXT_PUBLIC_SITE_URL` — public site URL.
 - `NEXT_PUBLIC_ASSETS_URL` *(optional)* — override the R2 assets host (defaults to `https://assets-s001.mukoko.com`).
-- `ADMIN_URL` *(optional)* — where `/admin*` redirects (defaults to `https://admin.events.mukoko.com`). The admin app itself is a separate Vercel project with its own env — see `admin/README.md`.
+- `ADMIN_URL` *(optional)* — where `/admin*` redirects (defaults to `https://admin.events.mukoko.com`). The admin app itself is a separate repo (`nyuchi/mukoko-events-admin`) and Vercel project with its own env.
 - `WORKOS_ADMIN_ORG_ID` *(admin app only; optional)* — the nyuchi WorkOS **organization id** (`org_…`) used only to org-scope the hosted sign-in screen (a UX hint, not the gate). Set on the **nhimbe-admin** Vercel project, not the public app.
-- `NYUCHI_ADMIN_ENTITY_ID` *(admin app only; optional)* — the Nyuchi **entity id** (`entity.entities._id`) whose active staff memberships (`entity.memberships`) may enter the admin app; when unset the entity is resolved by the `nyuchi-africa` slug and cached per process. See `admin/README.md`.
+- `NYUCHI_ADMIN_ENTITY_ID` *(admin app only; optional)* — the Nyuchi **entity id** (`entity.entities._id`) whose active staff memberships (`entity.memberships`) may enter the admin app; when unset the entity is resolved by the `nyuchi-africa` slug and cached per process. See the `nyuchi/mukoko-events-admin` repo README.
 
 Maps, address search and weather need **no API keys**: maps render **Leaflet + OpenStreetMap** tiles client-side (`src/lib/map/tiles.ts`), address geocoding is **DB-first (`places.places`) then OSM Nominatim** server-side (`src/app/actions/geocode.ts`), and weather is the shared **Mukoko embed** (`weather.mukoko.com/embed/widget`, `src/lib/weather.ts`) — replacing the former Google Maps + wttr.in stack. `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` has been removed; delete it from Vercel.
 

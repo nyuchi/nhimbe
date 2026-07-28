@@ -108,3 +108,33 @@ export async function checkinRegistrationAction(
 export async function getCheckinStatsAction(eventId: string): Promise<CheckinStats> {
   return getCheckinStats(eventId);
 }
+
+/**
+ * Does the signed-in person host this event? Used to gate the manage page.
+ *
+ * The old client-side check compared the event's ORGANIZER name (an entity's
+ * public name, e.g. "Nyuchi Africa") to the user's personal name — so anyone
+ * hosting through an organisation/family entity failed the check and was locked
+ * out of their own event's manage page. Ownership is entity-centric: the acting
+ * person must be able to host through the event's host entity (founder / admin /
+ * manager / representative membership), matching the same gate every mutation
+ * here already enforces. Non-throwing — returns false for signed-out users,
+ * unknown events, or non-hosts.
+ */
+export async function canManageEventAction(eventId: string): Promise<boolean> {
+  const person = await resolveActingPerson();
+  if (!person) return false;
+
+  const events = await eventsCollection();
+  const event = await events.findOne(
+    { $or: [{ _id: eventId }, { slug: eventId }, { "mukoko.shortCode": eventId }] },
+    { projection: { primaryHostEntityId: 1, hostEntityIds: 1 } },
+  );
+  if (!event) return false;
+
+  const hostIds = new Set((await listHostEntitiesForPerson(person._id)).map((e) => e._id));
+  return (
+    hostIds.has(event.primaryHostEntityId) ||
+    (event.hostEntityIds ?? []).some((id) => hostIds.has(id))
+  );
+}

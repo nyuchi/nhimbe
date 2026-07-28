@@ -64,7 +64,7 @@ Writes (`POST /api/events`, `PATCH /api/events/:id`) require a WorkOS bearer tok
 - **OAuth authorization server metadata**: https://nhimbe.com/.well-known/oauth-authorization-server
 - **OAuth protected resource metadata**: https://nhimbe.com/.well-known/oauth-protected-resource
 - **OpenID configuration**: https://nhimbe.com/.well-known/openid-configuration
-- **MCP server** (task-based, Streamable HTTP): https://events.mukoko.com/mcp (legacy: https://nhimbe.com/mcp) — tools: `events_near_me`, `events_matching_interests`, `get_event` (anonymous reads); `create_event`, `update_event` (bearer-authed writes)
+- **MCP server** (task-based, Streamable HTTP): https://events.mukoko.com/mcp — tools: `events_near_me`, `events_matching_interests`, `get_event` (anonymous reads); `create_event`, `update_event` (bearer-authed writes)
 
 ## Contact
 

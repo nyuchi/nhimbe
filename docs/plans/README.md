@@ -11,10 +11,11 @@ see the root [`CLAUDE.md`](../../CLAUDE.md); for a map of all docs see the
 These plans were written around a **standalone backend** design: a Cloudflare
 Workers REST service (later a Hono refactor) on **D1/Supabase**, with **Paynow**
 payments. nhimbe has since consolidated into a **single Next.js 16 app on Vercel**
-that reads and writes **MongoDB server-side**, with **WorkOS AuthKit** for auth
-and the `worker/` directory repurposed as the stateless `nhimbe-mcp` server. As a
-result, the backend mechanics in these plans are superseded, even where the
-user-facing outcome (error boundaries, accessibility, onboarding UX) shipped.
+that reads and writes **MongoDB server-side**, with **WorkOS AuthKit** for auth;
+the former `worker/` directory became the stateless MCP server and was later
+extracted to its own repo (`nyuchi/mukoko-events-mcp`). As a result, the backend
+mechanics in these plans are superseded, even where the user-facing outcome
+(error boundaries, accessibility, onboarding UX) shipped.
 
 ## How they relate
 

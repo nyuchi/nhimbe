@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { useFeedback } from "@/components/feedback/feedback-provider";
 
 const platformLinks = [
   { href: "/discover", label: "Discover" },
@@ -24,6 +25,7 @@ const legalLinks = [
 ];
 
 export function Footer() {
+  const { open } = useFeedback();
   return (
     <footer className="border-t border-elevated mt-20 pb-[env(safe-area-inset-bottom,0px)]" role="contentinfo">
       <div className="max-w-300 mx-auto px-6 py-12">
@@ -50,7 +52,12 @@ export function Footer() {
                   className="zebra zebra-dark"
                 />
               </div>
-              <span className="text-xl font-bold text-primary">Nhimbe</span>
+              <span className="flex flex-col leading-tight">
+                <span className="text-xl font-bold text-primary">Nhimbe</span>
+                <span className="text-[11px] font-medium uppercase tracking-wide text-text-tertiary">
+                  by Mukoko Events
+                </span>
+              </span>
             </Link>
             <p className="font-serif italic text-sm text-text-secondary leading-relaxed">
               &ldquo;Together we gather, together we grow&rdquo;
@@ -103,6 +110,15 @@ export function Footer() {
                   )}
                 </li>
               ))}
+              <li>
+                <button
+                  type="button"
+                  onClick={() => open()}
+                  className="text-left text-sm text-text-secondary hover:text-foreground transition-colors"
+                >
+                  Send feedback
+                </button>
+              </li>
             </ul>
           </nav>
 

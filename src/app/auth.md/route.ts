@@ -5,10 +5,9 @@
 
 import { workosAuthMetadata } from "@/lib/auth/workos-metadata";
 
-// force-dynamic: derived at request time from the same runtime env
-// (WORKOS_CLIENT_ID / WORKOS_API_HOSTNAME) the token verifier reads, so the
-// authorize/token/JWKS endpoints advertised here match what the app verifies
-// against — never the hosted-UI domain, never a stale/empty client id. Cached 1h.
+// force-dynamic: derived at request time from runtime env (WORKOS_AUTHKIT_DOMAIN)
+// so the authorize/token/register/JWKS endpoints advertised here always point at
+// the live AuthKit OAuth 2.1 authorization server. Cached 1h.
 export const dynamic = "force-dynamic";
 
 function buildAuthMd(): string {
@@ -35,17 +34,18 @@ Nhimbe uses WorkOS AuthKit as its authorization server. To call protected
 APIs, an agent first obtains a WorkOS AuthKit access token via the OAuth 2.1
 authorization-code flow with PKCE:
 
-1. Start authorization at the WorkOS authorize endpoint:
+1. Start authorization at the AuthKit authorize endpoint:
    \`${workos.authorizationEndpoint}\` (with a PKCE \`code_challenge\`).
-2. Exchange the returned authorization code for tokens at the WorkOS token
+2. Exchange the returned authorization code for tokens at the AuthKit token
    endpoint: \`${workos.tokenEndpoint}\` (supplying the PKCE \`code_verifier\`).
 3. Call Nhimbe APIs with the access token:
    \`Authorization: Bearer <token>\`.
 
-Tokens are issued by WorkOS and validated by Nhimbe against the WorkOS JWKS at
-\`${workos.jwksUri}\` (issuer \`${workos.issuer}\`). This is the WorkOS **API**
-domain (authorize/token/JWKS); the hosted sign-in **UI** is served separately
-from https://identity.nyuchi.com.
+Tokens are issued by the WorkOS AuthKit OAuth 2.1 authorization server
+(\`${workos.issuer}\`) and validated by Nhimbe against the WorkOS JWKS
+published at \`${workos.jwksUri}\`. Dynamic client registration is supported at
+\`${workos.registrationEndpoint}\` (see below), so clients can self-register
+before starting the flow.
 
 ## agent_auth
 

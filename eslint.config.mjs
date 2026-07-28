@@ -12,11 +12,6 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Wrangler generated files:
-    "worker/.wrangler/**",
-    // The standalone admin app lints itself (admin/eslint.config.mjs) with
-    // its own tsconfig/alias context:
-    "admin/**",
     // MongoDB playground files (not React code):
     "*.mongodb.js",
     // Agent worktree checkouts — they hold parallel branches plus built

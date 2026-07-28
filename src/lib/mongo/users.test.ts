@@ -13,9 +13,49 @@ vi.mock("@/lib/mongo/databases", () => ({
 import {
   deactivatePersonByWorkosId,
   ensurePersonForWorkosId,
+  mapPersonToAppUser,
   syncInputFromWorkosUser,
   syncPersonFromWorkos,
 } from "./users";
+import type { PersonDoc } from "./types";
+
+/** A minimal validator-complete person doc for mapper tests. */
+function baseDoc(extra: Partial<PersonDoc> = {}): PersonDoc {
+  return {
+    _id: "person-1",
+    _schemaVersion: "v3.1",
+    workosUserId: "user_123",
+    email: "amai@example.com",
+    name: "Amai Mukoko",
+    emailVerified: true,
+    phoneNumberVerified: false,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...extra,
+  } as PersonDoc;
+}
+
+describe("mapPersonToAppUser", () => {
+  it("defaults locale to English and treats event updates as opt-out (ON)", () => {
+    const user = mapPersonToAppUser(baseDoc());
+    expect(user.locale).toBe("en");
+    expect(user.subscribedToEventUpdates).toBe(true);
+  });
+
+  it("surfaces a known stored locale", () => {
+    expect(mapPersonToAppUser(baseDoc({ locale: "sn" })).locale).toBe("sn");
+  });
+
+  it("falls back to English for an unknown locale value", () => {
+    expect(mapPersonToAppUser(baseDoc({ locale: "fr" })).locale).toBe("en");
+  });
+
+  it("reads an explicit event-update opt-out", () => {
+    const user = mapPersonToAppUser(baseDoc({ mukoko: { notifications: { eventUpdates: false } } }));
+    expect(user.subscribedToEventUpdates).toBe(false);
+  });
+});
 
 /** Required fields on the live `identity.persons` validator. */
 const PERSON_REQUIRED_FIELDS = [

@@ -26,10 +26,20 @@ const GATEWAY_URL = process.env.SHAMWARI_AI_GATEWAY_URL;
 const GATEWAY_TOKEN = process.env.SHAMWARI_AI_GATEWAY_TOKEN;
 const GATEWAY_AUTH_TOKEN = process.env.SHAMWARI_AI_GATEWAY_AUTH_TOKEN;
 
-/** Generation model fronted by the gateway. */
-export const QWEN_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8";
-/** Embedding model fronted by the gateway (BGE base, 768-dim). */
-export const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5";
+/**
+ * Generation model fronted by the gateway. Overridable via
+ * `SHAMWARI_GENERATION_MODEL` (a Vercel env var) so the model can be swapped
+ * without a code change/deploy; defaults to Qwen3-30B.
+ */
+export const QWEN_MODEL = process.env.SHAMWARI_GENERATION_MODEL || "@cf/qwen/qwen3-30b-a3b-fp8";
+/**
+ * Embedding model fronted by the gateway (BGE base, 768-dim). Overridable via
+ * `SHAMWARI_EMBEDDING_MODEL`, but ONLY swap for another 768-dim model — the
+ * Atlas `event_vector_index` is pinned to EMBEDDING_DIMENSIONS below, so a model
+ * with a different output size would break vector search until the index is
+ * rebuilt.
+ */
+export const EMBEDDING_MODEL = process.env.SHAMWARI_EMBEDDING_MODEL || "@cf/baai/bge-base-en-v1.5";
 /** Dimensionality of EMBEDDING_MODEL — used by the Atlas vector index. */
 export const EMBEDDING_DIMENSIONS = 768;
 

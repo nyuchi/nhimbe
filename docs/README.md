@@ -13,13 +13,16 @@ truth — the canonical, always-current docs live at the repository root.
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Local setup, conventions, and the PR process |
 | [`../SECURITY.md`](../SECURITY.md) | Security policy and vulnerability reporting |
 | [`../RELEASES.md`](../RELEASES.md) | Changelog and release process |
-| [`../worker/README.md`](../worker/README.md) | The `nhimbe-mcp` server (task-based MCP at `nhimbe.com/mcp`) |
+
+The task-based MCP server (`events.mukoko.com/mcp`) and the admin dashboard now
+live in their own repos — `nyuchi/mukoko-events-mcp` and
+`nyuchi/mukoko-events-admin`.
 
 **Architecture in one line:** Nhimbe is a single **Next.js 16** app on **Vercel**
 that reads and writes **MongoDB server-side** (SSR-first, Server Actions), with
 **WorkOS AuthKit** for auth, a same-origin `/api` fallback, **Cloudflare R2** for
-media, and the **Shamwari** Cloudflare AI Gateway. The `worker/` directory is the
-stateless `nhimbe-mcp` server and owns no data.
+media, and the **Shamwari** Cloudflare AI Gateway. The Mukoko Events MCP server
+(a separate repo) owns no data — it calls the app's `/api/events*` endpoints.
 
 ## Active references
 
@@ -33,8 +36,9 @@ These are **dated, point-in-time plans**. They are kept for historical context
 and are **not** current architecture — each carries an archival banner at the
 top. Several describe a since-retired backend (a standalone Cloudflare Workers
 REST service on D1/Supabase, a Hono migration, Paynow payments); Nhimbe has since
-consolidated onto Vercel + MongoDB, and the worker is now `nhimbe-mcp`. Do not
-use these as a guide to how the app works today.
+consolidated onto Vercel + MongoDB, and the MCP server was extracted to its own
+repo (`nyuchi/mukoko-events-mcp`). Do not use these as a guide to how the app
+works today.
 
 | Plan | Date | Status |
 | --- | --- | --- |

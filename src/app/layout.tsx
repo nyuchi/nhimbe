@@ -16,6 +16,8 @@ import { WorkOSProvider } from "@/components/auth/workos-provider";
 import { ErrorBoundary } from "@/components/error/error-boundary";
 import { WidgetErrorBoundary } from "@/components/error/widget-error-boundary";
 import { LiveRegionProvider } from "@/components/ui/live-region";
+import { FeedbackProvider } from "@/components/feedback/feedback-provider";
+import { Toaster } from "@/components/ui/sonner";
 import { ServiceWorkerRegister } from "@/components/pwa/sw-register";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { IntercomLoader } from "@/components/intercom/intercom-loader";
@@ -207,17 +209,29 @@ export default function RootLayout({
               <ThemeProvider defaultTheme="system">
                 <I18nProvider>
                   <LiveRegionProvider>
-                    <AnimatedBackground enableAnimation={true} intensity={0.2} speed={0.3} />
-                    <WidgetErrorBoundary fallback={<MinimalNav />} name="Header">
-                      <Header />
-                    </WidgetErrorBoundary>
-                    <main id="main-content" className="flex-1 relative z-10 pb-16 md:pb-0">{children}</main>
-                    <WidgetErrorBoundary fallback={null} name="MobileNav">
-                      <MobileBottomNav />
-                    </WidgetErrorBoundary>
-                    <WidgetErrorBoundary fallback={null} name="Footer">
-                      <Footer />
-                    </WidgetErrorBoundary>
+                    <FeedbackProvider>
+                      <AnimatedBackground enableAnimation={true} intensity={0.2} speed={0.3} />
+                      <WidgetErrorBoundary fallback={<MinimalNav />} name="Header">
+                        <Header />
+                      </WidgetErrorBoundary>
+                      {/* Layered surfaces: the AnimatedBackground sits behind
+                          (-z-9); this page surface floats above it so the animation
+                          reads as ambient depth without distracting behind content.
+                          Container surfaces (cards, panels) stack above this. A
+                          translucent fill (not a backdrop-blur) keeps it cheap. */}
+                      <main
+                        id="main-content"
+                        className="flex-1 relative z-10 pb-16 md:pb-0 bg-background/85"
+                      >
+                        {children}
+                      </main>
+                      <WidgetErrorBoundary fallback={null} name="MobileNav">
+                        <MobileBottomNav />
+                      </WidgetErrorBoundary>
+                      <WidgetErrorBoundary fallback={null} name="Footer">
+                        <Footer />
+                      </WidgetErrorBoundary>
+                    </FeedbackProvider>
                   </LiveRegionProvider>
                 </I18nProvider>
               </ThemeProvider>
@@ -225,6 +239,7 @@ export default function RootLayout({
           </WorkOSProvider>
         </ErrorBoundary>
         <Analytics />
+        <Toaster />
         <ServiceWorkerRegister />
         {/* Intercom only mounts on support pages (/help, /contact, /support). */}
         <IntercomLoader />
