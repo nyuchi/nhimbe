@@ -48,6 +48,33 @@ published at \`${workos.jwksUri}\`. Dynamic client registration is supported at
 \`${workos.registrationEndpoint}\` (see below), so clients can self-register
 before starting the flow.
 
+## Connect the Mukoko Events MCP
+
+The Mukoko Events MCP server is served at \`https://events.mukoko.com/mcp\` and
+speaks the same WorkOS AuthKit OAuth 2.1 flow described above. MCP clients don't
+build the flow by hand — they run the standard discovery chain, and the human
+signs in once through the hosted AuthKit UI:
+
+1. The client requests \`https://events.mukoko.com/mcp\` unauthenticated and gets
+   \`401 Unauthorized\` with a \`WWW-Authenticate: Bearer\` header whose
+   \`resource_metadata\` points at
+   \`${SITE_URL}/.well-known/oauth-protected-resource\` (RFC 9728).
+2. That protected-resource document names the authorization server
+   (\`${workos.issuer}\`), whose metadata
+   (\`${SITE_URL}/.well-known/oauth-authorization-server\`) advertises the
+   authorize, token, JWKS and dynamic-client-registration endpoints below.
+3. The client self-registers via DCR (\`${workos.registrationEndpoint}\`), then
+   runs the authorization-code + PKCE flow. The user completes sign-in in the
+   hosted AuthKit UI (email code, password, passkey, MFA or social — all
+   configured in WorkOS), and the client stores the returned tokens.
+
+Once authorized, the client reuses the access token (refreshing via
+\`offline_access\`) on every MCP call — there is no second sign-in.
+
+**In Claude (web or desktop):** open Settings → Connectors → Add custom
+connector, enter \`https://events.mukoko.com/mcp\`, click Connect, and complete
+the WorkOS sign-in when prompted. The connector is then available in new chats.
+
 ## agent_auth
 
 The \`register_uri\` below is the WorkOS AuthKit dynamic-client-registration
