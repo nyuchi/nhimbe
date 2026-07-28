@@ -79,7 +79,7 @@ export function DateTimeModal({
               type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
-              className="w-full px-4 py-3 bg-surface text-foreground [color-scheme:light_dark] rounded-xl border border-border outline-none text-base"
+              className="w-full px-4 py-3 bg-surface text-foreground [color-scheme:light_dark] rounded-xl border border-border outline-none focus-visible:ring-2 focus-visible:ring-ring/50 text-base"
             />
           </div>
           <div>

@@ -40,7 +40,7 @@ export function CapacityModal({
             onChange={handleChange}
             placeholder="Leave empty for unlimited"
             min={1}
-            className="w-full px-4 py-3 bg-surface rounded-xl border-none outline-none text-base"
+            className="w-full px-4 py-3 bg-surface text-foreground placeholder:text-text-tertiary rounded-xl border border-border outline-none focus-visible:ring-2 focus-visible:ring-ring/50 text-base"
           />
         </div>
         <p className="text-sm text-text-tertiary">Leave empty for unlimited capacity</p>
