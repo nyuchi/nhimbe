@@ -15,7 +15,7 @@
  */
 
 import * as React from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { MessageSquareWarning, Loader2 } from "lucide-react";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,8 @@ import { submitFeedback } from "@/app/actions/feedback";
 import type { FeedbackCategory } from "@/lib/mongo/feedback";
 import {
   FeedbackContext,
+  composeFeedbackMessage,
+  openIntercomMessage,
   type FeedbackContextValue,
   type FeedbackPrefill,
 } from "./feedback-context";
@@ -50,6 +52,7 @@ const CATEGORY_LABELS: Record<FeedbackCategory, string> = {
 
 export function FeedbackProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -60,7 +63,8 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
   const [errorDigest, setErrorDigest] = React.useState<string | undefined>();
   const [submitting, setSubmitting] = React.useState(false);
 
-  const open = React.useCallback((prefill?: FeedbackPrefill) => {
+  // Fallback: the built-in Resend/Mongo report dialog.
+  const openForm = React.useCallback((prefill?: FeedbackPrefill) => {
     setCategory(prefill?.category ?? "bug");
     setMessage(prefill?.message ?? "");
     setErrorDigest(prefill?.errorDigest);
@@ -68,7 +72,25 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
     setIsOpen(true);
   }, []);
 
-  const value = React.useMemo<FeedbackContextValue>(() => ({ open }), [open]);
+  // Primary: route to Intercom (our support tool). If the Messenger is present
+  // on this page, open its composer prefilled; otherwise send the user to /help
+  // — the only surface that loads Intercom — carrying the report in the query so
+  // it opens there. The report text is short and non-sensitive (a bug/idea note
+  // plus an optional error ref), so a query string is an acceptable carrier.
+  const open = React.useCallback(
+    (prefill?: FeedbackPrefill) => {
+      const message = composeFeedbackMessage(prefill);
+      if (openIntercomMessage(message)) return;
+      const qs = new URLSearchParams({ feedback: "1", msg: message });
+      router.push(`/help?${qs.toString()}`);
+    },
+    [router],
+  );
+
+  const value = React.useMemo<FeedbackContextValue>(
+    () => ({ open, openForm }),
+    [open, openForm],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
