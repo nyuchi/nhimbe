@@ -85,7 +85,7 @@ export function CategoryModal({
                 }
               }}
               placeholder="Add a tag..."
-              className="flex-1 px-4 py-3 bg-surface rounded-xl border-none outline-none text-base"
+              className="flex-1 px-4 py-3 bg-surface text-foreground placeholder:text-text-tertiary rounded-xl border border-border outline-none focus-visible:ring-2 focus-visible:ring-ring/50 text-base"
             />
             <Button onClick={addTag} className="px-4 py-3 bg-primary text-primary-foreground rounded-xl shrink-0">
               Add

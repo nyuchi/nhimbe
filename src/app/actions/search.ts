@@ -9,7 +9,7 @@
  */
 
 import { chat, isGatewayConfigured } from "@/lib/ai/gateway";
-import { semanticSearchEvents } from "@/lib/mongo/search";
+import { semanticSearchEvents, autocompleteEventNames, type SearchMode } from "@/lib/mongo/search";
 import type { Event } from "@/lib/api";
 
 export interface SearchEventsResult {
@@ -18,8 +18,8 @@ export interface SearchEventsResult {
   /** One-line friendly summary of the results (Qwen), or a deterministic line. */
   aiSummary: string;
   totalResults: number;
-  /** How results were retrieved — "vector" (RAG) or "text" (fallback). */
-  mode: "vector" | "text";
+  /** How results were retrieved — "hybrid" (vector⊕text), "vector", or "text". */
+  mode: SearchMode;
 }
 
 /**
@@ -57,6 +57,21 @@ export async function searchEventsAction(input: {
     totalResults: events.length,
     mode,
   };
+}
+
+/**
+ * Type-ahead suggestions for the search box (event-name prefixes). Best-effort:
+ * returns [] for short/empty prefixes or any backend hiccup, so the UI can call
+ * it on every keystroke without guarding.
+ */
+export async function autocompleteEventsAction(prefix: string): Promise<string[]> {
+  const q = prefix?.trim() ?? "";
+  if (q.length < 2) return [];
+  try {
+    return await autocompleteEventNames(q, 6);
+  } catch {
+    return [];
+  }
 }
 
 /** Ask Qwen for a 2-3 sentence summary of the matches. Best-effort. */

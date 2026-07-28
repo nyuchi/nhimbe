@@ -35,6 +35,8 @@ export interface ListEventsParams {
   city?: string;
   /** Filter by a tag/category string. */
   category?: string;
+  /** Free-text query matched (case-insensitive) against event name + description. */
+  query?: string;
   /** Filter by hosting circle (events.events.circleId). */
   circleId?: string;
   /** Filter by curated calendar (events.events.calendarId, NYU-25). */
@@ -66,13 +68,33 @@ function publishedFilter(params: ListEventsParams): Filter<EventDoc> {
   if (params.category) filter.tags = params.category;
   if (params.circleId) filter.circleId = params.circleId;
   if (params.calendarId) filter.calendarId = params.calendarId;
+
+  // Both the free-text query and the city filter express themselves as an
+  // `$or` group; a plain `filter.$or =` for each would clobber the other, so
+  // collect them under `$and` (which composes cleanly with the top-level gate).
+  const andClauses: Record<string, unknown>[] = [];
+  if (params.query) {
+    // Free-text: case-insensitive substring over name + description. The input
+    // is regex-escaped so user text can't inject regex operators (a raw `.*`
+    // would widen the match; a bad group would throw). A leading-anchored index
+    // isn't available for arbitrary substrings, so this is a filtered scan —
+    // acceptable at listing scale and always combined with the published gate.
+    const escaped = params.query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    andClauses.push({
+      $or: [
+        { name: { $regex: escaped, $options: "i" } },
+        { description: { $regex: escaped, $options: "i" } },
+      ],
+    });
+  }
   if (params.city) {
     // The city lives in the embedded schema.org location. Match on either the
     // canonical nested path (location.address.addressLocality — what
     // createEvent writes) or the legacy flat one, symmetric with the /discover
     // count aggregation's coalescing city expression (see event-filters.ts).
-    Object.assign(filter as Record<string, unknown>, cityLocalityFilter(params.city));
+    andClauses.push(cityLocalityFilter(params.city));
   }
+  if (andClauses.length > 0) (filter as Record<string, unknown>).$and = andClauses;
   return filter;
 }
 
@@ -154,7 +176,9 @@ export async function getTrendingEvents(limit = 10): Promise<Event[]> {
  */
 export async function getEventByIdOrSlug(idOrSlug: string): Promise<Event | null> {
   const col = await eventsCollection();
-  const doc = await col.findOne({ $or: [{ _id: idOrSlug }, { slug: idOrSlug }] });
+  const doc = await col.findOne({
+    $or: [{ _id: idOrSlug }, { slug: idOrSlug }, { "mukoko.shortCode": idOrSlug }],
+  });
   if (!doc) return null;
   const [mapped] = await mapEventsWithRelations([doc]);
   return mapped ?? null;

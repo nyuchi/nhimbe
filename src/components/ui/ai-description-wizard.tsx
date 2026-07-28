@@ -63,7 +63,10 @@ export function AIDescriptionWizard({
   onClose,
 }: AIDescriptionWizardProps) {
   const { user } = useAuth();
-  const viewerPersonId = (user as { person_id?: string } | null)?.person_id ?? null;
+  // The auth context exposes the schema.org person UUID as `personId` (camelCase).
+  // The old `person_id` read was always undefined, so the Shamwari conversation
+  // was never created and no tool-usage/feedback was ever logged.
+  const viewerPersonId = user?.personId ?? null;
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [isGenerating, setIsGenerating] = useState(false);

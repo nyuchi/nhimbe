@@ -13,8 +13,9 @@ A single full-stack **Next.js 16** app (App Router, React 19, TypeScript strict,
 Tailwind v4) — the community events platform of the **Mukoko** ecosystem. There
 is no separate application backend: data lives in **MongoDB** and is
 read/written **server-side only** via the `mongodb` driver. Auth is **WorkOS
-AuthKit**. Deployed on **Vercel** (auto-deploys every push). The `worker/`
-directory is a separate concern (`nhimbe-mcp`), not the app request path.
+AuthKit**. Deployed on **Vercel** (auto-deploys every push). The Mukoko Events
+MCP server and the Mukoko Events Admin app live in their own repos
+(`nyuchi/mukoko-events-mcp`, `nyuchi/mukoko-events-admin`), not this one.
 
 ## Checks — must pass before you call a change done
 
