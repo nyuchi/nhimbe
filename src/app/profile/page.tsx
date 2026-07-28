@@ -9,7 +9,8 @@ import {
   MapPin,
   Calendar,
   Bell,
-  Moon,
+  Palette,
+  Languages,
   LogOut,
   ChevronRight,
   Ticket,
@@ -20,27 +21,30 @@ import {
   ExternalLink,
   KeyRound,
   MessageSquareWarning,
+  Building2,
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
+import { useT } from "@/lib/i18n/i18n-provider";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { useAuth } from "@/components/auth/auth-context";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProfileBadges } from "@/components/ui/profile-badges";
 import { NyuchiProfileBlock } from "@/components/ui/nyuchi-profile-block";
 import { useFeedback } from "@/components/feedback/feedback-provider";
+import { useFocusTrap } from "@/lib/use-focus-trap";
 
 type MenuItem = {
   icon: LucideIcon;
   label: string;
   href?: string;
-  badge?: number;
-  toggle?: boolean;
-  value?: boolean | string;
-  onChange?: () => void;
+  /** Trailing status text (e.g. current theme / language). */
+  value?: string;
+  /** Fires on click instead of navigating. */
   onClick?: () => void;
   external?: boolean;
+  /** Screen-reader-only description of the item's current state. */
+  srState?: string;
 };
 
 type MenuSection = {
@@ -51,55 +55,72 @@ type MenuSection = {
 function ProfileContent() {
   const router = useRouter();
   const { theme, cycleTheme, resolvedTheme } = useTheme();
+  const { locale } = useT();
   const { user, signOut, profileCompleteness } = useAuth();
   const { open: openFeedback } = useFeedback();
-  const [notifications, setNotifications] = useState(true);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+
+  const dialogRef = useFocusTrap<HTMLDivElement>({
+    isActive: showSignOutConfirm,
+    onEscape: () => setShowSignOutConfirm(false),
+  });
 
   const handleSignOut = async () => {
     await signOut();
     router.push("/");
   };
 
-  // Format join date
   const joinedDate = user?.id
-    ? new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    ? new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" })
     : "Unknown";
+
+  const themeLabel = theme === "system" ? "System" : resolvedTheme === "dark" ? "Dark" : "Light";
+  const languageLabel = locale === "sn" ? "Shona" : "English";
+  const emailUpdatesLabel = user?.subscribedToEventUpdates === false ? "Off" : "On";
 
   const menuItems: MenuSection[] = [
     {
       section: "Events",
       items: [
-        { icon: Ticket, label: "My Tickets", href: "/my-events" },
-        { icon: Users, label: "Events I'm Hosting", href: "/my-events?tab=hosting" },
-        { icon: Heart, label: "Saved Events", href: "/my-events?tab=saved" },
+        { icon: Ticket, label: "My tickets", href: "/my-events" },
+        { icon: Users, label: "Events I'm hosting", href: "/my-events?tab=hosting" },
+        { icon: Heart, label: "Saved events", href: "/my-events?tab=saved" },
       ],
     },
     {
-      section: "Settings",
+      section: "Preferences",
       items: [
-        { icon: User, label: "Edit Profile", href: "/profile/edit" },
+        { icon: User, label: "Edit profile & preferences", href: "/profile/edit" },
         {
-          icon: Bell,
-          label: "Notifications",
-          toggle: true,
-          value: notifications,
-          onChange: () => setNotifications(!notifications),
+          icon: Palette,
+          label: "Appearance",
+          value: themeLabel,
+          onClick: cycleTheme,
+          srState: `Current theme: ${themeLabel}. Activate to cycle.`,
         },
         {
-          icon: Moon,
-          label: "Appearance",
-          value: theme === "system" ? "System" : resolvedTheme === "dark" ? "Dark" : "Light",
-          onClick: cycleTheme,
+          icon: Languages,
+          label: "Language",
+          value: languageLabel,
+          href: "/profile/edit",
+          srState: `Current language: ${languageLabel}.`,
+        },
+        {
+          icon: Bell,
+          label: "Event update emails",
+          value: emailUpdatesLabel,
+          href: "/profile/edit",
+          srState: `Event update emails are ${emailUpdatesLabel}.`,
         },
       ],
     },
     {
       section: "Account",
       items: [
+        { icon: Building2, label: "Host Entities", href: "/profile/entities" },
         {
           icon: KeyRound,
-          label: "Change Password",
+          label: "Change password",
           href: "https://id.mukoko.com/settings/security",
           external: true,
         },
@@ -114,196 +135,223 @@ function ProfileContent() {
     {
       section: "Support",
       items: [
-        { icon: HelpCircle, label: "Help Center", href: "/help" },
-        { icon: MessageSquareWarning, label: "Send Feedback", onClick: () => openFeedback() },
-        { icon: Shield, label: "Privacy Policy", href: "/privacy" },
+        { icon: HelpCircle, label: "Help center", href: "/help" },
+        { icon: MessageSquareWarning, label: "Send feedback", onClick: () => openFeedback() },
+        { icon: Shield, label: "Privacy policy", href: "/privacy" },
       ],
     },
   ];
 
+  const rowClasses =
+    "flex min-h-[52px] w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
+
   return (
-    <div className="max-w-150 mx-auto px-6 py-8">
-      {/* Profile Header — branded identity block (centred avatar + name). */}
+    <div className="mx-auto max-w-2xl px-6 py-8">
+      {/* Identity header */}
       <NyuchiProfileBlock
-        className="mb-8"
+        className="mb-4"
         name={user?.name || "User"}
         subtitle={user?.email}
         avatar={user?.image}
       />
       {(user?.addressLocality || user?.addressCountry) && (
-        <div className="-mt-6 mb-8 flex items-center justify-center gap-1 text-sm text-text-tertiary">
-          <MapPin className="w-3.5 h-3.5" />
+        <p className="mb-8 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
+          <MapPin className="size-4" aria-hidden="true" />
           {[user?.addressLocality, user?.addressCountry].filter(Boolean).join(", ")}
-        </div>
+        </p>
       )}
 
       {/* Interests */}
       {user?.interests && user.interests.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-sm font-semibold text-text-tertiary uppercase tracking-wider mb-3">
+        <section aria-labelledby="interests-heading" className="mb-8">
+          <h2
+            id="interests-heading"
+            className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground"
+          >
             Interests
           </h2>
-          <div className="flex flex-wrap gap-2">
+          <ul className="flex flex-wrap gap-2">
             {user.interests.map((interest) => (
-              <Badge key={interest} variant="secondary">
-                {interest}
-              </Badge>
+              <li key={interest}>
+                <Badge variant="secondary">{interest}</Badge>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </section>
       )}
 
-      {/* Completeness Nudge */}
-      {!profileCompleteness.complete && (() => {
-        const missing: string[] = [];
-        if (!profileCompleteness.name) missing.push("your name");
-        if (!profileCompleteness.addressLocality) missing.push("your location");
-        if (!profileCompleteness.interests) missing.push("your interests");
-        const completionPercent = [profileCompleteness.name, profileCompleteness.addressLocality, profileCompleteness.interests].filter(Boolean).length / 3 * 100;
-        const nudgeText = `Add ${missing.join(" and ")} for a better experience`;
+      {/* Completeness nudge */}
+      {!profileCompleteness.complete &&
+        (() => {
+          const missing: string[] = [];
+          if (!profileCompleteness.name) missing.push("your name");
+          if (!profileCompleteness.addressLocality) missing.push("your location");
+          if (!profileCompleteness.interests) missing.push("your interests");
+          const completionPercent =
+            ([
+              profileCompleteness.name,
+              profileCompleteness.addressLocality,
+              profileCompleteness.interests,
+            ].filter(Boolean).length /
+              3) *
+            100;
+          const nudgeText = `Add ${missing.join(" and ")} for a better experience`;
 
-        return (
-          <Link href="/profile/edit" className="block mb-6">
-            <div className="bg-surface border border-elevated rounded-xl p-4 flex items-center gap-4">
-              <svg className="w-12 h-12 shrink-0" viewBox="0 0 36 36">
-                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeOpacity="0.1" strokeWidth="3" />
-                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray={`${completionPercent}, 100`} className="text-primary" />
+          return (
+            <Link
+              href="/profile/edit"
+              className="mb-8 flex items-center gap-4 rounded-[var(--radius-xl,17px)] bg-card p-4 ring-1 ring-foreground/10 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <svg
+                className="size-12 shrink-0"
+                viewBox="0 0 36 36"
+                role="img"
+                aria-label={`Profile ${Math.round(completionPercent)} percent complete`}
+              >
+                <path
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeOpacity="0.1"
+                  strokeWidth="3"
+                />
+                <path
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeDasharray={`${completionPercent}, 100`}
+                  className="text-primary"
+                />
               </svg>
-              <div>
-                <p className="font-medium">Complete your profile</p>
-                <p className="text-sm text-text-secondary">{nudgeText}</p>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-foreground">Complete your profile</p>
+                <p className="text-sm text-muted-foreground">{nudgeText}</p>
               </div>
-              <ChevronRight className="w-5 h-5 text-text-tertiary shrink-0" />
-            </div>
-          </Link>
-        );
-      })()}
+              <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </Link>
+          );
+        })()}
 
-      {/* Ubuntu badges showcase — earned + a tail of locked ones for "more to earn" */}
-      {(user as { person_id?: string } | null)?.person_id && (
-        <ProfileBadges personId={(user as { person_id?: string }).person_id!} />
-      )}
+      {/* Ubuntu badges showcase */}
+      {user?.personId && <ProfileBadges personId={user.personId} />}
 
-      {/* Menu Sections */}
+      {/* Menu sections */}
       <div className="space-y-6">
         {menuItems.map((section) => (
-          <div key={section.section}>
-            <h2 className="text-sm font-semibold text-text-tertiary uppercase tracking-wider mb-3">
+          <section key={section.section} aria-labelledby={`sec-${section.section}`}>
+            <h2
+              id={`sec-${section.section}`}
+              className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground"
+            >
               {section.section}
             </h2>
-            <div className="bg-surface rounded-xl divide-y divide-elevated">
+            <ul className="divide-y divide-border overflow-hidden rounded-[var(--radius-xl,17px)] bg-card ring-1 ring-foreground/10">
               {section.items.map((item) => {
                 const Icon = item.icon;
 
-                if (item.toggle) {
-                  const isOn = item.value === true;
-                  return (
-                    <div key={item.label} className="flex items-center gap-3 px-4 py-3.5">
-                      <Icon className="w-5 h-5 text-text-secondary" />
-                      <span className="flex-1 font-medium">{item.label}</span>
-                      <Switch
-                        checked={isOn}
-                        onCheckedChange={item.onChange}
+                const inner = (
+                  <>
+                    <Icon className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    <span className="flex-1 font-medium text-foreground">{item.label}</span>
+                    {item.value && (
+                      <span className="text-sm text-muted-foreground">{item.value}</span>
+                    )}
+                    {item.srState && <span className="sr-only">{item.srState}</span>}
+                    {item.external ? (
+                      <ExternalLink
+                        className="size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
                       />
-                    </div>
-                  );
-                }
-
-                if (item.onClick) {
-                  return (
-                    <Button
-                      key={item.label}
-                      variant="ghost"
-                      onClick={item.onClick}
-                      className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-elevated transition-colors rounded-none justify-start h-auto"
-                    >
-                      <Icon className="w-5 h-5 text-text-secondary" />
-                      <span className="flex-1 text-left font-medium">{item.label}</span>
-                      <span className="text-text-secondary">{item.value}</span>
-                      <ChevronRight className="w-5 h-5 text-text-tertiary" />
-                    </Button>
-                  );
-                }
-
-                if (item.external) {
-                  return (
-                    <a
-                      key={item.label}
-                      href={item.href || "#"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3 px-4 py-3.5 hover:bg-elevated transition-colors"
-                    >
-                      <Icon className="w-5 h-5 text-text-secondary" />
-                      <span className="flex-1 font-medium">{item.label}</span>
-                      <ExternalLink className="w-4 h-4 text-text-tertiary" />
-                    </a>
-                  );
-                }
+                    ) : (
+                      <ChevronRight
+                        className="size-5 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </>
+                );
 
                 return (
-                  <Link
-                    key={item.label}
-                    href={item.href || "#"}
-                    className="flex items-center gap-3 px-4 py-3.5 hover:bg-elevated transition-colors"
-                  >
-                    <Icon className="w-5 h-5 text-text-secondary" />
-                    <span className="flex-1 font-medium">{item.label}</span>
-                    {item.badge !== undefined && item.badge > 0 && (
-                      <Badge variant="default">
-                        {item.badge}
-                      </Badge>
+                  <li key={item.label}>
+                    {item.onClick ? (
+                      <button type="button" onClick={item.onClick} className={rowClasses}>
+                        {inner}
+                      </button>
+                    ) : item.external ? (
+                      <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={rowClasses}
+                      >
+                        {inner}
+                      </a>
+                    ) : (
+                      <Link href={item.href || "#"} className={rowClasses}>
+                        {inner}
+                      </Link>
                     )}
-                    <ChevronRight className="w-5 h-5 text-text-tertiary" />
-                  </Link>
+                  </li>
                 );
               })}
-            </div>
-          </div>
+            </ul>
+          </section>
         ))}
       </div>
 
-      {/* Sign Out */}
+      {/* Sign out */}
       <div className="mt-8">
         <Button
           variant="ghost"
           onClick={() => setShowSignOutConfirm(true)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-surface rounded-xl text-red-400 hover:bg-red-500/10 transition-colors"
+          className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-[var(--radius-xl,17px)] bg-card text-destructive ring-1 ring-foreground/10 hover:bg-destructive/10"
         >
-          <LogOut className="w-5 h-5" />
-          <span className="font-medium">Sign Out</span>
+          <LogOut className="size-5" aria-hidden="true" />
+          <span className="font-medium">Sign out</span>
         </Button>
       </div>
 
-      {/* Member Since */}
-      <div className="mt-8 text-center">
-        <div className="flex items-center justify-center gap-1 text-sm text-text-tertiary">
-          <Calendar className="w-4 h-4" />
-          Member since {joinedDate}
-        </div>
-      </div>
+      {/* Member since */}
+      <p className="mt-8 flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
+        <Calendar className="size-4" aria-hidden="true" />
+        Member since {joinedDate}
+      </p>
 
-      {/* Sign Out Confirmation Modal */}
+      {/* Sign-out confirmation */}
       {showSignOutConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-elevated rounded-2xl p-6 max-w-sm w-full">
-            <h3 className="text-xl font-bold mb-2">Sign Out?</h3>
-            <p className="text-text-secondary mb-6">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowSignOutConfirm(false)}
+        >
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="signout-title"
+            aria-describedby="signout-desc"
+            className="w-full max-w-sm rounded-[var(--radius-xl,17px)] bg-card p-6 ring-1 ring-foreground/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="signout-title" className="mb-2 font-serif text-xl font-bold text-foreground">
+              Sign out?
+            </h2>
+            <p id="signout-desc" className="mb-6 text-muted-foreground">
               Are you sure you want to sign out of your account?
             </p>
             <div className="flex gap-3">
               <Button
                 variant="secondary"
                 onClick={() => setShowSignOutConfirm(false)}
-                className="flex-1 px-4 py-3 rounded-xl bg-surface hover:bg-foreground/10 font-medium transition-colors"
+                className="flex-1"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleSignOut}
-                className="flex-1 px-4 py-3 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors"
+                className="flex-1 bg-destructive text-white hover:bg-destructive/90"
               >
-                Sign Out
+                Sign out
               </Button>
             </div>
           </div>

@@ -214,7 +214,17 @@ export default function RootLayout({
                       <WidgetErrorBoundary fallback={<MinimalNav />} name="Header">
                         <Header />
                       </WidgetErrorBoundary>
-                      <main id="main-content" className="flex-1 relative z-10 pb-16 md:pb-0">{children}</main>
+                      {/* Layered surfaces: the AnimatedBackground sits behind
+                          (-z-9); this page surface floats above it so the animation
+                          reads as ambient depth without distracting behind content.
+                          Container surfaces (cards, panels) stack above this. A
+                          translucent fill (not a backdrop-blur) keeps it cheap. */}
+                      <main
+                        id="main-content"
+                        className="flex-1 relative z-10 pb-16 md:pb-0 bg-background/85"
+                      >
+                        {children}
+                      </main>
                       <WidgetErrorBoundary fallback={null} name="MobileNav">
                         <MobileBottomNav />
                       </WidgetErrorBoundary>

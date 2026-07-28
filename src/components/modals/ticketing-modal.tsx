@@ -28,7 +28,7 @@ export function TicketingModal({
     <ResponsiveModal open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }} title="Ticketing">
       <div className="space-y-4">
         {/* Free/Paid Toggle */}
-        <div className="flex items-center gap-3 p-3 bg-surface rounded-xl">
+        <div className="flex items-center gap-3 p-3 bg-surface text-foreground placeholder:text-text-tertiary rounded-xl">
           <Ticket className="w-5 h-5 text-text-secondary" />
           <span className="flex-1">Free Event</span>
           <Switch
@@ -49,7 +49,7 @@ export function TicketingModal({
               value={ticketUrl}
               onChange={(e) => setTicketUrl(e.target.value)}
               placeholder="https://tickets.example.com/your-event"
-              className="w-full px-4 py-3 bg-surface rounded-xl border-none outline-none text-base"
+              className="w-full px-4 py-3 bg-surface text-foreground placeholder:text-text-tertiary rounded-xl border border-border outline-none focus-visible:ring-2 focus-visible:ring-ring/50 text-base"
             />
             <p className="text-xs text-text-tertiary mt-2">
               Link to your external ticketing page (e.g., Eventbrite, Quicket, etc.)
