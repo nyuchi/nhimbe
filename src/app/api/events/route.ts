@@ -33,11 +33,15 @@ export async function GET(request: Request) {
   const offset = parseBoundedInt(searchParams.get("offset"), { min: 0, max: 100_000, fallback: 0 });
   const cityFilter = clampString(searchParams.get("city") ?? "", 120) || undefined;
   const categoryFilter = clampString(searchParams.get("category") ?? "", 120) || undefined;
+  // Free-text search (the MCP `search_events` tool sends `q`). Length-capped so
+  // an oversized value can't become an expensive regex payload.
+  const queryFilter = clampString(searchParams.get("q") ?? "", 200) || undefined;
 
   try {
     const { events, total, limit: appliedLimit, offset: appliedOffset } = await listEvents({
       city: cityFilter,
       category: categoryFilter,
+      query: queryFilter,
       limit,
       offset,
     });

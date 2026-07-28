@@ -21,31 +21,13 @@
  */
 
 import { withAuth } from "@workos-inc/authkit-nextjs";
-import { eventsCollection, eventUpdatesCollection, personsCollection } from "@/lib/mongo/databases";
-import { stampNew } from "@/lib/mongo/ids";
-import { notifyAttendeesViaCampfire } from "@/lib/mongo/campfire";
+import { eventsCollection, personsCollection } from "@/lib/mongo/databases";
 import { listHostEntitiesForPerson } from "@/lib/mongo/entities";
-import { listUpdateSubscribers } from "@/lib/mongo/update-subscribers";
-import { sendEmail } from "@/lib/email/resend";
-import { eventUpdatePosted } from "@/lib/email/templates";
 import { isDevBypass, DEV_WORKOS_ID } from "@/lib/auth/dev";
-import { createLogger } from "@/lib/observability";
-import type { EventDoc, EventUpdateDoc, PersonDoc } from "@/lib/mongo/types";
+import { writeEventUpdateForHost, type EventUpdateType } from "@/lib/mongo/event-updates";
+import type { EventDoc, PersonDoc } from "@/lib/mongo/types";
 
-const updatesLog = createLogger("event-updates");
-
-const MAX_UPDATE_LENGTH = 4000;
-
-const UPDATE_TYPES = [
-  "announcement",
-  "schedule_change",
-  "venue_change",
-  "cancellation_notice",
-  "thank_you",
-  "general",
-] as const;
-
-export type EventUpdateType = (typeof UPDATE_TYPES)[number];
+export type { EventUpdateType };
 
 export interface PostEventUpdateInput {
   eventId: string;
@@ -95,9 +77,9 @@ async function requireEventHost(
 }
 
 /**
- * Host-only: post an update/announcement to an event. Writes the
- * `events.updates` doc, then (when `notifyAttendees`) best-effort routes the
- * text into the event's Campfire conversation.
+ * Host-only: post an update/announcement to an event. Resolves + host-gates the
+ * cookie-session caller, then delegates the write (+ Campfire/email fan-out) to
+ * the shared core writer, which the bearer-authed MCP blast endpoint reuses.
  */
 export async function postEventUpdate(
   input: PostEventUpdateInput,
@@ -105,90 +87,14 @@ export async function postEventUpdate(
   const eventId = input.eventId?.trim();
   if (!eventId) throw new Error("An event id is required.");
 
-  const text = (input.text ?? "").trim();
-  if (!text) throw new Error("Write an update before posting.");
-  if (text.length > MAX_UPDATE_LENGTH) {
-    throw new Error(`Updates must be ${MAX_UPDATE_LENGTH} characters or fewer.`);
-  }
-
-  const updateType: EventUpdateType =
-    input.updateType && UPDATE_TYPES.includes(input.updateType)
-      ? input.updateType
-      : "announcement";
-
   const { person, event } = await requireEventHost(eventId);
 
-  // The author acts through the event's host entity — requireEventHost just
-  // verified the person hosts through it (Rule 10: entity-centric).
-  const authorEntityId = event.primaryHostEntityId;
-
-  const doc: EventUpdateDoc = {
-    ...stampNew(),
-    eventId,
-    authorPersonId: person._id,
-    authorEntityId,
-    updateType,
-    text,
-    isPinned: input.isPinned === true,
-    notifyAttendees: input.notifyAttendees === true,
-    media: [],
-  };
-
-  const updates = await eventUpdatesCollection();
-  await updates.insertOne(doc);
-
-  // Cross-product write-through (NYU-26), AFTER the primary write succeeded.
-  // notifyAttendeesViaCampfire never throws; the extra guard keeps the update
-  // safe even if that contract ever changes. Awaited so Vercel's serverless
-  // freeze can't drop it mid-flight.
-  if (doc.notifyAttendees) {
-    try {
-      await notifyAttendeesViaCampfire({
-        eventId,
-        eventName: event.name,
-        authorPersonId: person._id,
-        authorEntityId,
-        text,
-      });
-    } catch (error) {
-      updatesLog.error("Campfire notification failed for event update", {
-        data: { eventId, updateId: doc._id },
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
-    }
-
-    // Email fan-out — subscribed attendees + the event team (opt-out at both
-    // the RSVP and the profile-preference level; the author never emails
-    // themself). Best-effort, same never-throw contract as Campfire; sendEmail
-    // itself no-ops when RESEND_API_KEY is unset.
-    try {
-      const recipients = await listUpdateSubscribers({
-        eventId,
-        hostEntityId: authorEntityId,
-        excludePersonId: person._id,
-      });
-      if (recipients.length > 0) {
-        const eventUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://nhimbe.com"}/events/${eventId}`;
-        const template = eventUpdatePosted({ eventName: event.name, updateText: text, eventUrl });
-        const results = await Promise.allSettled(
-          recipients.map((r) =>
-            sendEmail({ to: r.email, subject: template.subject, html: template.html, text: template.text }),
-          ),
-        );
-        const failed = results.filter(
-          (r) => r.status === "rejected" || (r.status === "fulfilled" && !r.value.success),
-        ).length;
-        updatesLog.info("Event-update emails sent", {
-          data: { eventId, updateId: doc._id, recipients: recipients.length, failed },
-        });
-      }
-    } catch (error) {
-      updatesLog.error("Event-update email fan-out failed", {
-        data: { eventId, updateId: doc._id },
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
-    }
-  }
-
-  return { updateId: doc._id };
+  return writeEventUpdateForHost({
+    person,
+    event,
+    text: input.text ?? "",
+    updateType: input.updateType,
+    isPinned: input.isPinned,
+    notifyAttendees: input.notifyAttendees,
+  });
 }
