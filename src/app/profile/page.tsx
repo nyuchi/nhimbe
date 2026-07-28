@@ -19,6 +19,7 @@ import {
   HelpCircle,
   ExternalLink,
   KeyRound,
+  MessageSquareWarning,
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { AuthGuard } from "@/components/auth/auth-guard";
@@ -28,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ProfileBadges } from "@/components/ui/profile-badges";
 import { NyuchiProfileBlock } from "@/components/ui/nyuchi-profile-block";
+import { useFeedback } from "@/components/feedback/feedback-provider";
 
 type MenuItem = {
   icon: LucideIcon;
@@ -50,6 +52,7 @@ function ProfileContent() {
   const router = useRouter();
   const { theme, cycleTheme, resolvedTheme } = useTheme();
   const { user, signOut, profileCompleteness } = useAuth();
+  const { open: openFeedback } = useFeedback();
   const [notifications, setNotifications] = useState(true);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
@@ -112,6 +115,7 @@ function ProfileContent() {
       section: "Support",
       items: [
         { icon: HelpCircle, label: "Help Center", href: "/help" },
+        { icon: MessageSquareWarning, label: "Send Feedback", onClick: () => openFeedback() },
         { icon: Shield, label: "Privacy Policy", href: "/privacy" },
       ],
     },

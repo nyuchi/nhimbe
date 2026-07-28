@@ -4,6 +4,7 @@ import { Component, ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { trackError } from "@/lib/observability";
+import { ReportProblemButton } from "@/components/feedback/report-problem-button";
 
 interface Props {
   children: ReactNode;
@@ -66,10 +67,13 @@ export class SectionErrorBoundary extends Component<Props, State> {
           <p className="text-xs text-text-secondary mb-4">
             Something went wrong in this section.
           </p>
-          <Button variant="outline" size="sm" onClick={this.handleRetry}>
-            <RefreshCw className="w-4 h-4" />
-            Try again
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button variant="outline" size="sm" onClick={this.handleRetry}>
+              <RefreshCw className="w-4 h-4" />
+              Try again
+            </Button>
+            <ReportProblemButton context={`${this.props.section} section`} />
+          </div>
         </div>
       );
     }
