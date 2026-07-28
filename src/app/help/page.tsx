@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useFeedback, openIntercomMessage } from "@/components/feedback/feedback-context";
 import Link from "next/link";
 import {
   Search,
@@ -104,7 +105,38 @@ const faqCategories: FAQCategory[] = [
 ];
 
 export default function HelpPage() {
+  const { openForm } = useFeedback();
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Open Intercom (our support tool). The Messenger loads lazily on /help, so
+  // poll briefly for it; if it never appears (blocked/offline), fall back to the
+  // built-in report form so contacting support is never a dead end.
+  const openSupport = useCallback(
+    (text?: string) => {
+      const message = text || "Hi! I need some help.";
+      let tries = 0;
+      const attempt = () => {
+        if (openIntercomMessage(message)) return;
+        if (++tries > 20) {
+          openForm({ message: text ?? "" });
+          return;
+        }
+        setTimeout(attempt, 300);
+      };
+      attempt();
+    },
+    [openForm],
+  );
+
+  // App-wide "Send feedback / Report a problem" affordances route here with
+  // ?feedback=1 (and an optional prefilled msg) — open the Messenger on arrival.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("feedback") === "1") {
+      openSupport(params.get("msg") || undefined);
+    }
+  }, [openSupport]);
+
   const [openItems, setOpenItems] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set<string>();
     try {
@@ -235,7 +267,7 @@ export default function HelpPage() {
         <p className="text-text-secondary mb-6">
           Our support team is here to assist you with any questions
         </p>
-        <Button variant="default">Contact Support</Button>
+        <Button variant="default" onClick={() => openSupport()}>Contact Support</Button>
       </div>
     </div>
   );

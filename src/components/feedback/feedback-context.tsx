@@ -24,8 +24,17 @@ export interface FeedbackPrefill {
 }
 
 export interface FeedbackContextValue {
-  /** Open the feedback dialog, optionally prefilled. */
+  /**
+   * Primary opener. Routes to Intercom (our customer-support tool): opens the
+   * Messenger's new-message composer prefilled with the report, or navigates to
+   * /help (where the Messenger loads) when it isn't present on the current page.
+   */
   open: (prefill?: FeedbackPrefill) => void;
+  /**
+   * Fallback opener — the built-in Resend/Mongo report dialog. Used on /help
+   * only if the Intercom widget fails to load, so feedback is never a dead end.
+   */
+  openForm: (prefill?: FeedbackPrefill) => void;
 }
 
 export const FeedbackContext = React.createContext<FeedbackContextValue | null>(null);
@@ -37,5 +46,37 @@ export const FeedbackContext = React.createContext<FeedbackContextValue | null>(
  */
 export function useFeedback(): FeedbackContextValue {
   const ctx = React.useContext(FeedbackContext);
-  return ctx ?? { open: () => {} };
+  return ctx ?? { open: () => {}, openForm: () => {} };
+}
+
+/** Window shape carrying the Intercom Messenger command function. */
+type IntercomWindow = Window & {
+  Intercom?: (command: string, ...args: unknown[]) => void;
+};
+
+/**
+ * Compose a single Messenger message from a report prefill — category tag,
+ * the message body, and the error reference when opened from a boundary.
+ */
+export function composeFeedbackMessage(prefill?: FeedbackPrefill): string {
+  const parts: string[] = [];
+  if (prefill?.category === "bug") parts.push("[Bug]");
+  else if (prefill?.category === "idea") parts.push("[Idea]");
+  const body = prefill?.message?.trim();
+  if (body) parts.push(body);
+  if (prefill?.errorDigest) parts.push(`(error ref: ${prefill.errorDigest})`);
+  return parts.join(" ").trim() || "Hi! I'd like to share some feedback.";
+}
+
+/**
+ * Open the Intercom Messenger's new-message composer if the widget is present
+ * on the current page. Returns false when Intercom hasn't loaded (the widget is
+ * only injected on the support surfaces) so the caller can fall back.
+ */
+export function openIntercomMessage(message: string): boolean {
+  if (typeof window === "undefined") return false;
+  const w = window as IntercomWindow;
+  if (typeof w.Intercom !== "function") return false;
+  w.Intercom("showNewMessage", message);
+  return true;
 }
