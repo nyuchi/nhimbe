@@ -32,7 +32,7 @@ import { createLogger } from "@/lib/observability";
 const feedbackLog = createLogger("feedback");
 
 /** Where feedback emails land. Overridable per environment. */
-const FEEDBACK_INBOX = process.env.FEEDBACK_INBOX || "support@nhimbe.com";
+const FEEDBACK_INBOX = process.env.FEEDBACK_INBOX || "support@mukoko.com";
 
 const MESSAGE_MAX = 5000;
 const FIELD_MAX = 1000;
