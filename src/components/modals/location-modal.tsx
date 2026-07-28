@@ -61,7 +61,7 @@ export function LocationModal({
       <div className="space-y-4">
         <label
           htmlFor="online-event-toggle"
-          className="flex items-center gap-3 p-3 bg-surface rounded-xl cursor-pointer select-none"
+          className="flex items-center gap-3 p-3 bg-surface text-foreground placeholder:text-text-tertiary rounded-xl cursor-pointer select-none"
         >
           <Globe className="w-5 h-5 text-text-secondary" />
           <span className="flex-1">Online Event</span>
@@ -117,7 +117,7 @@ export function LocationModal({
                     ? "https://teams.microsoft.com/..."
                     : "https://..."
                 }
-                className="w-full px-4 py-3 bg-surface rounded-xl border-none outline-none text-base"
+                className="w-full px-4 py-3 bg-surface text-foreground placeholder:text-text-tertiary rounded-xl border border-border outline-none focus-visible:ring-2 focus-visible:ring-ring/50 text-base"
               />
               {meetingUrl.trim() && !isValidMeetingUrl(meetingUrl) ? (
                 <p className="text-xs text-red-400 mt-2">Please enter a valid URL starting with https://</p>
@@ -162,7 +162,7 @@ export function LocationModal({
                 value={venue}
                 onChange={(e) => setVenue(e.target.value)}
                 placeholder="e.g., Rainbow Towers Hotel"
-                className="w-full px-4 py-3 bg-surface rounded-xl border-none outline-none text-base"
+                className="w-full px-4 py-3 bg-surface text-foreground placeholder:text-text-tertiary rounded-xl border border-border outline-none focus-visible:ring-2 focus-visible:ring-ring/50 text-base"
               />
             </div>
             <div>
@@ -174,7 +174,7 @@ export function LocationModal({
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="Street address"
-                className="w-full px-4 py-3 bg-surface rounded-xl border-none outline-none text-base"
+                className="w-full px-4 py-3 bg-surface text-foreground placeholder:text-text-tertiary rounded-xl border border-border outline-none focus-visible:ring-2 focus-visible:ring-ring/50 text-base"
               />
             </div>
             <div>

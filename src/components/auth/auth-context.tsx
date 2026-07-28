@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useMemo,
   ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -30,6 +31,8 @@ export interface NhimbeUser {
   role: UserRole;
   /** Event-update notifications (opt-out; absent means subscribed). */
   subscribedToEventUpdates?: boolean;
+  /** Preferred UI language — "en" (default) or "sn" (Shona). */
+  locale?: "en" | "sn";
 }
 
 export interface ProfileCompleteness {
@@ -121,6 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           addressCountry: appUser.addressCountry,
           interests: appUser.interests,
           role: appUser.role,
+          subscribedToEventUpdates: appUser.subscribedToEventUpdates,
+          locale: appUser.locale,
         });
       } else {
         // No session or suspended account — treat as signed out.
@@ -188,13 +193,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasAddressLocality = !!nhimbeUser?.addressLocality;
   const hasInterests = !!nhimbeUser?.interests && nhimbeUser.interests.length > 0;
 
-  const profileCompleteness: ProfileCompleteness = {
-    name: hasName,
-    addressLocality: hasAddressLocality,
-    interests: hasInterests,
-    complete: hasName && hasAddressLocality && hasInterests,
-  };
-
   const getAccessTokenSafe = useCallback(async () => {
     try {
       const t = await getAccessToken();
@@ -204,23 +202,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [getAccessToken]);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user: nhimbeUser,
-        isAuthenticated,
-        isLoading,
-        profileCompleteness,
-        signIn,
-        signOut,
-        refreshUser,
-        accessToken: accessToken ?? null,
-        getAccessToken: getAccessTokenSafe,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  // Memoise the context value so useAuth consumers don't re-render on every
+  // AuthProvider render. Previously the value was a fresh object literal each
+  // render, so the whole subscribed tree (header, guards, every page using
+  // useAuth) re-rendered even when nothing auth-related changed — a systemic
+  // churn source behind sluggish navigation. Every callback here is useCallback-
+  // stable, so the memo only changes when real auth state changes.
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user: nhimbeUser,
+      isAuthenticated,
+      isLoading,
+      profileCompleteness: {
+        name: hasName,
+        addressLocality: hasAddressLocality,
+        interests: hasInterests,
+        complete: hasName && hasAddressLocality && hasInterests,
+      },
+      signIn,
+      signOut,
+      refreshUser,
+      accessToken: accessToken ?? null,
+      getAccessToken: getAccessTokenSafe,
+    }),
+    [
+      nhimbeUser,
+      isAuthenticated,
+      isLoading,
+      hasName,
+      hasAddressLocality,
+      hasInterests,
+      signIn,
+      signOut,
+      refreshUser,
+      accessToken,
+      getAccessTokenSafe,
+    ],
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
