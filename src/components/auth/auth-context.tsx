@@ -31,6 +31,8 @@ export interface NhimbeUser {
   role: UserRole;
   /** Event-update notifications (opt-out; absent means subscribed). */
   subscribedToEventUpdates?: boolean;
+  /** Preferred UI language — "en" (default) or "sn" (Shona). */
+  locale?: "en" | "sn";
 }
 
 export interface ProfileCompleteness {
@@ -122,6 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           addressCountry: appUser.addressCountry,
           interests: appUser.interests,
           role: appUser.role,
+          subscribedToEventUpdates: appUser.subscribedToEventUpdates,
+          locale: appUser.locale,
         });
       } else {
         // No session or suspended account — treat as signed out.
