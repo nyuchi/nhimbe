@@ -149,18 +149,32 @@ function NyuchiListingCard({
       ? new Intl.NumberFormat(undefined, { style: "currency", currency }).format(price)
       : price;
 
+  // Cover fallback for events with no uploaded image: a mineral-accented gradient
+  // (keyed on the card's category mineral) so the card never shows a blank cover.
+  const mineralHex: Record<Mineral, string> = {
+    cobalt: "var(--color-cobalt, #00B0FF)",
+    tanzanite: "var(--color-tanzanite, #B388FF)",
+    malachite: "var(--color-malachite, #64FFDA)",
+    gold: "var(--color-gold, #FFD740)",
+    terracotta: "var(--color-terracotta, #D4A574)",
+  };
+  const fallbackCover = `linear-gradient(135deg, ${mineralHex[mineral]}, color-mix(in srgb, ${mineralHex[mineral]} 45%, #000))`;
+
   const content = (
     <>
-      {isCompact && image && (
-        <div className="aspect-video overflow-hidden bg-muted">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={image}
-            alt={title}
-            className="size-full object-cover transition-transform duration-300 group-hover/listing:scale-105"
-          />
-        </div>
-      )}
+      {isCompact &&
+        (image ? (
+          <div className="aspect-video overflow-hidden bg-muted">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={image}
+              alt={title}
+              className="size-full object-cover transition-transform duration-300 group-hover/listing:scale-105"
+            />
+          </div>
+        ) : (
+          <div className="aspect-video overflow-hidden" style={{ background: fallbackCover }} aria-hidden />
+        ))}
 
       {isHero && (
         <div
@@ -185,12 +199,19 @@ function NyuchiListingCard({
         </div>
       )}
 
-      {isRow && image && (
-        <div className="size-12 shrink-0 overflow-hidden rounded-[var(--radius-inner,7px)] bg-muted">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt="" className="size-full object-cover" />
-        </div>
-      )}
+      {isRow &&
+        (image ? (
+          <div className="size-12 shrink-0 overflow-hidden rounded-[var(--radius-inner,7px)] bg-muted">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={image} alt="" className="size-full object-cover" />
+          </div>
+        ) : (
+          <div
+            className="size-12 shrink-0 overflow-hidden rounded-[var(--radius-inner,7px)]"
+            style={{ background: fallbackCover }}
+            aria-hidden
+          />
+        ))}
 
       <div className={cn("relative flex min-w-0 flex-1 flex-col gap-1.5", isCompact && "p-4", isHero && "z-10")}>
         {category && (

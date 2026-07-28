@@ -158,7 +158,7 @@ export default function CreateEventForm() {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
+  const [created, setCreated] = useState<{ id: string; name: string; shortCode?: string } | null>(null);
 
   // Hosting (step 3)
   const [hostMode, setHostMode] = useState<HostMode>("person");
@@ -299,7 +299,7 @@ export default function CreateEventForm() {
   const formatDateForDisplay = () => {
     if (!eventDate) return "Select Date & Time";
     const date = new Date(eventDate);
-    return date.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" });
+    return date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   };
 
   const validateStep = useCallback(
@@ -402,7 +402,11 @@ export default function CreateEventForm() {
       });
 
       setFormTouched(false);
-      setCreated({ id: result.id, name: eventName.trim() || "Your event" });
+      setCreated({
+        id: result.id,
+        name: eventName.trim() || "Your event",
+        shortCode: result.event?.shortCode,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create event. Please try again.");
     } finally {
@@ -421,7 +425,8 @@ export default function CreateEventForm() {
           message={`${created.name} is live. Share it with your community to start getting RSVPs.`}
           primaryAction={{
             label: "View event",
-            onClick: () => router.push(`/events/${created.id}`),
+            onClick: () =>
+              router.push(created.shortCode ? `/e/${created.shortCode}` : `/events/${created.id}`),
           }}
           secondaryAction={{ label: "My events", onClick: () => router.push("/my-events") }}
         />
@@ -430,8 +435,13 @@ export default function CreateEventForm() {
   }
 
   return (
-    <div className="max-w-150 mx-auto px-4">
-      <WizardStepIndicator currentStep={step} steps={STEPS} />
+    // Full-bleed SOLID surface behind the whole wizard so nothing (page washes,
+    // entry animations, anything rendered underneath) bleeds through and
+    // distracts while creating an event.
+    <div className="min-h-dvh bg-background">
+      <div className="max-w-150 mx-auto px-4 pb-28">
+        <div className="mt-2 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+        <WizardStepIndicator currentStep={step} steps={STEPS} />
 
       {step === 1 && (
         <section aria-label="About your event" data-slot="wizard-step-1">
@@ -452,16 +462,26 @@ export default function CreateEventForm() {
             What are we gathering for? Give it a name, pick a category, and add the story.
           </p>
 
-          <Input
-            type="text"
-            inputMode="text"
-            autoCapitalize="words"
-            enterKeyHint="next"
-            value={eventName}
-            onChange={(e) => { setEventName(e.target.value); touchForm(); }}
-            placeholder="Event Name"
-            className="w-full text-2xl font-semibold bg-transparent border-none shadow-none outline-none placeholder:text-text-tertiary mb-4 h-auto px-0 focus-visible:ring-0"
-          />
+          <div className="mb-4">
+            <label
+              htmlFor="create-event-name"
+              className="block text-sm font-medium text-foreground mb-1.5"
+            >
+              Event name <span className="text-red-500" aria-hidden>*</span>
+            </label>
+            <Input
+              id="create-event-name"
+              type="text"
+              inputMode="text"
+              autoCapitalize="words"
+              enterKeyHint="next"
+              value={eventName}
+              onChange={(e) => { setEventName(e.target.value); touchForm(); }}
+              placeholder="e.g. Harare Tech Meetup"
+              aria-required="true"
+              className="w-full h-auto text-xl font-semibold bg-surface text-foreground rounded-xl border border-border px-4 py-3 shadow-xs placeholder:text-text-tertiary placeholder:font-normal focus-visible:ring-2 focus-visible:ring-ring/50"
+            />
+          </div>
 
           <FormFieldRow icon={<span className="text-lg" aria-hidden>🏷️</span>} onClick={() => setShowCategoryModal(true)}>
             <div className={`font-medium ${!category ? "text-text-secondary" : ""}`}>
@@ -588,6 +608,7 @@ export default function CreateEventForm() {
           <p className="text-red-400 text-sm">{error}</p>
         </div>
       )}
+      </div>
 
       {/* Sticky wizard navigation — branded nyuchi-create-listing PublishBar,
           keeping the wizard's goNext/handleSubmit flow and server action. */}
@@ -618,6 +639,7 @@ export default function CreateEventForm() {
       <DescriptionModal isOpen={showDescriptionModal} onClose={() => { setShowDescriptionModal(false); touchForm(); }} description={description} setDescription={setDescription} eventName={eventName} category={category} isOnline={isOnline} />
       <TicketingModal isOpen={showPriceModal} onClose={() => { setShowPriceModal(false); touchForm(); }} isFree={isFree} setIsFree={setIsFree} ticketUrl={ticketUrl} setTicketUrl={setTicketUrl} />
       <CapacityModal isOpen={showCapacityModal} onClose={() => { setShowCapacityModal(false); touchForm(); }} capacity={capacity} setCapacity={setCapacity} />
+      </div>
     </div>
   );
 }

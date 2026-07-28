@@ -39,15 +39,18 @@ function formatDateFragments(date: Date): Event["date"] {
   }
   return {
     day: String(date.getUTCDate()),
-    month: date.toLocaleString("en-US", { month: "short", timeZone: "UTC" }),
-    full: date.toLocaleString("en-US", {
+    // British (en-GB) formatting: day-before-month long dates ("Monday 3 August
+    // 2026") and 24-hour times ("19:00"), not the American "August 3, 2026" /
+    // "7:00 PM" order.
+    month: date.toLocaleString("en-GB", { month: "short", timeZone: "UTC" }),
+    full: date.toLocaleString("en-GB", {
       weekday: "long",
-      month: "long",
       day: "numeric",
+      month: "long",
       year: "numeric",
       timeZone: "UTC",
     }),
-    time: date.toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" }),
+    time: date.toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" }),
   };
 }
 
@@ -181,7 +184,9 @@ export function mapEventDocToApi(doc: EventDoc, relations: EventRelations = {}):
 
   return {
     id: doc._id,
-    shortCode: (doc.slug ?? doc._id).slice(0, 8),
+    // Prefer the stored short share code (mukoko.shortCode, written at creation);
+    // fall back to a slug/id slice for legacy events created before it existed.
+    shortCode: (meta.shortCode as string | undefined) ?? (doc.slug ?? doc._id).slice(0, 8),
     slug: doc.slug ?? doc._id,
     name: doc.name,
     description: doc.description ?? "",
