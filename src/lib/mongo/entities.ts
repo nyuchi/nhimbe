@@ -19,7 +19,13 @@ import {
 } from "./databases";
 import { newId, slugify, stampNew, WRITE_SCHEMA_VERSION } from "./ids";
 import { ensurePersonForWorkosId } from "./users";
-import type { EntityDoc, EntityMembershipDoc, EntityMembershipRole, PersonDoc } from "./types";
+import type {
+  EntityDoc,
+  EntityMembershipDoc,
+  EntityMembershipRole,
+  EntityType,
+  PersonDoc,
+} from "./types";
 
 export async function getEntityById(id: string): Promise<EntityDoc | null> {
   const col = await entitiesCollection();
@@ -77,6 +83,155 @@ export async function listHostEntitiesForPerson(personId: string): Promise<Entit
   if (entityIds.length === 0) return [];
   const entities = await entitiesCollection();
   return entities.find({ _id: { $in: entityIds }, isActive: true }).toArray();
+}
+
+// ── Entity management (account preferences) ────────────────────────────
+//
+// The account-preferences "Manage host entities" surface lets a person see the
+// entities they can host through, rename their own personal/family entity, and
+// pick which one is their default. WorkOS-owned organisation entities are
+// read-only here (created/renamed via WorkOS, mirrored by the webhook) — only a
+// person's `family` entity is editable, and only by someone with a manage-level
+// role on it.
+
+/** Membership roles that may rename/manage a family host entity. */
+const MANAGE_ROLES: readonly EntityMembershipRole[] = ["founder", "admin", "manager"];
+
+/** Rank hostable roles so the highest role a person holds on an entity wins. */
+const ROLE_RANK: Record<string, number> = {
+  founder: 4,
+  admin: 3,
+  manager: 2,
+  representative: 1,
+};
+
+/**
+ * A host entity paired with the acting person's effective role on it. `role` is
+ * the highest hostable role the person holds across their memberships on that
+ * entity.
+ */
+export interface HostEntityWithRole {
+  entity: EntityDoc;
+  role: EntityMembershipRole;
+}
+
+/**
+ * Whether a person holding `role` on an entity of `entityType` may rename it.
+ * Pure so it can be reused by the gate on the write path and asserted in tests.
+ * Only `family` entities are editable in nhimbe — organisation entities are
+ * WorkOS-owned and read-only here.
+ */
+export function canManageHostEntity(
+  role: EntityMembershipRole,
+  entityType: EntityType,
+): boolean {
+  return entityType === "family" && MANAGE_ROLES.includes(role);
+}
+
+/**
+ * List the entities a person can host through, each paired with the person's
+ * effective (highest) hostable role. Same active-membership predicate as
+ * {@link listHostEntitiesForPerson}, batched the same way.
+ */
+export async function listHostEntitiesWithRoleForPerson(
+  personId: string,
+): Promise<HostEntityWithRole[]> {
+  const memberships = await entityMembershipsCollection();
+  const mships = await memberships
+    .find({ personId, isActive: true, membershipRole: { $in: HOSTABLE_ROLES } })
+    .toArray();
+
+  const roleByEntity = new Map<string, EntityMembershipRole>();
+  for (const m of mships) {
+    const current = roleByEntity.get(m.entityId);
+    if (!current || (ROLE_RANK[m.membershipRole] ?? 0) > (ROLE_RANK[current] ?? 0)) {
+      roleByEntity.set(m.entityId, m.membershipRole);
+    }
+  }
+
+  const entityIds = [...roleByEntity.keys()];
+  if (entityIds.length === 0) return [];
+  const entities = await entitiesCollection();
+  const docs = await entities.find({ _id: { $in: entityIds }, isActive: true }).toArray();
+  return docs.map((entity) => ({ entity, role: roleByEntity.get(entity._id)! }));
+}
+
+/**
+ * The acting person's highest hostable role on one entity, or `null` when they
+ * hold no active hostable membership on it. The authorisation primitive behind
+ * the rename / set-default writes.
+ */
+export async function getPersonHostRoleForEntity(
+  personId: string,
+  entityId: string,
+): Promise<EntityMembershipRole | null> {
+  const memberships = await entityMembershipsCollection();
+  const mships = await memberships
+    .find({ personId, entityId, isActive: true, membershipRole: { $in: HOSTABLE_ROLES } })
+    .toArray();
+  if (mships.length === 0) return null;
+  let best: EntityMembershipRole | null = null;
+  for (const m of mships) {
+    if (!best || (ROLE_RANK[m.membershipRole] ?? 0) > (ROLE_RANK[best] ?? 0)) {
+      best = m.membershipRole;
+    }
+  }
+  return best;
+}
+
+/**
+ * Rename a person's family host entity. Gated: the person must hold a
+ * manage-level role on the entity AND the entity must be of type `family`
+ * (organisation entities are WorkOS-owned, read-only here). Throws on a missing
+ * entity or an unauthorised caller; returns the updated entity. The slug is
+ * regenerated from the new name (with the usual random suffix for uniqueness).
+ */
+export async function renameHostEntityForPerson(params: {
+  personId: string;
+  entityId: string;
+  name: string;
+}): Promise<EntityDoc> {
+  const name = params.name.trim();
+  if (!name) throw new Error("A name is required.");
+  if (name.length > 120) throw new Error("That name is too long.");
+
+  const entity = await getEntityById(params.entityId);
+  if (!entity) throw new Error("That entity could not be found.");
+
+  const role = await getPersonHostRoleForEntity(params.personId, params.entityId);
+  if (!role || !canManageHostEntity(role, entity.entityType)) {
+    throw new Error("You do not have permission to rename this entity.");
+  }
+
+  const entities = await entitiesCollection();
+  const updated = await entities.findOneAndUpdate(
+    { _id: params.entityId },
+    { $set: { name, slug: slugify(name), updatedAt: new Date() } },
+    { returnDocument: "after" },
+  );
+  if (!updated) throw new Error("That entity could not be updated.");
+  return updated;
+}
+
+/**
+ * Set a person's default host entity (`identity.persons.bundu.defaultFamilyEntityId`).
+ * Gated: the person must hold an active hostable membership on the target
+ * entity — you can only default to an entity you can actually host through.
+ * Throws when the person cannot host through the entity.
+ */
+export async function setDefaultHostEntityForPerson(params: {
+  personId: string;
+  entityId: string;
+}): Promise<void> {
+  const role = await getPersonHostRoleForEntity(params.personId, params.entityId);
+  if (!role) {
+    throw new Error("You can only default to an entity you host through.");
+  }
+  const persons = await personsCollection();
+  await persons.updateOne(
+    { _id: params.personId },
+    { $set: { "bundu.defaultFamilyEntityId": params.entityId, updatedAt: new Date() } },
+  );
 }
 
 /**
