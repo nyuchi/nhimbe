@@ -3,7 +3,7 @@
 // recognise it. Describes how AI agents authenticate to nhimbe's protected
 // APIs via WorkOS AuthKit bearer tokens.
 
-import { workosAuthMetadata } from "@/lib/auth/workos-metadata";
+import { workosAuthMetadata, workosMcpClientId } from "@/lib/auth/workos-metadata";
 import { SITE_URL } from "@/lib/site-url";
 
 // force-dynamic: derived at request time from runtime env (WORKOS_AUTHKIT_DOMAIN)
@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 function buildAuthMd(): string {
   const workos = workosAuthMetadata();
+  const mcpClientId = workosMcpClientId();
   return `# auth.md
 
 Nhimbe is a community events discovery and management platform, part of the
@@ -63,10 +64,13 @@ signs in once through the hosted AuthKit UI:
    (\`${workos.issuer}\`), whose metadata
    (\`${SITE_URL}/.well-known/oauth-authorization-server\`) advertises the
    authorize, token, JWKS and dynamic-client-registration endpoints below.
-3. The client self-registers via DCR (\`${workos.registrationEndpoint}\`), then
-   runs the authorization-code + PKCE flow. The user completes sign-in in the
-   hosted AuthKit UI (email code, password, passkey, MFA or social — all
-   configured in WorkOS), and the client stores the returned tokens.
+3. The client obtains an OAuth client id — either by self-registering via DCR
+   (\`${workos.registrationEndpoint}\`), or, for clients that use a fixed
+   pre-registered client, the dedicated **Mukoko Events MCP** OAuth client id
+   \`${mcpClientId}\` (a WorkOS Connect app separate from the app's own login
+   client). It then runs the authorization-code + PKCE flow. The user completes
+   sign-in in the hosted AuthKit UI (email code, password, passkey, MFA or
+   social — all configured in WorkOS), and the client stores the returned tokens.
 
 Once authorized, the client reuses the access token (refreshing via
 \`offline_access\`) on every MCP call — there is no second sign-in.
@@ -90,6 +94,7 @@ bearer_methods_supported: [header]
 agent_auth:
   skill: "Discover and register for community events on Nhimbe"
   register_uri: ${workos.registrationEndpoint}
+  client_id: ${mcpClientId}
   identity_types_supported: [identity_assertion]
   identity_assertion:
     assertion_types_supported: [urn:ietf:params:oauth:token-type:id-jag]
