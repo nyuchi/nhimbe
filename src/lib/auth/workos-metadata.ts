@@ -60,6 +60,25 @@ export function workosClientId(): string {
   return process.env.WORKOS_CLIENT_ID ?? "";
 }
 
+/**
+ * WorkOS client id for the **MCP OAuth connector** — a WorkOS Connect app that
+ * is DISTINCT from the app's first-party AuthKit login client
+ * (`WORKOS_CLIENT_ID`). MCP clients (e.g. Claude/ChatGPT connectors) authorize
+ * against this one; keeping it separate is what lets its redirect URIs and
+ * consent behaviour be configured for the third-party connector flow (the app's
+ * own login client isn't set up for it — hence the `state`-drop failures).
+ *
+ * A client id is a **public** OAuth identifier (it rides in every authorize URL
+ * and discovery doc), NOT a secret — so it lives in a plain env var, with the
+ * production value as the default. Override per environment via
+ * `WORKOS_MCP_CLIENT_ID`. The bearer-token verifier needs no change: a WorkOS
+ * environment signs every access token with one key, so tokens minted through
+ * this client verify against the same JWKS the app already trusts.
+ */
+export function workosMcpClientId(): string {
+  return process.env.WORKOS_MCP_CLIENT_ID || "client_01KYH11K4XV3HRPGMAQ4JS18RH";
+}
+
 export interface WorkosAuthMetadata {
   /** OAuth/OIDC issuer — the AuthKit (authorization-server) domain origin. */
   issuer: string;
@@ -72,8 +91,13 @@ export interface WorkosAuthMetadata {
   clientId: string;
 }
 
-/** The one place discovery endpoints are computed. */
-export function workosAuthMetadata(): WorkosAuthMetadata {
+/**
+ * The one place discovery endpoints are computed. Pass `{ mcp: true }` when the
+ * document is being served for the MCP resource (`events.mukoko.com`) so the
+ * advertised `clientId` is the dedicated MCP Connect app rather than the app's
+ * first-party login client.
+ */
+export function workosAuthMetadata(opts?: { mcp?: boolean }): WorkosAuthMetadata {
   const base = `https://${workosAuthkitDomain()}`;
   return {
     issuer: base,
@@ -81,6 +105,6 @@ export function workosAuthMetadata(): WorkosAuthMetadata {
     tokenEndpoint: `${base}/oauth2/token`,
     jwksUri: `${base}/oauth2/jwks`,
     registrationEndpoint: `${base}/oauth2/register`,
-    clientId: workosClientId(),
+    clientId: opts?.mcp ? workosMcpClientId() : workosClientId(),
   };
 }
