@@ -4,18 +4,29 @@ import type { Metadata } from "next";
 import { getEventByIdOrSlug } from "@/lib/mongo/events";
 import { SITE_URL } from "@/lib/site-url";
 import { EventDetailContent } from "./event-detail-content";
+import { syncCurrentUser } from "@/app/actions/auth";
+import {
+  getEventStatsAction,
+  getEventReviewsAction,
+  getUserReferralCodeAction,
+  generateUserReferralCodeAction,
+} from "@/app/actions/engagement";
+import type { EventStats, ReviewStats, UserReferralCode } from "@/lib/api";
 
 interface EventDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
-// The root layout reads request cookies via `withAuth()` (WorkOSProvider), which
-// makes every route in the app dynamic. This page must therefore render on demand
-// too — opting into static generation (a bare `generateStaticParams`) makes Next
-// prerender it as SSG, then the runtime cookie read flips it static→dynamic and
-// throws "Page changed from static to dynamic at runtime" (HTTP 500). Force
-// dynamic so the SEO/detail render always runs per-request, consistent with
-// `/events` and the rest of the app.
+// The root layout used to read the session cookie via `withAuth()`
+// (WorkOSProvider), which forced every route in the app dynamic — including
+// this one, where opting into static generation triggered "Page changed from
+// static to dynamic at runtime" (HTTP 500) once the layout's cookie read ran.
+// That layout-level read is gone now (see workos-provider.tsx), so this
+// page COULD attempt static/ISR generation again — kept force-dynamic
+// deliberately for now: RSVPs, host updates and check-ins change often
+// enough that per-request freshness is the safer default, and re-enabling
+// static generation here needs its own verification pass (this comment's own
+// history shows that transition has bitten this page before).
 export const dynamic = "force-dynamic";
 
 // Direct Mongo read on the server — events created via the createEvent server
@@ -29,6 +40,41 @@ const loadEvent = cache(async (id: string) => {
     return null;
   }
 });
+
+/**
+ * Server-side companion data for the event-detail page — stats, review
+ * aggregates, and (when signed in) the viewer's referral code. Previously
+ * each of these was its own client `useEffect` firing after hydration
+ * (three extra round trips, one of them gated behind the client auth
+ * context resolving first). Fetched here in parallel and passed down as
+ * initial state instead; this page is already `force-dynamic`; so this
+ * costs nothing that dynamism wasn't already paying for.
+ *
+ * The other event-detail subcomponents (venue card, weather, map, campfire,
+ * polls, host card, waitlist) still fetch their own data client-side —
+ * consolidating those too is a larger, separate pass (each owns its own
+ * fetch contract) and is left for later.
+ */
+async function loadCompanionData(
+  eventId: string,
+): Promise<{ stats: EventStats | null; reviewStats: ReviewStats | null; userReferral: UserReferralCode | null }> {
+  const [stats, reviews, userReferral] = await Promise.all([
+    getEventStatsAction(eventId).catch(() => null),
+    getEventReviewsAction(eventId).catch(() => null),
+    syncCurrentUser()
+      .then(async (appUser) => {
+        if (!appUser) return null;
+        let referral = await getUserReferralCodeAction(appUser.id);
+        if (!referral) {
+          const result = await generateUserReferralCodeAction(appUser.id);
+          referral = { code: result.code, totalReferrals: 0, totalConversions: 0 };
+        }
+        return referral;
+      })
+      .catch(() => null),
+  ]);
+  return { stats, reviewStats: reviews?.stats ?? null, userReferral };
+}
 
 // Dynamic OpenGraph metadata
 export async function generateMetadata({ params }: EventDetailPageProps): Promise<Metadata> {
@@ -110,6 +156,8 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     notFound();
   }
 
+  const { stats, reviewStats, userReferral } = await loadCompanionData(event.id);
+
   const eventUrl = `${SITE_URL}/e/${event.shortCode}`;
 
   // JSON-LD structured data for SEO
@@ -169,7 +217,12 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <EventDetailContent event={event} />
+      <EventDetailContent
+        event={event}
+        initialStats={stats}
+        initialReviewStats={reviewStats}
+        initialUserReferral={userReferral}
+      />
     </>
   );
 }

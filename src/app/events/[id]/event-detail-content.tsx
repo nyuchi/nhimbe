@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ArrowLeft, MapPin, Video, Bookmark, Globe, ChevronRight, Flame, Eye, Star } from "lucide-react";
@@ -31,14 +30,7 @@ import { EventSpecifics } from "./event-specifics";
 import { EventVenueCard } from "./event-venue-card";
 import { EventPolls } from "./event-polls";
 import { EventCampfire } from "./event-campfire";
-import { useAuth } from "@/components/auth/auth-context";
 import { type UserReferralCode, type EventStats, type ReviewStats } from "@/lib/api";
-import {
-  getUserReferralCodeAction,
-  generateUserReferralCodeAction,
-  getEventStatsAction,
-  getEventReviewsAction,
-} from "@/app/actions/engagement";
 import type { Event } from "@/lib/api";
 import { useSaveEvent } from "@/lib/use-save-event";
 
@@ -54,6 +46,10 @@ const ReferralLeaderboard = dynamic(
 
 interface EventDetailContentProps {
   event: Event;
+  /** Resolved server-side in page.tsx (parallel with the event read) — see loadCompanionData. */
+  initialStats: EventStats | null;
+  initialReviewStats: ReviewStats | null;
+  initialUserReferral: UserReferralCode | null;
 }
 
 /** Map a schema.org eventStatus to a branded alert; null when scheduled. */
@@ -98,12 +94,18 @@ function formatViews(count: number): string {
   return count.toString();
 }
 
-export function EventDetailContent({ event }: EventDetailContentProps) {
-  const { user } = useAuth();
+export function EventDetailContent({
+  event,
+  initialStats,
+  initialReviewStats,
+  initialUserReferral,
+}: EventDetailContentProps) {
   const statusAlert = eventStatusAlert(event.eventStatus);
-  const [userReferral, setUserReferral] = useState<UserReferralCode | null>(null);
-  const [stats, setStats] = useState<EventStats | null>(null);
-  const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
+  // Resolved server-side (see page.tsx's loadCompanionData) — no client
+  // fetch, no setter, nothing to update after mount.
+  const userReferral = initialUserReferral;
+  const stats = initialStats;
+  const reviewStats = initialReviewStats;
   // Bookmark / save persists to events.save_action via the hook — no more
   // local-only state. canSave gates the click for unauthenticated users.
   const { saved, toggle: toggleSaved, canSave: canSaveEvent } = useSaveEvent(event.id);
@@ -123,37 +125,6 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
     event.id,
     "ticket"
   );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    getEventStatsAction(event.id).then(data => {
-      if (!controller.signal.aborted) setStats(data);
-    }).catch(() => {});
-    return () => controller.abort();
-  }, [event.id]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    getEventReviewsAction(event.id).then(r => {
-      if (!controller.signal.aborted) setReviewStats(r.stats);
-    }).catch(() => {});
-    return () => controller.abort();
-  }, [event.id]);
-
-  useEffect(() => {
-    async function fetchReferralCode() {
-      if (!user?.id) return;
-      try {
-        let referral = await getUserReferralCodeAction(user.id);
-        if (!referral) {
-          const result = await generateUserReferralCodeAction(user.id);
-          referral = { code: result.code, totalReferrals: 0, totalConversions: 0 };
-        }
-        setUserReferral(referral);
-      } catch {}
-    }
-    fetchReferralCode();
-  }, [user?.id]);
 
   return (
     <EventThemeWrapper coverGradient={event.coverGradient}>
