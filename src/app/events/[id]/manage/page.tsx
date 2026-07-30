@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -411,17 +412,49 @@ function ManageEventContent() {
           </div>
 
           {/* Event Preview Card */}
-          <Card className="overflow-hidden">
+          <Card className="overflow-hidden p-0">
             <div className="flex flex-col md:flex-row">
-              {/* Cover Image */}
+              {/* Cover Image — mirrors the public event page's banner
+                  (event-cover.tsx): image + dark scrim + date/category
+                  overlay, not a bare background div. The Card above needs
+                  `p-0` here too — its default padding was pushing this block
+                  down from the rounded corner, leaving a blank strip above it. */}
               <div
-                className="w-full md:w-64 h-48 md:h-auto shrink-0"
-                style={{
-                  background: event.image
-                    ? `url(${event.image}) center/cover`
-                    : event.coverGradient || "linear-gradient(135deg, #64FFDA 0%, #B388FF 100%)",
-                }}
-              />
+                className="relative w-full md:w-64 h-48 md:h-auto shrink-0 overflow-hidden"
+                style={
+                  event.image
+                    ? {
+                        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.5)), url('${event.image}')`,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
+                      }
+                    : { background: event.coverGradient || "linear-gradient(135deg, #64FFDA 0%, #B388FF 100%)" }
+                }
+              >
+                {event.image && (
+                  <Image src={event.image} alt={event.name} fill className="object-cover" />
+                )}
+                <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent" />
+                <div className="absolute top-3 left-3 flex gap-2 z-10">
+                  <div className="bg-black/70 backdrop-blur-sm px-2.5 py-1.5 rounded-xl text-center">
+                    <div
+                      className="text-lg font-extrabold leading-none"
+                      style={{ color: "var(--event-primary)" }}
+                    >
+                      {event.date.day}
+                    </div>
+                    <div className="text-[10px] font-semibold text-white/60 uppercase tracking-wide">
+                      {event.date.month}
+                    </div>
+                  </div>
+                  <Badge
+                    className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase self-start border-0"
+                    style={{ backgroundColor: "var(--event-primary)", color: "#0A0A0A" }}
+                  >
+                    {event.category}
+                  </Badge>
+                </div>
+              </div>
               {/* Event Info */}
               <div className="flex-1 p-6">
                 <h2 className="text-xl font-bold mb-3">{event.name}</h2>
