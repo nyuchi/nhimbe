@@ -1,17 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { User, Building2, Home, BadgeCheck, Star } from "lucide-react";
+import { User, Building2, Home, BadgeCheck, Star, Globe } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Rating } from "@/components/ui/rating";
 import {
   getEventHostCard,
   type EventHostInfo,
   type HostReputation,
 } from "@/app/actions/host-card";
+import type { ReviewStats } from "@/lib/api";
 
 interface EventEntityHostCardProps {
   eventId: string;
   onResolved?: (found: boolean) => void;
+  /** The event's own review aggregate — shown alongside the host identity. */
+  reviewStats?: ReviewStats | null;
 }
 
 // nhimbe hosts come in three flavours, all resolved from the entity-centric
@@ -45,7 +49,7 @@ function HostAvatar({ info }: { info: EventHostInfo }) {
   );
 }
 
-export function EventEntityHostCard({ eventId, onResolved }: EventEntityHostCardProps) {
+export function EventEntityHostCard({ eventId, onResolved, reviewStats }: EventEntityHostCardProps) {
   const [hostInfo, setHostInfo] = useState<EventHostInfo | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [reputation, setReputation] = useState<HostReputation | null>(null);
@@ -105,9 +109,28 @@ export function EventEntityHostCard({ eventId, onResolved }: EventEntityHostCard
           </div>
         </div>
         {hostInfo.description && (
-          <p className="mt-2.5 text-xs text-foreground/60 line-clamp-2">
+          <p className="mt-2.5 text-xs text-muted-foreground line-clamp-2">
             {hostInfo.description}
           </p>
+        )}
+        {(!!reviewStats?.averageRating || hostInfo.url) && (
+          <div className="mt-2.5 flex items-center gap-3 text-xs text-muted-foreground">
+            {!!reviewStats?.averageRating && reviewStats.averageRating > 0 && (
+              <Rating value={reviewStats.averageRating} readOnly size="sm" showValue />
+            )}
+            {hostInfo.url && (
+              <a
+                href={hostInfo.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+                aria-label={`${hostInfo.name}'s website`}
+              >
+                <Globe className="w-4 h-4" aria-hidden />
+                Website
+              </a>
+            )}
+          </div>
         )}
         {/* Reputation strip — person hosts only, only when there's something to show. */}
         {reputation && (reputation.ubuntuScore > 0 || reputation.eventsOrganized > 0 || reputation.followerCount > 0) && (

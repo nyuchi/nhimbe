@@ -51,9 +51,10 @@ describe("HomeYourEvents", () => {
     expect(screen.getByText("Poetry Night")).toBeInTheDocument();
     expect(screen.getByText("My Workshop")).toBeInTheDocument();
     expect(container.querySelector('[data-slot="nyuchi-timeline"]')).not.toBeNull();
-    // Hosted events deep-link to manage.
+    // Hosted events go to the public event page first, same as attending
+    // events — manage is one click further, from there, not skipped past.
     const hostRow = screen.getByText("My Workshop").closest("a");
-    expect(hostRow).toHaveAttribute("href", "/events/h1/manage");
+    expect(hostRow).toHaveAttribute("href", "/events/h1");
   });
 
   it("offers an Upcoming/Past segmented control", () => {

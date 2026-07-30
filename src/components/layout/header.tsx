@@ -64,6 +64,7 @@ const navLinks = [
   { href: "/discover", label: "Discover" },
   { href: "/my-events", label: "My Events" },
   { href: "/calendar", label: "Calendar" },
+  { href: "/circles", label: "Circles" },
 ];
 
 // Static page titles mapping
@@ -250,10 +251,12 @@ export function Header() {
                 by Mukoko Events
               </span>
             </span>
-            {/* Page title - visible when scrolled */}
+            {/* Page title - visible when scrolled. Smaller on mobile — at
+                full text-lg it overwhelmed the header next to the logo,
+                nav pills and action group on narrow viewports. */}
             {pageTitle && (
               <span
-                className={`text-lg font-semibold text-foreground truncate max-w-50 sm:max-w-75 transition-all duration-300 ${
+                className={`text-sm sm:text-lg font-semibold text-foreground truncate max-w-32 sm:max-w-75 transition-all duration-300 ${
                   isScrolled
                     ? "opacity-100"
                     : "opacity-0 absolute"

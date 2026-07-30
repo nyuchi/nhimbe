@@ -44,6 +44,8 @@ export interface EventHostInfo {
   avatar: string | null;
   slug: string | null;
   verificationStatus: string | null;
+  /** The entity's own external website, when set — not a Nhimbe-hosted page. */
+  url: string | null;
 }
 
 export interface HostReputation {
@@ -154,6 +156,7 @@ export async function getEventHostCard(eventId: string): Promise<EventHostCard |
     avatar: ownerType === "person" ? (person?.picture ?? null) : entityLogoUrl(entity.logo),
     slug: entity.slug ?? null,
     verificationStatus: verificationStatus(entity),
+    url: entity.url ?? null,
   };
 
   // Reputation only makes sense for the Person branch — Family and Organization

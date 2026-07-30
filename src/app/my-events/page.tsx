@@ -52,7 +52,6 @@ function MyEventsContent() {
   const attendingEvents = events.attending;
   const hostingEvents = events.hosting;
   const pastEvents = events.past;
-  const hostingIdSet = new Set(hostingEvents.map((e) => e.id));
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode; count: number }[] = [
     { id: "attending", label: "Attending", icon: <Ticket className="w-4 h-4" />, count: attendingEvents.length },
@@ -129,16 +128,13 @@ function MyEventsContent() {
                 mineral={categoryToMineral(event.category)}
               />
             ) : (
-              // Hosting → straight to manage; past → the event page.
+              // Always the public event page first, even when hosting —
+              // manage is one click further from there, not skipped past.
               <NyuchiListingCard
                 key={event.id}
                 variant="compact"
                 index={i}
-                href={
-                  activeTab === "hosting" || hostingIdSet.has(event.id)
-                    ? `/events/${event.id}/manage`
-                    : `/events/${event.id}`
-                }
+                href={`/events/${event.id}`}
                 title={event.name}
                 category={event.category}
                 mineral={categoryToMineral(event.category)}
