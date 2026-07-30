@@ -328,7 +328,7 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
             {isInPerson && (
               <div className="mt-8">
                 <Separator className="mb-8" style={{ backgroundColor: "var(--event-surface)" }} />
-                <h3 className="text-sm font-medium text-foreground/50 mb-4">Location</h3>
+                <h3 className="text-sm font-medium text-muted-foreground mb-4">Location</h3>
                 <h4 className="text-lg font-bold mb-1">{event.location.name}</h4>
                 {event.location.streetAddress && (
                   <p className="text-sm text-foreground/60 mb-1">{event.location.streetAddress}</p>
@@ -355,7 +355,7 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
             {/* Hosted By Section - Luma style */}
             <div id="hosted-by" className="mt-10 scroll-mt-20">
               <Separator className="mb-8" style={{ backgroundColor: "var(--event-surface)" }} />
-              <h3 className="text-sm font-medium text-foreground/50 mb-4">Hosted By</h3>
+              <h3 className="text-sm font-medium text-muted-foreground mb-4">Hosted By</h3>
               <div className="flex items-start gap-4">
                 <div
                   className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-[#0A0A0A] shrink-0"
@@ -387,7 +387,7 @@ export function EventDetailContent({ event }: EventDetailContentProps) {
                   </div>
                   {/* Social links */}
                   <div className="flex items-center gap-3 mb-3">
-                    <Globe className="w-4 h-4 text-foreground/40" />
+                    <Globe className="w-4 h-4 text-muted-foreground" />
                   </div>
                   <button className="text-sm font-medium" style={{ color: "var(--event-primary)" }}>
                     Contact the Host

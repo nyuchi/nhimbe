@@ -86,7 +86,7 @@ export function EventEntityHostCard({ eventId, onResolved }: EventEntityHostCard
       style={{ backgroundColor: "var(--event-surface)" }}
     >
       <CardContent className="p-5">
-        <p className="text-xs text-foreground/50 uppercase tracking-wider font-semibold mb-3">
+        <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-3">
           Hosted by
         </p>
         <div className="flex items-center gap-3">
@@ -101,7 +101,7 @@ export function EventEntityHostCard({ eventId, onResolved }: EventEntityHostCard
                 />
               )}
             </div>
-            <div className="text-xs text-foreground/50">{typeLabel}</div>
+            <div className="text-xs text-muted-foreground">{typeLabel}</div>
           </div>
         </div>
         {hostInfo.description && (
@@ -142,7 +142,7 @@ function Stat({
         {Icon && <Icon className="w-3.5 h-3.5" />}
         {value}
       </dd>
-      <dt className="text-[10px] font-semibold uppercase tracking-wide text-foreground/50 mt-1">
+      <dt className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mt-1">
         {label}
       </dt>
     </div>
