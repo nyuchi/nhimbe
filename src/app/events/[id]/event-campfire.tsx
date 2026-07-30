@@ -40,7 +40,7 @@ const MAX_MESSAGES = 20;
 
 export function EventCampfire({ conversationId }: EventCampfireProps) {
   const { user } = useAuth();
-  const viewerPersonId = (user as { person_id?: string } | null)?.person_id ?? null;
+  const viewerPersonId = user?.personId ?? null;
   const [messages, setMessages] = useState<CampfireMessage[]>([]);
   const [authors, setAuthors] = useState<Map<string, CampfireAuthor>>(new Map());
   const [loaded, setLoaded] = useState(false);
@@ -159,7 +159,7 @@ export function EventCampfire({ conversationId }: EventCampfireProps) {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Drop a log on the fire…"
-            className="flex-1 h-10 px-4 rounded-full bg-muted text-sm placeholder:text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-[var(--nh-lead)]"
+            className="flex-1 h-10 px-4 rounded-full border border-border bg-muted text-sm text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-[var(--nh-lead)]"
             disabled={sending}
             aria-label="Type a message"
           />

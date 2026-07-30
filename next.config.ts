@@ -55,11 +55,12 @@ const nextConfig: NextConfig = {
   // header — it's free reconnaissance for an attacker and offers no value to
   // legitimate clients.
   poweredByHeader: false,
-  // Client-side Router Cache retention. Every route is dynamic (the layout reads
-  // the auth cookie), so by default a revisit re-fetches the RSC payload from the
-  // server on each navigation — which is why moving between pages/tabs feels like
-  // a full reload. Keep dynamic entries fresh for 30s and static for 3min so
-  // back/forward and quick re-visits render instantly from cache.
+  // Client-side Router Cache retention. Several routes are still dynamic (home's
+  // own per-request auth split, event-detail, manage, …), where by default a
+  // revisit re-fetches the RSC payload from the server on each navigation — which
+  // is why moving between pages/tabs feels like a full reload. Keep dynamic
+  // entries fresh for 30s and static for 3min so back/forward and quick
+  // re-visits render instantly from cache.
   experimental: {
     staleTimes: {
       dynamic: 30,

@@ -197,7 +197,7 @@ export function EventContributionsBoard({ event }: { event: Event }) {
   if (chips.length === 0) return null;
   return (
     <section data-slot="event-contributions" className="mt-8">
-      <h3 className="text-sm font-medium text-foreground/50 mb-3">Contributions board</h3>
+      <h3 className="text-sm font-medium text-muted-foreground mb-3">Contributions board</h3>
       <ul className="flex flex-wrap gap-2">
         {chips.map((c, i) => (
           <li

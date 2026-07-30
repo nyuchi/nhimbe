@@ -168,7 +168,7 @@ export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
                 <StatBox icon={<Share2 className="w-3.5 h-3.5" />} label="Referrals" value={stats.referrals} />
               )}
             </div>
-            <p className="text-xs text-foreground/40 text-center mt-3">Open data - Transparency builds trust</p>
+            <p className="text-xs text-muted-foreground text-center mt-3">Open data - Transparency builds trust</p>
           </CardContent>
         </Card>
       )}
