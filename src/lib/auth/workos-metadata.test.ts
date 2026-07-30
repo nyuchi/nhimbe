@@ -87,14 +87,13 @@ describe("workos-metadata (AuthKit OAuth2 discovery)", () => {
     expect(m.jwksUri).not.toContain("client_01KQBBSMQTSMTBN7HEC9KQBJC0");
   });
 
-  it("exposes a dedicated MCP client id, distinct from the app login client", () => {
+  it("defaults the MCP client id to the app's own login client (one WorkOS Application, no separate MCP client)", () => {
     process.env.WORKOS_CLIENT_ID = "client_APP";
-    // Defaults to the production MCP Connect app when the env is unset.
-    expect(workosMcpClientId()).toBe("client_01KYH11K4XV3HRPGMAQ4JS18RH");
-    // Overridable per environment.
+    expect(workosMcpClientId()).toBe("client_APP");
+    // Still overridable per environment, for any non-MCP integration that
+    // genuinely wants a distinct client.
     process.env.WORKOS_MCP_CLIENT_ID = "client_MCP";
     expect(workosMcpClientId()).toBe("client_MCP");
-    // workosAuthMetadata swaps in the MCP client only when { mcp: true }.
     expect(workosAuthMetadata().clientId).toBe("client_APP");
     expect(workosAuthMetadata({ mcp: true }).clientId).toBe("client_MCP");
   });

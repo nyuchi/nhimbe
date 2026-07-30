@@ -61,22 +61,23 @@ export function workosClientId(): string {
 }
 
 /**
- * WorkOS client id for the **MCP OAuth connector** — a WorkOS Connect app that
- * is DISTINCT from the app's first-party AuthKit login client
- * (`WORKOS_CLIENT_ID`). MCP clients (e.g. Claude/ChatGPT connectors) authorize
- * against this one; keeping it separate is what lets its redirect URIs and
- * consent behaviour be configured for the third-party connector flow (the app's
- * own login client isn't set up for it — hence the `state`-drop failures).
+ * WorkOS client id advertised to MCP-style agents. This is deliberately the
+ * SAME client as the app's first-party AuthKit login (`WORKOS_CLIENT_ID`) —
+ * one WorkOS Application ("Mukoko Events"), one login, one set of users. An
+ * earlier revision of this file pointed a distinct `WORKOS_MCP_CLIENT_ID`
+ * Connect app here, which is what caused the `state: Field required`
+ * connection failures agents hit: the actual Mukoko Events MCP
+ * (`events.mukoko.com/mcp`, in `nyuchi/mukoko-events-mcp`) is now its own
+ * OAuth 2.1 broker (DCR, `/oauth/*`) that signs into THIS client, not a
+ * resource server pointing agents at WorkOS directly — so there is no
+ * separate MCP client to advertise here at all.
  *
- * A client id is a **public** OAuth identifier (it rides in every authorize URL
- * and discovery doc), NOT a secret — so it lives in a plain env var, with the
- * production value as the default. Override per environment via
- * `WORKOS_MCP_CLIENT_ID`. The bearer-token verifier needs no change: a WorkOS
- * environment signs every access token with one key, so tokens minted through
- * this client verify against the same JWKS the app already trusts.
+ * `WORKOS_MCP_CLIENT_ID` is kept as an optional override only for any
+ * lingering non-MCP agent integration that still wants a distinct client;
+ * unset (the default), this returns the app's own client id.
  */
 export function workosMcpClientId(): string {
-  return process.env.WORKOS_MCP_CLIENT_ID || "client_01KYH11K4XV3HRPGMAQ4JS18RH";
+  return process.env.WORKOS_MCP_CLIENT_ID || workosClientId();
 }
 
 export interface WorkosAuthMetadata {
