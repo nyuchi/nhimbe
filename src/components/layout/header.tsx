@@ -255,7 +255,7 @@ export function Header() {
                   : "opacity-100"
               }`}
             >
-              <span className="truncate text-[24px] font-bold text-primary">Nhimbe</span>
+              <span className="truncate font-serif text-[24px] font-bold text-primary">Nhimbe</span>
               <span className="mt-0.5 truncate whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
                 by Mukoko Events
               </span>
