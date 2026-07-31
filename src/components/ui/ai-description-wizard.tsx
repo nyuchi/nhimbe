@@ -314,25 +314,30 @@ export function AIDescriptionWizard({
                   className="w-full px-4 py-3 bg-surface rounded-xl border-none outline-none resize-none h-24 text-sm"
                 />
                 <div className="flex gap-2">
+                  {/* min-w-0 + shrink: Button's base classes force shrink-0
+                      (buttons don't shrink by default), which fights flex-1
+                      when a sibling's content grows (idle "Apply Changes" vs
+                      loading "Regenerating..."), overflowing the row. truncate
+                      is the safety net if the row is ever too narrow either way. */}
                   <Button
                     variant="secondary"
                     onClick={() => setShowRegenerateInput(false)}
-                    className="flex-1"
+                    className="flex-1 min-w-0 shrink"
                   >
-                    Cancel
+                    <span className="truncate">Cancel</span>
                   </Button>
                   <Button
                     onClick={handleRegenerate}
                     disabled={!regenerateFeedback.trim() || isGenerating}
-                    className="flex-1"
+                    className="flex-1 min-w-0 shrink"
                   >
                     {isGenerating ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        Regenerating...
+                        <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                        <span className="truncate">Regenerating...</span>
                       </>
                     ) : (
-                      "Apply Changes"
+                      <span className="truncate">Apply Changes</span>
                     )}
                   </Button>
                 </div>
