@@ -30,8 +30,7 @@ export function MobileBottomNav() {
   return (
     <nav
       aria-label="Mobile navigation"
-      className="fixed inset-x-4 z-40 md:hidden"
-      style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}
+      className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] z-40 md:hidden"
     >
       <div className="flex items-center justify-around px-2 h-14 mx-auto max-w-100 rounded-full bg-background/90 backdrop-blur-xl border border-elevated shadow-lg">
         {mobileNavItems.map((item) => {

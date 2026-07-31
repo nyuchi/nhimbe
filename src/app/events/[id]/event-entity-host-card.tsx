@@ -82,6 +82,7 @@ export function EventEntityHostCard({ eventId, onResolved, reviewStats }: EventE
       : hostInfo.ownerType === "organization"
         ? "Organisation host"
         : "Personal host";
+  const hasRating = !!reviewStats?.averageRating && reviewStats.averageRating > 0;
 
   return (
     <Card
@@ -113,10 +114,10 @@ export function EventEntityHostCard({ eventId, onResolved, reviewStats }: EventE
             {hostInfo.description}
           </p>
         )}
-        {(!!reviewStats?.averageRating || hostInfo.url) && (
+        {(hasRating || hostInfo.url) && (
           <div className="mt-2.5 flex items-center gap-3 text-xs text-muted-foreground">
-            {!!reviewStats?.averageRating && reviewStats.averageRating > 0 && (
-              <Rating value={reviewStats.averageRating} readOnly size="sm" showValue />
+            {hasRating && (
+              <Rating value={reviewStats!.averageRating} readOnly size="sm" showValue />
             )}
             {hostInfo.url && (
               <a

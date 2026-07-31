@@ -32,6 +32,7 @@ import {
   eventsCollection,
   personsCollection,
 } from "@/lib/mongo/databases";
+import { isHttpUrl } from "@/lib/security/request";
 import type { EntityDoc, PersonDoc } from "@/lib/mongo/types";
 
 export type HostOwnerType = "person" | "organization" | "family";
@@ -156,7 +157,7 @@ export async function getEventHostCard(eventId: string): Promise<EventHostCard |
     avatar: ownerType === "person" ? (person?.picture ?? null) : entityLogoUrl(entity.logo),
     slug: entity.slug ?? null,
     verificationStatus: verificationStatus(entity),
-    url: entity.url ?? null,
+    url: entity.url && isHttpUrl(entity.url) ? entity.url : null,
   };
 
   // Reputation only makes sense for the Person branch — Family and Organization

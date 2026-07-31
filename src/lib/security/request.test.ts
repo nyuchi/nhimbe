@@ -4,6 +4,7 @@ import {
   readJsonBody,
   clampString,
   clampStringArray,
+  isHttpUrl,
   DEFAULT_JSON_BODY_LIMIT,
 } from "./request";
 
@@ -121,5 +122,18 @@ describe("clampStringArray", () => {
 
   it("caps the length of each item", () => {
     expect(clampStringArray(["abcdefg"], opts)).toEqual(["abcd"]);
+  });
+});
+
+describe("isHttpUrl", () => {
+  it("accepts http/https URLs", () => {
+    expect(isHttpUrl("https://example.com")).toBe(true);
+    expect(isHttpUrl("http://example.com/path")).toBe(true);
+  });
+
+  it("rejects other schemes and malformed URLs", () => {
+    expect(isHttpUrl("javascript:alert(1)")).toBe(false);
+    expect(isHttpUrl("data:text/html,<script>")).toBe(false);
+    expect(isHttpUrl("not a url")).toBe(false);
   });
 });

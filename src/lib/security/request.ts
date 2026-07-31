@@ -106,3 +106,13 @@ export function clampStringArray(
   }
   return out;
 }
+
+/** http(s)-only URL check — rejects javascript:, data:, and malformed URLs. */
+export function isHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}

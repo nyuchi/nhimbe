@@ -24,21 +24,12 @@ import { indexEventEmbedding } from "@/lib/ai/event-index";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { mapEventDocToApi } from "@/lib/mongo/mappers";
 import { isDevBypass, DEV_WORKOS_ID, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
+import { isHttpUrl } from "@/lib/security/request";
 import type { EventDoc, PersonDoc } from "@/lib/mongo/types";
 import type { Event } from "@/lib/api";
 
 const MAX_NAME_LENGTH = 200;
 const MAX_DESCRIPTION_LENGTH = 5000;
-
-/** http(s)-only URL check — rejects javascript:, data:, and malformed URLs. */
-function isHttpUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "https:" || parsed.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
 
 export interface CreateEventActionInput {
   name: string;
