@@ -14,6 +14,7 @@ import { getMediaUrl } from "@/lib/api";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { useAuth } from "@/components/auth/auth-context";
 import { getMyEvents, type MyEventsResult } from "@/app/actions/my-events";
+import { HostingView } from "./hosting-view";
 
 type TabType = "attending" | "hosting" | "past";
 
@@ -111,42 +112,47 @@ function MyEventsContent() {
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
         </div>
       ) : currentEvents.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {currentEvents.map((event, i) =>
-            activeTab === "attending" ? (
-              // Attending → a real ticket for the gathering.
-              <NyuchiTicketCard
-                key={event.id}
-                href={`/events/${event.id}`}
-                eventTitle={event.name}
-                eventDate={`${event.date.month} ${event.date.day}${event.date.time ? ` · ${event.date.time}` : ""}`}
-                eventVenue={event.location.name || event.location.addressLocality}
-                tierName={event.offers?.price ? "Ticket" : "Free entry"}
-                tierPrice={event.offers?.price ?? 0}
-                ticketCode={event.shortCode}
-                status="valid"
-                mineral={categoryToMineral(event.category)}
-              />
-            ) : (
-              // Always the public event page first, even when hosting —
-              // manage is one click further from there, not skipped past.
-              <NyuchiListingCard
-                key={event.id}
-                variant="compact"
-                index={i}
-                href={`/events/${event.id}`}
-                title={event.name}
-                category={event.category}
-                mineral={categoryToMineral(event.category)}
-                image={event.image ? getMediaUrl(event.image) : undefined}
-                meta={[
-                  { label: "date", value: `${event.date.month} ${event.date.day}`, icon: Clock },
-                  { label: "going", value: `${event.attendeeCount} going`, icon: Users },
-                ]}
-              />
-            ),
-          )}
-        </div>
+        activeTab === "hosting" ? (
+          // Hosting gets the Notion-style multi-view (Card/Table/Timeline) —
+          // this is the host's own catalogue, not a discovery feed.
+          <HostingView events={hostingEvents} />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {currentEvents.map((event, i) =>
+              activeTab === "attending" ? (
+                // Attending → a real ticket for the gathering.
+                <NyuchiTicketCard
+                  key={event.id}
+                  href={`/events/${event.id}`}
+                  eventTitle={event.name}
+                  eventDate={`${event.date.month} ${event.date.day}${event.date.time ? ` · ${event.date.time}` : ""}`}
+                  eventVenue={event.location.name || event.location.addressLocality}
+                  tierName={event.offers?.price ? "Ticket" : "Free entry"}
+                  tierPrice={event.offers?.price ?? 0}
+                  ticketCode={event.shortCode}
+                  status="valid"
+                  mineral={categoryToMineral(event.category)}
+                />
+              ) : (
+                // Past — a plain listing card (mixes attended + hosted events).
+                <NyuchiListingCard
+                  key={event.id}
+                  variant="compact"
+                  index={i}
+                  href={`/events/${event.id}`}
+                  title={event.name}
+                  category={event.category}
+                  mineral={categoryToMineral(event.category)}
+                  image={event.image ? getMediaUrl(event.image) : undefined}
+                  meta={[
+                    { label: "date", value: `${event.date.month} ${event.date.day}`, icon: Clock },
+                    { label: "going", value: `${event.attendeeCount} going`, icon: Users },
+                  ]}
+                />
+              ),
+            )}
+          </div>
+        )
       ) : (
         <NyuchiEmptyState
           icon={activeTab === "hosting" ? <Users /> : <Ticket />}
