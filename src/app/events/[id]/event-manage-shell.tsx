@@ -18,11 +18,11 @@ import {
   Sidebar,
   SidebarContent,
   SidebarHeader,
-  SidebarInset,
   SidebarProvider,
   SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 
 export type ManageSectionKey =
   | "overview"
@@ -120,7 +120,19 @@ export function EventManageShell({
           <NyuchiSidebarNav width="w-full" activeKey={activeKey} items={items} />
         </SidebarContent>
       </Sidebar>
-      <SidebarInset>
+      {/* Deliberately a <div>, not the `sidebar` primitive's <SidebarInset>
+          (which renders <main>): the root layout already wraps every route in
+          <main id="main-content"> for the skip-link, so a second <main> here
+          would nest two non-hidden main landmarks in one document — invalid
+          per the HTML spec and ambiguous for screen-reader landmark nav. Same
+          className as SidebarInset, so the sidebar's CSS (peer-data
+          selectors, all attribute-based, not tag-based) behaves identically. */}
+      <div
+        data-slot="sidebar-inset"
+        className={cn(
+          "relative flex w-full flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-[var(--radius-xl,17px)] md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
+        )}
+      >
         <div className="flex items-center gap-3 border-b px-4 py-3 sm:px-6" style={{ borderColor: "var(--border)" }}>
           <SidebarTrigger />
           <h1 className="min-w-0 flex-1 truncate text-foreground text-[15px] font-semibold">{eventName}</h1>
@@ -132,7 +144,7 @@ export function EventManageShell({
           </Button>
         </div>
         <div className="flex-1 overflow-x-hidden">{children}</div>
-      </SidebarInset>
+      </div>
     </SidebarProvider>
   );
 }

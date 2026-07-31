@@ -657,6 +657,7 @@ function ManageEventContent() {
                   />
                 </div>
                 <FilterBar
+                  label="Filter guests by status"
                   options={[
                     { id: "all", label: `All (${registrations.length})` },
                     { id: "pending", label: `Pending (${stats.pending})` },

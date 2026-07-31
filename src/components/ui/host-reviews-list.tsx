@@ -132,6 +132,7 @@ export function HostReviewsList({ entityId, className }: { entityId: string; cla
                     )}
                   </div>
                   <FilterBar
+                    label="Filter host reviews by rating"
                     options={([5, 4, 3, 2, 1] as const).map((stars) => ({
                       id: String(stars),
                       label: `${stars}★`,

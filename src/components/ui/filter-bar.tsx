@@ -19,6 +19,9 @@ interface FilterBarProps {
   showAll?: boolean;
   showClear?: boolean;
   className?: string;
+  /** Accessible name for the chip group (e.g. "Filter by rating") — without
+   *  it, screen readers announce each chip with no shared context. */
+  label?: string;
 }
 
 function FilterBar({
@@ -29,6 +32,7 @@ function FilterBar({
   showAll = true,
   showClear = false,
   className,
+  label,
 }: FilterBarProps) {
   const allSelected = selected.length === 0;
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -74,6 +78,8 @@ function FilterBar({
       <div
         ref={scrollRef}
         data-slot="filter-bar"
+        role="group"
+        aria-label={label}
         className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1"
       >
         {showAll && (
