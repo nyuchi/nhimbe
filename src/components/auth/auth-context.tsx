@@ -24,6 +24,12 @@ export interface NhimbeUser {
   addressLocality?: string;
   addressCountry?: string;
   interests?: string[];
+  nickname?: string;
+  preferredUsername?: string;
+  phoneNumber?: string;
+  gender?: string;
+  /** ISO `YYYY-MM-DD`. */
+  birthdate?: string;
   // schema.org Person UUID from identity.person — this is what auth.uid() returns under our platform JWT.
   personId: string;
   // WorkOS user id (kept for audit / migration). Replaces the old stytchUserId field.
@@ -123,6 +129,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           addressLocality: appUser.addressLocality,
           addressCountry: appUser.addressCountry,
           interests: appUser.interests,
+          nickname: appUser.nickname,
+          preferredUsername: appUser.preferredUsername,
+          phoneNumber: appUser.phoneNumber,
+          gender: appUser.gender,
+          birthdate: appUser.birthdate,
           role: appUser.role,
           subscribedToEventUpdates: appUser.subscribedToEventUpdates,
           locale: appUser.locale,

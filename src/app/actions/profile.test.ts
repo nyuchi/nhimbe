@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // update action can be unit-tested without a cluster or a WorkOS session.
 vi.mock("server-only", () => ({}));
 
-const persons = { findOneAndUpdate: vi.fn() };
+const persons = { findOneAndUpdate: vi.fn(), findOne: vi.fn() };
 
 vi.mock("@/lib/mongo/databases", () => ({
   personsCollection: vi.fn(async () => persons),
@@ -28,7 +28,10 @@ const log = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/observability", () => ({ log }));
 
-import { updateMyProfile } from "./profile";
+const findGravatarUrl = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/gravatar", () => ({ findGravatarUrl }));
+
+import { updateMyProfile, getMyGravatarUrlAction } from "./profile";
 
 /** A minimal validator-complete person doc the update returns. */
 function personDoc(extra: Record<string, unknown> = {}) {
@@ -50,6 +53,7 @@ function personDoc(extra: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   persons.findOneAndUpdate.mockResolvedValue(personDoc());
+  persons.findOne.mockResolvedValue(personDoc());
 });
 
 describe("updateMyProfile", () => {
@@ -100,5 +104,50 @@ describe("updateMyProfile", () => {
   it("throws when the account can't be resolved", async () => {
     persons.findOneAndUpdate.mockResolvedValueOnce(null);
     await expect(updateMyProfile({ name: "Nobody" })).rejects.toThrow(/resolve your account/i);
+  });
+
+  it("writes the avatar and new identity fields", async () => {
+    await updateMyProfile({
+      picture: "https://assets-s001.mukoko.com/events/abc.png",
+      nickname: "  Ama  ",
+      preferredUsername: "  amai_zw  ",
+      phoneNumber: " +263771234567 ",
+      gender: " Woman ",
+      birthdate: "1990-05-12",
+    });
+    const [, update] = persons.findOneAndUpdate.mock.calls[0];
+    expect(update.$set.picture).toBe("https://assets-s001.mukoko.com/events/abc.png");
+    expect(update.$set.nickname).toBe("Ama");
+    expect(update.$set.preferredUsername).toBe("amai_zw");
+    expect(update.$set.phoneNumber).toBe("+263771234567");
+    expect(update.$set.gender).toBe("Woman");
+    expect(update.$set.birthdate).toBeInstanceOf(Date);
+    expect((update.$set.birthdate as Date).toISOString()).toBe("1990-05-12T00:00:00.000Z");
+  });
+
+  it("ignores a malformed birthdate rather than writing an invalid value", async () => {
+    await updateMyProfile({ birthdate: "not-a-date" });
+    const [, update] = persons.findOneAndUpdate.mock.calls[0];
+    expect(update.$set).not.toHaveProperty("birthdate");
+  });
+});
+
+describe("getMyGravatarUrlAction", () => {
+  it("looks up the acting person's own email and returns the Gravatar URL", async () => {
+    persons.findOne.mockResolvedValueOnce(personDoc({ email: "dev@example.com" }));
+    findGravatarUrl.mockResolvedValueOnce("https://www.gravatar.com/avatar/abc?s=256&d=404");
+
+    const url = await getMyGravatarUrlAction();
+
+    expect(persons.findOne).toHaveBeenCalledWith({ workosUserId: "workos-dev" });
+    expect(findGravatarUrl).toHaveBeenCalledWith("dev@example.com");
+    expect(url).toBe("https://www.gravatar.com/avatar/abc?s=256&d=404");
+  });
+
+  it("returns null without calling Gravatar when the person has no email", async () => {
+    persons.findOne.mockResolvedValueOnce(personDoc({ email: null }));
+    const url = await getMyGravatarUrlAction();
+    expect(url).toBeNull();
+    expect(findGravatarUrl).not.toHaveBeenCalled();
   });
 });
