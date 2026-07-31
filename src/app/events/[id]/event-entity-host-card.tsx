@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { User, Building2, Home, BadgeCheck, Star, Globe } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Rating } from "@/components/ui/rating";
+import { HostReviewsList } from "@/components/ui/host-reviews-list";
 import {
   getEventHostCard,
   type EventHostInfo,
@@ -141,6 +142,8 @@ export function EventEntityHostCard({ eventId, onResolved, reviewStats }: EventE
             <Stat label="Following" value={String(reputation.followerCount)} />
           </dl>
         )}
+
+        <HostReviewsList entityId={hostInfo.id} className="mt-4 pt-3 border-t border-elevated" />
       </CardContent>
     </Card>
   );

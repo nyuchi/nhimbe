@@ -16,6 +16,7 @@
  */
 
 import {
+  getEntityReviews,
   getEventReviews,
   getEventRatingStats,
   getHostReputation,
@@ -30,6 +31,7 @@ import { getEventStats } from "@/lib/mongo/stats";
 import type {
   EventReviewsResponse,
   EventStats,
+  HostReviewsResponse,
   HostStats,
   ReferralLeaderboardEntry,
   ReviewStats,
@@ -58,6 +60,11 @@ export async function getEventReferralLeaderboardAction(
 
 export async function getHostReputationAction(userId: string): Promise<HostStats | null> {
   return getHostReputation(userId);
+}
+
+/** Reviews written about a host entity, across every event it has run. */
+export async function getEntityReviewsAction(entityId: string): Promise<HostReviewsResponse> {
+  return getEntityReviews(entityId);
 }
 
 export async function getUserReferralCodeAction(userId: string): Promise<UserReferralCode | null> {
