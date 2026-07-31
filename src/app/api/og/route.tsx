@@ -35,7 +35,7 @@ function sanitizeText(input: string | null, maxLength: number = 200): string {
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams, origin } = new URL(request.url);
 
     // Get and sanitize parameters
     const title = sanitizeText(searchParams.get("title"), 100) || "Nhimbe";
@@ -84,20 +84,12 @@ export async function GET(request: NextRequest) {
               gap: 12,
             }}
           >
-            {/* nhimbe icon */}
-            <div
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 12,
-                background: "#64FFDA",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <span style={{ fontSize: 28, fontWeight: 700, color: "#0A0A0A" }}>n</span>
-            </div>
+            {/* Mukoko Seed-of-Life mark — the full multi-colour flower, never a
+                mono placeholder. Referenced as an absolute PNG URL (not the
+                app SVGs) because Satori's og-image renderer needs a raster
+                source it can fetch. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`${origin}/app-icon-192.png`} width={48} height={48} alt="" />
             <span style={{ fontSize: 28, fontWeight: 600, color: "#FFFFFF" }}>Nhimbe</span>
           </div>
 
