@@ -13,7 +13,6 @@ import { NyuchiMetaTile } from "@/components/ui/nyuchi-meta-tile";
 import { AddToCalendarButton, GetDirectionsButton } from "./event-actions";
 import { LikeButton } from "./like-button";
 import { EventThemeWrapper } from "./event-theme-wrapper";
-import { EventMap } from "./event-map";
 import { EventWeather } from "./event-weather";
 import { NyuchiCoverWashHeader } from "@/components/ui/nyuchi-cover-wash-header";
 import { EventSidebar } from "./event-sidebar";
@@ -40,6 +39,15 @@ const EventRatings = dynamic(
 
 const ReferralLeaderboard = dynamic(
   () => import("@/components/ui/referral-leaderboard").then(m => ({ default: m.ReferralLeaderboard })),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full rounded-2xl" /> }
+);
+
+// Deferred like the two above: EventMap's static `import "leaflet/dist/leaflet.css"`
+// was shipping Leaflet's CSS on every /events/[id] navigation even when the
+// visitor never scrolls to the map (the Leaflet JS itself was already lazy —
+// only the CSS wasn't).
+const EventMap = dynamic(
+  () => import("./event-map").then(m => ({ default: m.EventMap })),
   { ssr: false, loading: () => <Skeleton className="h-64 w-full rounded-2xl" /> }
 );
 
