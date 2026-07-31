@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowLeft, MapPin, Video, Bookmark, ChevronRight, Flame, Eye, Star, Settings } from "lucide-react";
+import { ArrowLeft, MapPin, Video, Bookmark, ChevronRight, Flame, Eye, Star, Settings, Pencil } from "lucide-react";
 import { useTrackedLink } from "@/lib/use-tracked-link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -138,13 +138,22 @@ export function EventDetailContent({
             Back to events
           </Link>
           {canManage && (
-            <Link
-              href={`/events/${event.id}/manage`}
-              className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground h-10 px-3 -mr-3 rounded-xl hover:bg-surface transition-colors"
-            >
-              <Settings className="w-4.5 h-4.5" />
-              Manage event
-            </Link>
+            <div className="flex items-center gap-1 -mr-3">
+              <Link
+                href={`/events/${event.id}/edit`}
+                className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground h-10 px-3 rounded-xl hover:bg-surface transition-colors"
+              >
+                <Pencil className="w-4.5 h-4.5" />
+                Edit
+              </Link>
+              <Link
+                href={`/events/${event.id}/manage`}
+                className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground h-10 px-3 rounded-xl hover:bg-surface transition-colors"
+              >
+                <Settings className="w-4.5 h-4.5" />
+                Manage
+              </Link>
+            </div>
           )}
         </div>
 
