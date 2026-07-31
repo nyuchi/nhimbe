@@ -42,4 +42,20 @@ describe("categoryToMineral", () => {
   it("falls back to the lead for unknown categories", () => {
     expect(categoryToMineral("Something Unmapped")).toBe("tanzanite");
   });
+
+  // Live engagement.interestCategories rows (the 2026-07 refresh) that
+  // previously fell through to the tanzanite default with no keyword hit.
+  it("maps the newer engagement.interestCategories rows", () => {
+    expect(categoryToMineral("Crypto & Web3")).toBe("cobalt");
+    expect(categoryToMineral("Real Estate")).toBe("cobalt");
+    expect(categoryToMineral("World News")).toBe("cobalt");
+    expect(categoryToMineral("History")).toBe("cobalt");
+    expect(categoryToMineral("Housing & Urban Development")).toBe("cobalt");
+    expect(categoryToMineral("Travel & Tourism")).toBe("malachite");
+    expect(categoryToMineral("African Identity")).toBe("tanzanite");
+  });
+
+  it("resolves Automotive & Transport to cobalt, not an accidental 'sport' match", () => {
+    expect(categoryToMineral("Automotive & Transport")).toBe("cobalt");
+  });
 });

@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("server-only", () => ({}));
 
 // Mongo accessor + auth gate are mocked so the action runs in isolation.
-const places = { find: vi.fn() };
+const places = { find: vi.fn(), aggregate: vi.fn() };
 vi.mock("@/lib/mongo/databases", () => ({
   placesCollection: vi.fn(async () => places),
 }));
@@ -23,9 +23,22 @@ function findReturning(docs: unknown[]) {
   };
 }
 
+/** Build a chainable aggregate() result (.toArray()) — or a rejecting one to simulate a missing/unavailable Atlas Search index. */
+function aggregateReturning(docs: unknown[] | Error) {
+  return {
+    toArray: vi.fn(async () => {
+      if (docs instanceof Error) throw docs;
+      return docs;
+    }),
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   places.find.mockReturnValue(findReturning([]));
+  // Simulate Atlas Search being unavailable by default (e.g. no index on a
+  // local/test cluster) so existing regex-path tests keep exercising find().
+  places.aggregate.mockReturnValue(aggregateReturning(new Error("no such index")));
   global.fetch = vi.fn();
 });
 
@@ -63,6 +76,49 @@ describe("geocodeAddress", () => {
       latitude: -17.8306,
       longitude: 31.0522,
     });
+  });
+
+  it("prefers the places_search Atlas Search index over the regex scan when available", async () => {
+    places.aggregate.mockReturnValue(
+      aggregateReturning([
+        {
+          _id: "place-2",
+          name: "National Sports Stadium",
+          isActive: true,
+          address: { streetAddress: "Rotten Row", addressLocality: "Harare", addressCountry: "Zimbabwe" },
+          geo: { type: "Point", coordinates: [31.05, -17.85] },
+        },
+      ]),
+    );
+
+    const results = await geocodeAddress("Stadium");
+
+    expect(places.aggregate).toHaveBeenCalledTimes(1);
+    const pipeline = places.aggregate.mock.calls[0][0];
+    expect(pipeline[0].$search.index).toBe("places_search");
+    expect(places.find).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(results).toMatchObject([{ source: "db", placeId: "place-2", name: "National Sports Stadium" }]);
+  });
+
+  it("falls back to the regex scan when the Atlas Search index errors", async () => {
+    places.aggregate.mockReturnValue(aggregateReturning(new Error("Atlas Search is not configured")));
+    places.find.mockReturnValue(
+      findReturning([
+        {
+          _id: "place-1",
+          name: "Rainbow Towers",
+          isActive: true,
+          address: { streetAddress: "1 Pennefather Ave", addressLocality: "Harare", addressCountry: "Zimbabwe" },
+          geo: { type: "Point", coordinates: [31.0522, -17.8306] },
+        },
+      ]),
+    );
+
+    const results = await geocodeAddress("Rainbow");
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ source: "db", placeId: "place-1", name: "Rainbow Towers" });
   });
 
   it("skips DB rows without a usable Point geometry", async () => {

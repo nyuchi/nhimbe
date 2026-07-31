@@ -49,61 +49,51 @@ const STEPS: { id: WizardStep; label: string }[] = [
 ];
 
 // Broad pan-African event categories. The live data source is the
-// `engagement.interestCategories` MongoDB collection (40 canonical rows
-// seeded). This list is the offline fallback if that lookup is unreachable.
+// `engagement.interestCategories` MongoDB collection (40 canonical rows).
+// This list is the offline fallback if that lookup is unreachable — kept in
+// step with the live rows (slug/name/groupName) so a fallback render never
+// shows a different taxonomy than what's actually stored.
 const DEFAULT_CATEGORIES: Category[] = [
-  // Technology & Innovation
   { id: "technology", name: "Technology", group: "Technology & Innovation" },
-  { id: "ai-ml", name: "AI & Machine Learning", group: "Technology & Innovation" },
-  { id: "startups", name: "Startups & Founders", group: "Technology & Innovation" },
-  // Business & Economy
+  { id: "ai-machine-learning", name: "AI & Machine Learning", group: "Technology & Innovation" },
+  { id: "crypto-web3", name: "Crypto & Web3", group: "Technology & Innovation" },
   { id: "business", name: "Business", group: "Business & Economy" },
-  { id: "finance", name: "Finance & Investment", group: "Business & Economy" },
-  { id: "trade", name: "Trade & Commerce", group: "Business & Economy" },
+  { id: "fintech-mobile-money", name: "Fintech & Mobile Money", group: "Business & Economy" },
   { id: "agriculture", name: "Agriculture", group: "Business & Economy" },
-  // Culture & Society
-  { id: "culture", name: "Culture & Heritage", group: "Culture & Society" },
-  { id: "food", name: "Food & Drink", group: "Culture & Society" },
-  { id: "fashion", name: "Fashion & Style", group: "Culture & Society" },
-  { id: "language", name: "Language", group: "Culture & Society" },
-  // Faith & Community
-  { id: "faith", name: "Faith & Spirituality", group: "Faith & Community" },
-  { id: "community", name: "Community Service", group: "Faith & Community" },
-  { id: "family", name: "Family & Parenting", group: "Faith & Community" },
-  { id: "ubuntu", name: "Ubuntu Gatherings", group: "Faith & Community" },
-  // Education & Knowledge
-  { id: "education", name: "Education", group: "Education & Knowledge" },
-  { id: "research", name: "Research & Academia", group: "Education & Knowledge" },
-  { id: "language-learning", name: "Language Learning", group: "Education & Knowledge" },
-  // Entertainment & Media
+  { id: "investment", name: "Investment", group: "Business & Economy" },
+  { id: "real-estate", name: "Real Estate", group: "Business & Economy" },
   { id: "music", name: "Music", group: "Entertainment & Media" },
   { id: "film-tv", name: "Film & TV", group: "Entertainment & Media" },
-  { id: "comedy", name: "Comedy", group: "Entertainment & Media" },
-  { id: "theatre", name: "Theatre & Performance", group: "Entertainment & Media" },
-  { id: "gaming", name: "Gaming & Esports", group: "Entertainment & Media" },
-  // Creative Arts
-  { id: "art", name: "Art & Design", group: "Creative Arts" },
-  { id: "photography", name: "Photography", group: "Creative Arts" },
-  { id: "writing", name: "Writing & Books", group: "Creative Arts" },
-  { id: "dance", name: "Dance", group: "Creative Arts" },
-  // Sports & Wellness
-  { id: "football", name: "Football", group: "Sports & Wellness" },
-  { id: "fitness", name: "Fitness", group: "Sports & Wellness" },
-  { id: "outdoors", name: "Outdoors & Hiking", group: "Sports & Wellness" },
-  { id: "wellness", name: "Wellness & Mindfulness", group: "Sports & Wellness" },
-  // Governance & Civic
-  { id: "governance", name: "Governance & Civic", group: "Governance & Civic" },
-  { id: "policy", name: "Policy & Advocacy", group: "Governance & Civic" },
-  { id: "human-rights", name: "Human Rights", group: "Governance & Civic" },
-  // Environment & Sustainability
-  { id: "environment", name: "Environment & Climate", group: "Environment & Sustainability" },
-  { id: "wildlife", name: "Wildlife & Conservation", group: "Environment & Sustainability" },
-  // Health
-  { id: "health", name: "Health & Medicine", group: "Health" },
-  { id: "mental-health", name: "Mental Health", group: "Health" },
-  // Networking
-  { id: "networking", name: "Networking & Mixers", group: "Networking" },
-  { id: "diaspora", name: "Diaspora Meetups", group: "Networking" },
+  { id: "gaming-esports", name: "Gaming & Esports", group: "Entertainment & Media" },
+  { id: "celebrity-pop-culture", name: "Celebrity & Pop Culture", group: "Entertainment & Media" },
+  { id: "football", name: "Football", group: "Sports" },
+  { id: "other-sports", name: "Other Sports", group: "Sports" },
+  { id: "fitness-wellness", name: "Fitness & Wellness", group: "Sports" },
+  { id: "african-culture", name: "African Culture", group: "Culture & Society" },
+  { id: "fashion-style", name: "Fashion & Style", group: "Culture & Society" },
+  { id: "food-cuisine", name: "Food & Cuisine", group: "Culture & Society" },
+  { id: "travel-tourism", name: "Travel & Tourism", group: "Culture & Society" },
+  { id: "politics-governance", name: "Politics & Governance", group: "News & Current Affairs" },
+  { id: "world-news", name: "World News", group: "News & Current Affairs" },
+  { id: "local-news", name: "Local News", group: "News & Current Affairs" },
+  { id: "education", name: "Education", group: "Education & Knowledge" },
+  { id: "science-research", name: "Science & Research", group: "Education & Knowledge" },
+  { id: "history", name: "History", group: "Education & Knowledge" },
+  { id: "languages-learning", name: "Languages & Learning", group: "Education & Knowledge" },
+  { id: "relationships-family", name: "Relationships & Family", group: "Lifestyle" },
+  { id: "parenting", name: "Parenting", group: "Lifestyle" },
+  { id: "spirituality-faith", name: "Spirituality & Faith", group: "Lifestyle" },
+  { id: "visual-arts", name: "Visual Arts", group: "Creative Arts" },
+  { id: "literature-books", name: "Literature & Books", group: "Creative Arts" },
+  { id: "comedy-humour", name: "Comedy & Humour", group: "Creative Arts" },
+  { id: "environment-climate", name: "Environment & Climate", group: "Environment" },
+  { id: "diaspora-migration", name: "Diaspora & Migration", group: "Culture & Society" },
+  { id: "housing-urban-development", name: "Housing & Urban Development", group: "Business & Economy" },
+  { id: "wildlife-conservation", name: "Wildlife & Conservation", group: "Environment" },
+  { id: "automotive-transport", name: "Automotive & Transport", group: "Lifestyle" },
+  { id: "mental-health-wellness", name: "Mental Health & Wellness", group: "Lifestyle" },
+  { id: "african-identity", name: "African Identity", group: "Culture & Society" },
+  { id: "maker-culture-diy", name: "Maker Culture & DIY", group: "Creative Arts" },
 ];
 
 const DEFAULT_CITIES = [
