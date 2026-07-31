@@ -209,7 +209,7 @@ export function EventSidebar({ event, stats, reviewStats }: EventSidebarProps) {
       )}
 
       {/* Host card — entity path (MongoDB via server action) with legacy fallback */}
-      <EventEntityHostCard eventId={event.id} onResolved={setHasEntityHost} />
+      <EventEntityHostCard eventId={event.id} onResolved={setHasEntityHost} reviewStats={reviewStats} />
       {!hasEntityHost && (
         <HostReputation
           host={{

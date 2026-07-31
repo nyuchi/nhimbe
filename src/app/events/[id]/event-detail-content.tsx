@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowLeft, MapPin, Video, Bookmark, ChevronRight, Flame, Eye, Star } from "lucide-react";
+import { ArrowLeft, MapPin, Video, Bookmark, ChevronRight, Flame, Eye, Star, Settings } from "lucide-react";
 import { useTrackedLink } from "@/lib/use-tracked-link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +49,8 @@ interface EventDetailContentProps {
   initialStats: EventStats | null;
   initialReviewStats: ReviewStats | null;
   initialUserReferral: UserReferralCode | null;
+  /** Whether the viewer hosts this event (canManageEventAction) — gates the Manage entry point. */
+  canManage: boolean;
 }
 
 /** Map a schema.org eventStatus to a branded alert; null when scheduled. */
@@ -98,6 +100,7 @@ export function EventDetailContent({
   initialStats,
   initialReviewStats,
   initialUserReferral,
+  canManage,
 }: EventDetailContentProps) {
   const statusAlert = eventStatusAlert(event.eventStatus);
   // Resolved server-side (see page.tsx's loadCompanionData) — no client
@@ -129,10 +132,21 @@ export function EventDetailContent({
     <EventThemeWrapper coverGradient={event.coverGradient}>
       {/* Extra bottom padding on mobile for the sticky RSVP bar */}
       <div className="max-w-250 mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:pb-10">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground h-10 px-3 -ml-3 rounded-xl hover:bg-surface transition-colors mb-4 sm:mb-6">
-          <ArrowLeft className="w-4.5 h-4.5" />
-          Back to events
-        </Link>
+        <div className="flex items-center justify-between mb-4 sm:mb-6">
+          <Link href="/" className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground h-10 px-3 -ml-3 rounded-xl hover:bg-surface transition-colors">
+            <ArrowLeft className="w-4.5 h-4.5" />
+            Back to events
+          </Link>
+          {canManage && (
+            <Link
+              href={`/events/${event.id}/manage`}
+              className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground h-10 px-3 -mr-3 rounded-xl hover:bg-surface transition-colors"
+            >
+              <Settings className="w-4.5 h-4.5" />
+              Manage event
+            </Link>
+          )}
+        </div>
 
         {statusAlert && (
           <NyuchiAlertBanner
