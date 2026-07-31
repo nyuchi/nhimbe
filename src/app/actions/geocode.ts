@@ -87,27 +87,8 @@ function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Search the nhimbe venue catalogue (`places.places`).
- *
- * Matches the query case-insensitively against the venue name and the address
- * sub-fields, restricted to active places that carry a usable Point geometry.
- */
-async function searchPlacesDb(query: string, limit: number): Promise<GeocodeSuggestion[]> {
-  const places = await placesCollection();
-  const rx = { $regex: escapeRegex(query), $options: "i" };
-  const docs = (await places
-    .find({
-      isActive: true,
-      $or: [
-        { name: rx },
-        { "address.streetAddress": rx },
-        { "address.addressLocality": rx },
-      ],
-    } as Parameters<typeof places.find>[0])
-    .limit(limit * 2) // over-fetch; some rows may lack Point coords
-    .toArray()) as PlaceDoc[];
-
+/** Map `places.places` docs to suggestions, dropping rows without usable Point geometry. */
+function mapPlaceDocs(docs: PlaceDoc[], limit: number): GeocodeSuggestion[] {
   const out: GeocodeSuggestion[] = [];
   for (const doc of docs) {
     const ll = pointLatLng(doc.geo);
@@ -130,6 +111,65 @@ async function searchPlacesDb(query: string, limit: number): Promise<GeocodeSugg
     if (out.length >= limit) break;
   }
   return out;
+}
+
+/**
+ * Search the nhimbe venue catalogue (`places.places`) case-insensitively
+ * against the venue name and address sub-fields via a plain regex scan.
+ * Kept as the fallback for `searchPlacesDb` — no Atlas Search dependency.
+ */
+async function searchPlacesDbRegex(query: string, limit: number): Promise<GeocodeSuggestion[]> {
+  const places = await placesCollection();
+  const rx = { $regex: escapeRegex(query), $options: "i" };
+  const docs = (await places
+    .find({
+      isActive: true,
+      $or: [
+        { name: rx },
+        { "address.streetAddress": rx },
+        { "address.addressLocality": rx },
+      ],
+    } as Parameters<typeof places.find>[0])
+    .limit(limit * 2) // over-fetch; some rows may lack Point coords
+    .toArray()) as PlaceDoc[];
+
+  return mapPlaceDocs(docs, limit);
+}
+
+/**
+ * Search the nhimbe venue catalogue (`places.places`) via the `places_search`
+ * Atlas Search index (autocomplete on venue name + full-text on description/
+ * tags/keywords, synonym-aware). Falls back to the plain regex scan when
+ * Atlas Search isn't available (e.g. a local dev cluster without a Search
+ * deployment) so the geocode combobox never hard-fails.
+ */
+async function searchPlacesDb(query: string, limit: number): Promise<GeocodeSuggestion[]> {
+  const places = await placesCollection();
+  try {
+    const docs = (await places
+      .aggregate([
+        {
+          $search: {
+            index: "places_search",
+            compound: {
+              filter: [{ equals: { path: "isActive", value: true } }],
+              should: [
+                { autocomplete: { query, path: "name", fuzzy: { maxEdits: 1 } } },
+                { text: { query, path: ["description", "tags", "keywords"] } },
+              ],
+              minimumShouldMatch: 1,
+            },
+          },
+        },
+        { $limit: limit * 2 }, // over-fetch; some rows may lack Point coords
+      ])
+      .toArray()) as PlaceDoc[];
+    const hits = mapPlaceDocs(docs, limit);
+    if (hits.length > 0) return hits;
+  } catch {
+    // Atlas Search index missing/unavailable — fall through to the regex scan.
+  }
+  return searchPlacesDbRegex(query, limit);
 }
 
 interface NominatimFeature {

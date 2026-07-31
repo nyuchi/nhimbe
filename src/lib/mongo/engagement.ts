@@ -30,6 +30,8 @@ import { initialsFromName } from "./mappers";
 import type {
   EventReview,
   EventReviewsResponse,
+  HostReview,
+  HostReviewsResponse,
   HostStats,
   ReferralLeaderboardEntry,
   ReviewStats,
@@ -139,6 +141,71 @@ export async function getEventReviews(eventId: string): Promise<EventReviewsResp
   });
 
   return { reviews: mapped, stats };
+}
+
+/**
+ * Reviews written about a host entity, across every event it has run — the
+ * entity-scoped counterpart to `getEventReviews`, backing a searchable "host
+ * reviews" list on the event-detail host card. Reads the same
+ * `engagement.reviews` substrate filtered by `targetEntityId` instead of a
+ * single event, and additionally resolves each review's event title (when it
+ * targets an event) so a multi-event host's reviews stay attributable.
+ */
+export async function getEntityReviews(entityId: string): Promise<HostReviewsResponse> {
+  const reviews = await reviewsCollection();
+  const docs = await reviews
+    .find({
+      targetEntityId: entityId,
+      isActive: true,
+      visibility: "public",
+      moderationStatus: { $ne: "removed" },
+    })
+    .sort({ datePublished: -1, createdAt: -1 })
+    .limit(100)
+    .toArray();
+
+  const personIds = [...new Set(docs.map((d) => d.reviewerPersonId).filter(Boolean))];
+  const persons = personIds.length
+    ? await (await personsCollection()).find({ _id: { $in: personIds } }).toArray()
+    : [];
+  const nameById = new Map(persons.map((p) => [p._id, p.name ?? ""]));
+
+  const eventIds = [
+    ...new Set(
+      docs
+        .filter((d) => d.targetReferenceType === "event" && d.targetProductId)
+        .map((d) => d.targetProductId as string),
+    ),
+  ];
+  const events = eventIds.length
+    ? await (await eventsCollection())
+        .find({ _id: { $in: eventIds } }, { projection: { name: 1 } })
+        .toArray()
+    : [];
+  const titleById = new Map(events.map((e) => [e._id, e.name]));
+
+  const mapped: HostReview[] = docs.map((d) => {
+    const name = nameById.get(d.reviewerPersonId) || "Member";
+    const created = d.datePublished ?? d.createdAt;
+    return {
+      id: d._id,
+      eventId: d.targetProductId ?? "",
+      eventTitle:
+        d.targetReferenceType === "event" && d.targetProductId
+          ? titleById.get(d.targetProductId)
+          : undefined,
+      userId: d.reviewerPersonId,
+      userName: name,
+      userInitials: initialsFromName(name),
+      rating: d.reviewRating?.ratingValue ?? 0,
+      reviewBody: d.reviewBody ?? undefined,
+      helpfulCount: d.helpfulCount ?? 0,
+      isVerifiedAttendee: d.verifiedPurchase ?? false,
+      dateCreated: created instanceof Date ? created.toISOString() : "",
+    };
+  });
+
+  return { reviews: mapped };
 }
 
 export interface SubmitEventReviewInput {

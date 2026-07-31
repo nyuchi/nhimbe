@@ -30,9 +30,9 @@ export function MobileBottomNav() {
   return (
     <nav
       aria-label="Mobile navigation"
-      className="fixed bottom-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-xl border-t border-elevated md:hidden pb-[env(safe-area-inset-bottom,0px)]"
+      className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] z-40 md:hidden"
     >
-      <div className="flex items-center justify-around px-2 h-14">
+      <div className="flex items-center justify-around px-2 h-14 mx-auto max-w-100 rounded-full bg-background/90 backdrop-blur-xl border border-elevated shadow-lg">
         {mobileNavItems.map((item) => {
           // For profile, redirect to sign-in if not authenticated
           const href =
@@ -51,7 +51,7 @@ export function MobileBottomNav() {
             <Link
               key={item.href}
               href={href}
-              className={`flex flex-col items-center justify-center gap-0.5 w-16 h-12 rounded-xl transition-colors ${
+              className={`flex flex-col items-center justify-center gap-0.5 w-14 h-12 rounded-full transition-colors ${
                 isActive
                   ? "text-primary"
                   : "text-text-tertiary hover:text-foreground"

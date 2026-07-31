@@ -553,6 +553,16 @@ export interface EventReviewsResponse {
   stats: ReviewStats;
 }
 
+/** A review surfaced on a host's reputation, across any of the host's events. */
+export interface HostReview extends EventReview {
+  /** Title of the event this review was written about, when resolvable. */
+  eventTitle?: string;
+}
+
+export interface HostReviewsResponse {
+  reviews: HostReview[];
+}
+
 // Get reviews for an event (PUBLIC)
 export async function getEventReviews(eventId: string): Promise<EventReviewsResponse> {
   return apiFetch<EventReviewsResponse>(`/api/events/${eventId}/reviews`);

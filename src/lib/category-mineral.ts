@@ -24,12 +24,12 @@ export const NHIMBE_LEAD_MINERAL: Mineral = "tanzanite";
 const MINERAL_KEYWORDS: [Mineral, string[]][] = [
   // Gold — food, faith, agriculture, markets (prosperity / earth).
   ["gold", ["food", "drink", "dinner", "tasting", "menu", "faith", "spiritual", "religious", "worship", "church", "prayer", "agricultur", "farming", "market"]],
-  // Tanzanite (nhimbe lead) — arts, culture, music, entertainment.
-  ["tanzanite", ["music", "festival", "concert", "art", "culture", "heritage", "film", "comedy", "theatre", "dance", "fashion", "photograph", "writing", "book", "entertain", "gaming", "esport"]],
+  // Tanzanite (nhimbe lead) — arts, culture, music, entertainment, identity.
+  ["tanzanite", ["music", "festival", "concert", "art", "culture", "heritage", "film", "comedy", "theatre", "dance", "fashion", "photograph", "writing", "book", "entertain", "gaming", "esport", "identity"]],
   // Cobalt — knowledge, tech, business, civic (information mineral).
-  ["cobalt", ["tech", "ai-", "machine", "startup", "business", "finance", "invest", "trade", "commerce", "education", "research", "academ", "conference", "workshop", "network", "diaspora", "governance", "policy", "advocacy", "human-rights", "language"]],
+  ["cobalt", ["tech", "ai-", "machine", "startup", "business", "finance", "invest", "trade", "commerce", "education", "research", "academ", "conference", "workshop", "network", "diaspora", "governance", "policy", "advocacy", "human-rights", "language", "crypto", "web3", "real estate", "news", "history", "housing", "urban", "automotive"]],
   // Malachite — outdoors, sport, wellness, environment, health (green).
-  ["malachite", ["outdoor", "hike", "hiking", "trail", "run", "walk", "sport", "football", "fitness", "wellness", "mindful", "environment", "climate", "wildlife", "conservation", "nature", "health", "medicine", "mental", "adventure", "cycling", "swim", "climb", "marathon", "parkrun"]],
+  ["malachite", ["outdoor", "hike", "hiking", "trail", "run", "walk", "sport", "football", "fitness", "wellness", "mindful", "environment", "climate", "wildlife", "conservation", "nature", "health", "medicine", "mental", "adventure", "cycling", "swim", "climb", "marathon", "parkrun", "travel", "tourism"]],
   // Terracotta — community, family, ubuntu, social gatherings (earth/clay).
   ["terracotta", ["community", "family", "parent", "ubuntu", "social", "meetup", "mixer", "volunteer", "charity", "civic"]],
 ];

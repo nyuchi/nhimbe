@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -8,9 +9,17 @@ import { useFeedback } from "@/components/feedback/feedback-provider";
 const platformLinks = [
   { href: "/discover", label: "Discover" },
   { href: "/events", label: "All Events" },
+  { href: "/circles", label: "Circles" },
   { href: "/calendar", label: "Calendar" },
+  { href: "/map", label: "Map" },
   { href: "/search", label: "Search" },
   { href: "/events/create", label: "Create an Event" },
+];
+
+const accountLinks = [
+  { href: "/my-events", label: "My Events" },
+  { href: "/profile", label: "Profile" },
+  { href: "/profile/entities", label: "Manage Entities" },
 ];
 
 const companyLinks = [
@@ -24,13 +33,62 @@ const legalLinks = [
   { href: "/privacy", label: "Privacy Policy" },
 ];
 
+interface FooterLink {
+  href: string;
+  label: string;
+  external?: boolean;
+}
+
+function FooterColumn({
+  title,
+  links,
+  children,
+}: {
+  title: string;
+  links: FooterLink[];
+  /** Extra list items appended after the links (e.g. a feedback button). */
+  children?: ReactNode;
+}) {
+  return (
+    <nav aria-label={title}>
+      <h3 className="text-sm font-semibold text-foreground mb-4">{title}</h3>
+      <ul className="space-y-3">
+        {links.map((link) =>
+          link.external ? (
+            <li key={link.href}>
+              <a
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-text-secondary hover:text-foreground transition-colors"
+              >
+                {link.label}
+              </a>
+            </li>
+          ) : (
+            <li key={link.href}>
+              <Link
+                href={link.href}
+                className="text-sm text-text-secondary hover:text-foreground transition-colors"
+              >
+                {link.label}
+              </Link>
+            </li>
+          ),
+        )}
+        {children}
+      </ul>
+    </nav>
+  );
+}
+
 export function Footer() {
   const { open } = useFeedback();
   return (
     <footer className="border-t border-elevated mt-20 pb-[env(safe-area-inset-bottom,0px)]" role="contentinfo">
       <div className="max-w-300 mx-auto px-6 py-12">
         {/* Top section — brand + link columns */}
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-4 lg:gap-12">
+        <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-5 lg:gap-12">
           {/* Brand column */}
           <div className="col-span-2 sm:col-span-1">
             <Link href="/" className="flex items-center gap-3 mb-4">
@@ -64,82 +122,20 @@ export function Footer() {
             </p>
           </div>
 
-          {/* Platform column */}
-          <nav aria-label="Platform">
-            <h3 className="text-sm font-semibold text-foreground mb-4">
-              Platform
-            </h3>
-            <ul className="space-y-3">
-              {platformLinks.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-sm text-text-secondary hover:text-foreground transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          {/* Company column */}
-          <nav aria-label="Company">
-            <h3 className="text-sm font-semibold text-foreground mb-4">
-              Company
-            </h3>
-            <ul className="space-y-3">
-              {companyLinks.map((link) => (
-                <li key={link.href}>
-                  {"external" in link ? (
-                    <a
-                      href={link.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-text-secondary hover:text-foreground transition-colors"
-                    >
-                      {link.label}
-                    </a>
-                  ) : (
-                    <Link
-                      href={link.href}
-                      className="text-sm text-text-secondary hover:text-foreground transition-colors"
-                    >
-                      {link.label}
-                    </Link>
-                  )}
-                </li>
-              ))}
-              <li>
-                <button
-                  type="button"
-                  onClick={() => open()}
-                  className="text-left text-sm text-text-secondary hover:text-foreground transition-colors"
-                >
-                  Send feedback
-                </button>
-              </li>
-            </ul>
-          </nav>
-
-          {/* Legal column */}
-          <nav aria-label="Legal">
-            <h3 className="text-sm font-semibold text-foreground mb-4">
-              Legal
-            </h3>
-            <ul className="space-y-3">
-              {legalLinks.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-sm text-text-secondary hover:text-foreground transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
+          <FooterColumn title="Platform" links={platformLinks} />
+          <FooterColumn title="Account" links={accountLinks} />
+          <FooterColumn title="Company" links={companyLinks}>
+            <li>
+              <button
+                type="button"
+                onClick={() => open()}
+                className="text-left text-sm text-text-secondary hover:text-foreground transition-colors"
+              >
+                Send feedback
+              </button>
+            </li>
+          </FooterColumn>
+          <FooterColumn title="Legal" links={legalLinks} />
         </div>
 
         {/* Bottom bar — copyright + theme toggle */}

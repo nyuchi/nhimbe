@@ -64,6 +64,7 @@ const navLinks = [
   { href: "/discover", label: "Discover" },
   { href: "/my-events", label: "My Events" },
   { href: "/calendar", label: "Calendar" },
+  { href: "/circles", label: "Circles" },
 ];
 
 // Static page titles mapping
@@ -218,8 +219,12 @@ export function Header() {
       <div className="max-w-300 mx-auto px-6 py-3 sm:py-4 flex items-center justify-between">
         {/* Logo / Page Title */}
         <Link href="/" className="min-w-0 shrink flex items-center gap-3">
-          {/* Mukoko Seed-of-Life mark — full palette at 34px (>=32px per brand) */}
-          <div className="rhino w-8.5 h-8.5 bg-surface border border-elevated">
+          {/* Mukoko Seed-of-Life mark — full palette at 34px (>=32px per brand).
+              shrink-0 keeps it a true square: without it, a flex row this tight
+              on narrow viewports shrinks the icon's WIDTH only (flexbox shrink
+              only touches the main axis), squashing the mark into a sliver that
+              crowds/overlaps the wordmark next to it. */}
+          <div className="rhino w-8.5 h-8.5 shrink-0 bg-surface border border-elevated">
             <Image
               src="/mukoko-mark-full-light.svg"
               alt="Nhimbe"
@@ -236,24 +241,26 @@ export function Header() {
               className="zebra zebra-dark"
             />
           </div>
-          <div className="relative min-h-8.5 flex items-center">
+          <div className="relative min-h-8.5 min-w-0 flex items-center">
             {/* Wordmark lockup — "Nhimbe by Mukoko Events" (visible when not scrolled) */}
             <span
-              className={`flex flex-col leading-none transition-all duration-300 ${
+              className={`flex min-w-0 flex-col leading-none transition-all duration-300 ${
                 isScrolled && pageTitle
                   ? "opacity-0 absolute"
                   : "opacity-100"
               }`}
             >
-              <span className="text-[24px] font-bold text-primary">Nhimbe</span>
-              <span className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
+              <span className="truncate text-[24px] font-bold text-primary">Nhimbe</span>
+              <span className="mt-0.5 truncate whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
                 by Mukoko Events
               </span>
             </span>
-            {/* Page title - visible when scrolled */}
+            {/* Page title - visible when scrolled. Smaller on mobile — at
+                full text-lg it overwhelmed the header next to the logo,
+                nav pills and action group on narrow viewports. */}
             {pageTitle && (
               <span
-                className={`text-lg font-semibold text-foreground truncate max-w-50 sm:max-w-75 transition-all duration-300 ${
+                className={`text-sm sm:text-lg font-semibold text-foreground truncate max-w-32 sm:max-w-75 transition-all duration-300 ${
                   isScrolled
                     ? "opacity-100"
                     : "opacity-0 absolute"

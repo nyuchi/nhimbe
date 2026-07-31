@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowLeft, MapPin, Video, Bookmark, Globe, ChevronRight, Flame, Eye, Star } from "lucide-react";
+import { ArrowLeft, MapPin, Video, Bookmark, ChevronRight, Flame, Eye, Star, Settings, Pencil } from "lucide-react";
 import { useTrackedLink } from "@/lib/use-tracked-link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { Rating } from "@/components/ui/rating";
 import { NyuchiAlertBanner, type AlertSeverity } from "@/components/ui/nyuchi-alert-banner";
 import { NyuchiMetaTile } from "@/components/ui/nyuchi-meta-tile";
 import { AddToCalendarButton, GetDirectionsButton } from "./event-actions";
@@ -50,6 +49,8 @@ interface EventDetailContentProps {
   initialStats: EventStats | null;
   initialReviewStats: ReviewStats | null;
   initialUserReferral: UserReferralCode | null;
+  /** Whether the viewer hosts this event (canManageEventAction) — gates the Manage entry point. */
+  canManage: boolean;
 }
 
 /** Map a schema.org eventStatus to a branded alert; null when scheduled. */
@@ -99,6 +100,7 @@ export function EventDetailContent({
   initialStats,
   initialReviewStats,
   initialUserReferral,
+  canManage,
 }: EventDetailContentProps) {
   const statusAlert = eventStatusAlert(event.eventStatus);
   // Resolved server-side (see page.tsx's loadCompanionData) — no client
@@ -130,10 +132,30 @@ export function EventDetailContent({
     <EventThemeWrapper coverGradient={event.coverGradient}>
       {/* Extra bottom padding on mobile for the sticky RSVP bar */}
       <div className="max-w-250 mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:pb-10">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground h-10 px-3 -ml-3 rounded-xl hover:bg-surface transition-colors mb-4 sm:mb-6">
-          <ArrowLeft className="w-4.5 h-4.5" />
-          Back to events
-        </Link>
+        <div className="flex items-center justify-between mb-4 sm:mb-6">
+          <Link href="/" className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground h-10 px-3 -ml-3 rounded-xl hover:bg-surface transition-colors">
+            <ArrowLeft className="w-4.5 h-4.5" />
+            Back to events
+          </Link>
+          {canManage && (
+            <div className="flex items-center gap-1 -mr-3">
+              <Link
+                href={`/events/${event.id}/edit`}
+                className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground h-10 px-3 rounded-xl hover:bg-surface transition-colors"
+              >
+                <Pencil className="w-4.5 h-4.5" />
+                Edit
+              </Link>
+              <Link
+                href={`/events/${event.id}/manage`}
+                className="inline-flex items-center gap-2 text-sm font-medium text-foreground/60 hover:text-foreground h-10 px-3 rounded-xl hover:bg-surface transition-colors"
+              >
+                <Settings className="w-4.5 h-4.5" />
+                Manage
+              </Link>
+            </div>
+          )}
+        </div>
 
         {statusAlert && (
           <NyuchiAlertBanner
@@ -323,48 +345,17 @@ export function EventDetailContent({
               </div>
             )}
 
-            {/* Hosted By Section - Luma style */}
+            {/* Hosted By Section — entity-centric host card (resolves the
+                real host — person/family/organization — via the event's
+                primaryHostEntityId, with verification badge + reputation
+                stats). Replaces a hand-rolled block that showed the raw
+                organizer.identifier slug as if it were meaningful copy and
+                had two dead buttons ("Subscribe", "Contact the Host" — no
+                onClick handler on either) and a Globe icon with no link
+                behind it. */}
             <div id="hosted-by" className="mt-10 scroll-mt-20">
               <Separator className="mb-8" style={{ backgroundColor: "var(--event-surface)" }} />
-              <h3 className="text-sm font-medium text-muted-foreground mb-4">Hosted By</h3>
-              <div className="flex items-start gap-4">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-[#0A0A0A] shrink-0"
-                  style={{ background: `linear-gradient(135deg, var(--event-primary), var(--event-secondary))` }}
-                >
-                  {event.organizer.initials}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-1">
-                    <h4 className="text-lg font-bold">{event.organizer.name}</h4>
-                    <Button variant="outline" size="sm" className="rounded-full text-xs h-8 px-4 shrink-0">
-                      Subscribe
-                    </Button>
-                  </div>
-                  {event.organizer.identifier && (
-                    <p className="text-sm text-foreground/60 mb-2">{event.organizer.identifier}</p>
-                  )}
-                  <div className="flex items-center gap-3 text-sm text-foreground/60 mb-3">
-                    <span>{event.organizer.eventCount} events hosted</span>
-                    {event.organizer.eventCount > 5 && (
-                      <Badge variant="success" className="text-[10px]">Trusted Host</Badge>
-                    )}
-                    {reviewStats && reviewStats.averageRating > 0 && (
-                      <>
-                        <span>·</span>
-                        <Rating value={reviewStats.averageRating} readOnly size="sm" showValue />
-                      </>
-                    )}
-                  </div>
-                  {/* Social links */}
-                  <div className="flex items-center gap-3 mb-3">
-                    <Globe className="w-4 h-4 text-muted-foreground" />
-                  </div>
-                  <button className="text-sm font-medium" style={{ color: "var(--event-primary)" }}>
-                    Contact the Host
-                  </button>
-                </div>
-              </div>
+              <EventEntityHostCard eventId={event.id} reviewStats={reviewStats} />
             </div>
 
             {/* Ratings */}

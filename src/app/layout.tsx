@@ -211,7 +211,10 @@ export default function RootLayout({
                 <I18nProvider>
                   <LiveRegionProvider>
                     <FeedbackProvider>
-                      <AnimatedBackground enableAnimation={true} intensity={0.2} speed={0.3} />
+                      {/* Animated WebGL contour background disabled for now
+                          (per feedback) — falls back to the static gradient
+                          the component already uses for reduced-motion users. */}
+                      <AnimatedBackground enableAnimation={false} intensity={0.2} speed={0.3} />
                       <WidgetErrorBoundary fallback={<MinimalNav />} name="Header">
                         <Header />
                       </WidgetErrorBoundary>

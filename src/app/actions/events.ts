@@ -24,21 +24,12 @@ import { indexEventEmbedding } from "@/lib/ai/event-index";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { mapEventDocToApi } from "@/lib/mongo/mappers";
 import { isDevBypass, DEV_WORKOS_ID, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
+import { isHttpUrl } from "@/lib/security/request";
 import type { EventDoc, PersonDoc } from "@/lib/mongo/types";
 import type { Event } from "@/lib/api";
 
 const MAX_NAME_LENGTH = 200;
 const MAX_DESCRIPTION_LENGTH = 5000;
-
-/** http(s)-only URL check — rejects javascript:, data:, and malformed URLs. */
-function isHttpUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "https:" || parsed.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
 
 export interface CreateEventActionInput {
   name: string;
@@ -270,12 +261,36 @@ export interface UpdateEventInput {
   endDate?: string;
   /** Lifecycle change — e.g. "cancelled" to cancel the event. */
   status?: "published" | "cancelled" | "draft";
+  category?: string | null;
+  keywords?: string[];
+  /** Uploaded cover image URL, or null to clear it. */
+  image?: string | null;
+  coverGradient?: string | null;
+  maximumAttendeeCapacity?: number | null;
+  visibility?: "public" | "private";
+  requiresApproval?: boolean;
+  isFree?: boolean;
+  ticketUrl?: string | null;
+  /**
+   * The full location surface — like `create`, these all arrive together
+   * (the edit form always submits the current location as a whole) so
+   * `location` is rebuilt from scratch whenever `isOnline` is present rather
+   * than patched field-by-field.
+   */
+  isOnline?: boolean;
+  venue?: string;
+  streetAddress?: string;
+  addressLocality?: string;
+  addressCountry?: string;
+  meetingUrl?: string | null;
+  meetingPlatform?: string | null;
 }
 
 /**
  * Update/manage an existing event, given an already-resolved person. HOST-GATED
  * (Rule 10): `person` must host through the entity that owns the event. Shared
- * by the MCP write endpoint `PATCH /api/events/:id`.
+ * by the MCP write endpoint `PATCH /api/events/:id` and the `/events/:id/edit`
+ * page (via the `updateEvent` server action below).
  */
 export async function updateEventForPerson(
   person: PersonDoc,
@@ -289,6 +304,16 @@ export async function updateEventForPerson(
   const hostEntities = await listHostEntitiesForPerson(person._id);
   const canHost = hostEntities.some((e) => e._id === event.primaryHostEntityId);
   if (!canHost) throw new Error("You are not a host of this event.");
+
+  if (patch.maximumAttendeeCapacity != null && patch.maximumAttendeeCapacity < 1) {
+    throw new Error("Capacity must be at least 1 attendee.");
+  }
+  if (patch.isOnline && patch.meetingUrl && !isHttpUrl(patch.meetingUrl)) {
+    throw new Error("The meeting URL must be a valid http(s) link.");
+  }
+  if (patch.ticketUrl && !isHttpUrl(patch.ticketUrl)) {
+    throw new Error("The ticket URL must be a valid http(s) link.");
+  }
 
   const set: Record<string, unknown> = { updatedAt: new Date() };
   let contentChanged = false;
@@ -324,6 +349,59 @@ export async function updateEventForPerson(
     set.status = patch.status;
     set.eventStatus = patch.status === "cancelled" ? "EventCancelled" : "EventScheduled";
   }
+  if (patch.category !== undefined || patch.keywords !== undefined) {
+    // The chosen category leads the tags array, mirroring createEventForPerson.
+    const category = patch.category !== undefined ? patch.category : (event.mukoko?.category as string | null);
+    const existingTags = (event.tags ?? []) as string[];
+    const keywords = patch.keywords ?? existingTags.filter((t) => t !== category);
+    set.tags = [...(category ? [category] : []), ...keywords.filter((k) => k !== category)];
+    set["mukoko.category"] = category ?? null;
+    contentChanged = true;
+  }
+  if (patch.image !== undefined) {
+    set.image = patch.image ? [patch.image] : [];
+  }
+  if (patch.coverGradient !== undefined) {
+    set["mukoko.coverGradient"] = patch.coverGradient;
+  }
+  if (patch.maximumAttendeeCapacity !== undefined) {
+    set.maximumAttendeeCapacity = patch.maximumAttendeeCapacity;
+  }
+  if (patch.visibility !== undefined) {
+    set["mukoko.visibility"] = patch.visibility;
+  }
+  if (patch.requiresApproval !== undefined) {
+    set["mukoko.requiresApproval"] = patch.requiresApproval;
+  }
+  if (patch.isFree !== undefined || patch.ticketUrl !== undefined) {
+    const isFree = patch.isFree ?? (event.offers ?? []).length === 0;
+    const ticketUrl = patch.ticketUrl ?? (event.offers?.[0] as { url?: string } | undefined)?.url;
+    set.isAccessibleForFree = isFree;
+    set.offers = !isFree && ticketUrl ? [{ "@type": "Offer", url: ticketUrl, availability: "https://schema.org/InStock" }] : [];
+  }
+  if (patch.isOnline !== undefined) {
+    // Rebuild the whole location doc — the edit form always submits every
+    // location field together, same contract as createEventForPerson.
+    set.attendanceMode = patch.isOnline ? "OnlineEventAttendanceMode" : "OfflineEventAttendanceMode";
+    set.location = patch.isOnline
+      ? {
+          "@type": "VirtualLocation",
+          name: "Online",
+          url: patch.meetingUrl ?? undefined,
+          platform: patch.meetingPlatform ?? undefined,
+        }
+      : {
+          "@type": "Place",
+          name: patch.venue ?? "",
+          address: {
+            "@type": "PostalAddress",
+            streetAddress: patch.streetAddress ?? "",
+            addressLocality: patch.addressLocality ?? "",
+            addressCountry: patch.addressCountry ?? "",
+          },
+        };
+    contentChanged = true;
+  }
 
   await events.updateOne({ _id: eventId }, { $set: set });
   const updated = await events.findOne({ _id: eventId });
@@ -334,4 +412,31 @@ export async function updateEventForPerson(
 
   const hostEntity = await getEntityById(updated.primaryHostEntityId);
   return { id: updated._id, event: mapEventDocToApi(updated, { hostEntity, hostPerson: person }) };
+}
+
+/**
+ * Update an event as the signed-in WorkOS user (cookie session) — the
+ * `/events/:id/edit` page's write path. Resolves identity the same way
+ * `createEvent` does, then delegates to `updateEventForPerson`.
+ */
+export async function updateEvent(eventId: string, patch: UpdateEventInput): Promise<CreateEventResult> {
+  let syncInput: SyncPersonInput;
+  if (isDevBypass()) {
+    syncInput = { workosUserId: DEV_WORKOS_ID, email: DEV_EMAIL, name: DEV_NAME, emailVerified: true };
+  } else {
+    const { user } = await withAuth();
+    if (!user) throw new Error("You must be signed in to edit an event.");
+    syncInput = {
+      workosUserId: user.id,
+      email: user.email ?? null,
+      name: [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || null,
+      givenName: user.firstName ?? null,
+      familyName: user.lastName ?? null,
+      picture: user.profilePictureUrl ?? null,
+      emailVerified: user.emailVerified ?? undefined,
+    };
+  }
+
+  const person = await resolvePerson(syncInput);
+  return updateEventForPerson(person, eventId, patch);
 }

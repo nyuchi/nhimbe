@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Star, MessageSquare, Loader2 } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Star, MessageSquare, Loader2, Search, X } from "lucide-react";
 import { Rating } from "@/components/ui/rating";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { FilterBar } from "@/components/ui/filter-bar";
 import { NyuchiReviewCard } from "@/components/ui/nyuchi-review-card";
 import { type EventReview as ApiReview, type ReviewStats } from "@/lib/api";
 import {
@@ -124,8 +126,23 @@ export function EventRatings({
   const ratingDistribution = stats?.distribution ?? { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [helpfulClicked, setHelpfulClicked] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [ratingFilter, setRatingFilter] = useState<string[]>([]);
 
   const totalRatings = Object.values(ratingDistribution).reduce((a, b) => a + b, 0);
+
+  const isFiltering = searchQuery.trim() !== "" || ratingFilter.length > 0;
+  const filteredReviews = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return reviews.filter((review) => {
+      if (ratingFilter.length > 0 && !ratingFilter.includes(String(review.rating))) return false;
+      if (!query) return true;
+      return (
+        review.userName.toLowerCase().includes(query) ||
+        review.reviewBody.toLowerCase().includes(query)
+      );
+    });
+  }, [reviews, searchQuery, ratingFilter]);
 
   const ratingSize = (size: "sm" | "md" | "lg" = "md") =>
     size === "sm" ? "sm" as const : size === "lg" ? "lg" as const : "default" as const;
@@ -155,7 +172,11 @@ export function EventRatings({
     }
   };
 
-  const displayedReviews = showAllReviews ? reviews : reviews.slice(0, 3);
+  const displayedReviews = isFiltering
+    ? filteredReviews
+    : showAllReviews
+      ? reviews
+      : reviews.slice(0, 3);
 
   // Inline write-a-review form, shared by the empty state and the footer CTA.
   const reviewForm = showForm ? (
@@ -274,8 +295,49 @@ export function EventRatings({
         </div>
       </div>
 
+      {/* Search + rating filter — only worth showing once there's enough to sift through. */}
+      {reviews.length > 3 && (
+        <div className="mb-4 space-y-2">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary pointer-events-none" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search reviews..."
+              className="pl-10 pr-9"
+              aria-label="Search reviews"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <FilterBar
+            options={([5, 4, 3, 2, 1] as const).map((stars) => ({
+              id: String(stars),
+              label: `${stars}★`,
+              count: ratingDistribution[stars] || 0,
+            }))}
+            selected={ratingFilter}
+            onChange={setRatingFilter}
+            mode="single"
+          />
+        </div>
+      )}
+
       {/* Reviews List — branded NyuchiReviewCard. A verified attendee earns
           the community trust dot (tier 1); the helpful vote tints malachite. */}
+      {isFiltering && filteredReviews.length === 0 ? (
+        <p className="text-sm text-text-secondary text-center py-6">
+          No reviews match your search.
+        </p>
+      ) : (
       <div className="space-y-3">
         {displayedReviews.map((review) => {
           const marked = helpfulClicked.has(review.id);
@@ -294,10 +356,11 @@ export function EventRatings({
           );
         })}
       </div>
+      )}
 
       {/* Show More / Write Review */}
       <div className="mt-4 flex items-center justify-between">
-        {reviews.length > 3 && (
+        {!isFiltering && reviews.length > 3 && (
           <Button
             variant="ghost"
             size="sm"

@@ -5,6 +5,7 @@ import { getEventByIdOrSlug } from "@/lib/mongo/events";
 import { SITE_URL } from "@/lib/site-url";
 import { EventDetailContent } from "./event-detail-content";
 import { syncCurrentUser } from "@/app/actions/auth";
+import { canManageEventAction } from "@/app/actions/host-registrations";
 import {
   getEventStatsAction,
   getEventReviewsAction,
@@ -55,10 +56,13 @@ const loadEvent = cache(async (id: string) => {
  * consolidating those too is a larger, separate pass (each owns its own
  * fetch contract) and is left for later.
  */
-async function loadCompanionData(
-  eventId: string,
-): Promise<{ stats: EventStats | null; reviewStats: ReviewStats | null; userReferral: UserReferralCode | null }> {
-  const [stats, reviews, userReferral] = await Promise.all([
+async function loadCompanionData(eventId: string): Promise<{
+  stats: EventStats | null;
+  reviewStats: ReviewStats | null;
+  userReferral: UserReferralCode | null;
+  canManage: boolean;
+}> {
+  const [stats, reviews, userReferral, canManage] = await Promise.all([
     getEventStatsAction(eventId).catch(() => null),
     getEventReviewsAction(eventId).catch(() => null),
     syncCurrentUser()
@@ -72,8 +76,9 @@ async function loadCompanionData(
         return referral;
       })
       .catch(() => null),
+    canManageEventAction(eventId).catch(() => false),
   ]);
-  return { stats, reviewStats: reviews?.stats ?? null, userReferral };
+  return { stats, reviewStats: reviews?.stats ?? null, userReferral, canManage };
 }
 
 // Dynamic OpenGraph metadata
@@ -156,7 +161,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     notFound();
   }
 
-  const { stats, reviewStats, userReferral } = await loadCompanionData(event.id);
+  const { stats, reviewStats, userReferral, canManage } = await loadCompanionData(event.id);
 
   const eventUrl = `${SITE_URL}/e/${event.shortCode}`;
 
@@ -222,6 +227,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
         initialStats={stats}
         initialReviewStats={reviewStats}
         initialUserReferral={userReferral}
+        canManage={canManage}
       />
     </>
   );

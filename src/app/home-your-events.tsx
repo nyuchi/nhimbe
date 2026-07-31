@@ -38,7 +38,9 @@ function toTimelineItem(event: Event, hosting: boolean): TimelineItem {
     location: event.location.name || event.location.addressLocality,
     attendeeCount: event.attendeeCount,
     thumbnail: event.image ? getMediaUrl(event.image) : undefined,
-    href: hosting ? `/events/${event.id}/manage` : `/events/${event.id}`,
+    // Always the public event page first, even when hosting — the manage
+    // page is one click further, from there (not skipped past).
+    href: `/events/${event.id}`,
     mineral: categoryToMineral(event.category),
     category: event.category,
   };
