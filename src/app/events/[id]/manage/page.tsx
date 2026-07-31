@@ -1,15 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft,
   Users,
   Eye,
   Share2,
-  Settings,
   Check,
   X,
   Clock,
@@ -19,14 +17,11 @@ import {
   Trash2,
   Copy,
   ExternalLink,
-  Calendar,
   MapPin,
   Loader2,
   MessageSquare,
-  BarChart3,
   QrCode,
   UserPlus,
-  Send,
   Bell,
   MessageCircle,
   ChevronRight,
@@ -43,12 +38,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { NyuchiNotificationItem } from "@/components/ui/nyuchi-notification-item";
 import { NyuchiActionSheet } from "@/components/ui/nyuchi-action-sheet";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { FilterBar } from "@/components/ui/filter-bar";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   deleteEvent,
@@ -65,8 +58,22 @@ import {
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { PairKiosk } from "../kiosk/pair-kiosk";
 import { VenueVerifyCta } from "./venue-verify-cta";
+import { EventManageShell, type ManageSectionKey } from "../event-manage-shell";
 import { useAuth } from "@/components/auth/auth-context";
 import { useToast } from "@/hooks/use-toast";
+
+const SECTION_KEYS: ManageSectionKey[] = [
+  "overview",
+  "guests",
+  "registration",
+  "blasts",
+  "insights",
+  "settings",
+];
+
+function isSectionKey(value: string | null): value is ManageSectionKey {
+  return SECTION_KEYS.includes(value as ManageSectionKey);
+}
 
 interface Registration {
   id: string;
@@ -89,6 +96,9 @@ interface EventStats {
 function ManageEventContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const sectionParam = searchParams.get("section");
+  const activeKey: ManageSectionKey = isSectionKey(sectionParam) ? sectionParam : "overview";
   const { user, accessToken, getAccessToken } = useAuth();
   // Stable identity for the data-loading effect. Depending on the whole `user`
   // object re-ran the fetch on every render (new object reference each time),
@@ -348,53 +358,11 @@ function ManageEventContent() {
   const capacityUsed = stats.approved;
 
   return (
-    <div className="max-w-280 mx-auto px-4 sm:px-6 py-6 sm:py-8">
-      {/* Header */}
-      <div className="flex items-center gap-3 sm:gap-4 mb-6">
-        <Link
-          href="/my-events"
-          className="w-10 h-10 rounded-full bg-surface flex items-center justify-center hover:bg-elevated transition-colors shrink-0"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-text-secondary">Personal</span>
-            <ChevronRight className="w-3 h-3 text-text-tertiary" />
-          </div>
-          <h1 className="text-lg sm:text-xl font-bold truncate">{event.name}</h1>
-        </div>
-        <Link href={`/events/${event.id}`} className="shrink-0">
-          <Button variant="secondary" className="gap-2 hidden sm:flex">
-            <ExternalLink className="w-4 h-4" />
-            View Event
-          </Button>
-          <button className="sm:hidden w-10 h-10 rounded-full bg-surface flex items-center justify-center hover:bg-elevated transition-colors">
-            <ExternalLink className="w-4 h-4" />
-          </button>
-        </Link>
-      </div>
-
-      {/* Tabs */}
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="w-full sm:w-auto overflow-x-auto scrollbar-none flex-nowrap">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="guests">
-            Guests
-            {stats.pending > 0 && (
-              <Badge variant="warning" className="ml-1.5">
-                {stats.pending}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="registration">Registration</TabsTrigger>
-          <TabsTrigger value="blasts">Blasts</TabsTrigger>
-          <TabsTrigger value="insights">Insights</TabsTrigger>
-          <TabsTrigger value="more">More</TabsTrigger>
-        </TabsList>
-
-        {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-6">
+    <EventManageShell eventId={event.id} eventName={event.name} activeKey={activeKey} pendingGuestCount={stats.pending}>
+    <div className="max-w-280 mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+        {/* Overview */}
+        {activeKey === "overview" && (
+        <div className="space-y-6">
           {/* Quick Actions Row */}
           <div className="flex flex-wrap gap-3">
             <Button variant="default" className="gap-2" onClick={() => {}}>
@@ -621,10 +589,12 @@ function ManageEventContent() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+        )}
 
-        {/* Guests Tab */}
-        <TabsContent value="guests" className="space-y-6">
+        {/* Guests */}
+        {activeKey === "guests" && (
+        <div className="space-y-6">
           {/* At a Glance */}
           <Card>
             <CardHeader>
@@ -767,10 +737,12 @@ function ManageEventContent() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+        )}
 
-        {/* Registration Tab */}
-        <TabsContent value="registration" className="space-y-6">
+        {/* Registration */}
+        {activeKey === "registration" && (
+        <div className="space-y-6">
           {/* Status Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card className="p-4">
@@ -878,10 +850,12 @@ function ManageEventContent() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+        )}
 
-        {/* Blasts Tab */}
-        <TabsContent value="blasts" className="space-y-6">
+        {/* Blasts */}
+        {activeKey === "blasts" && (
+        <div className="space-y-6">
           {/* Send Blast Input */}
           <Card className="p-4">
             <div className="flex items-center gap-3">
@@ -952,10 +926,12 @@ function ManageEventContent() {
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
+        </div>
+        )}
 
-        {/* Insights Tab */}
-        <TabsContent value="insights" className="space-y-6">
+        {/* Insights */}
+        {activeKey === "insights" && (
+        <div className="space-y-6">
           {/* Page Views */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -1027,10 +1003,12 @@ function ManageEventContent() {
               <p className="text-text-secondary">Track where your registrations are coming from.</p>
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+        )}
 
-        {/* More Tab (Settings) */}
-        <TabsContent value="more" className="space-y-6">
+        {/* Settings */}
+        {activeKey === "settings" && (
+        <div className="space-y-6">
           {/* Clone Event */}
           <Card>
             <CardHeader>
@@ -1293,8 +1271,8 @@ function ManageEventContent() {
               </button>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+        </div>
+        )}
 
       {/* Per-guest action sheet — branded bottom-sheet action list */}
       <NyuchiActionSheet
@@ -1400,6 +1378,7 @@ function ManageEventContent() {
         </div>
       )}
     </div>
+    </EventManageShell>
   );
 }
 
@@ -1407,7 +1386,15 @@ function ManageEventContent() {
 export default function ManageEventPage() {
   return (
     <AuthGuard>
-      <ManageEventContent />
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        }
+      >
+        <ManageEventContent />
+      </Suspense>
     </AuthGuard>
   );
 }

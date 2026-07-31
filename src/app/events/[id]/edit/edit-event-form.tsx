@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { NyuchiMetaTile } from "@/components/ui/nyuchi-meta-tile";
 import { EventThemeWrapper } from "../event-theme-wrapper";
+import { EventManageShell } from "../event-manage-shell";
 import { CoverImageUpload } from "../../create/cover-image-upload";
 import { DateTimeModal } from "@/components/modals/date-time-modal";
 import { LocationModal } from "@/components/modals/location-modal";
@@ -221,6 +222,7 @@ export function EditEventForm({ event }: EditEventFormProps) {
   };
 
   return (
+    <EventManageShell eventId={event.id} eventName={event.name} activeKey="edit">
     <EventThemeWrapper coverGradient={event.coverGradient} themeId={event.themeId}>
       <div className="max-w-250 mx-auto px-4 sm:px-6 py-6 sm:py-10">
         <div className="flex items-center justify-between mb-6">
@@ -408,5 +410,6 @@ export function EditEventForm({ event }: EditEventFormProps) {
         setTicketUrl={setTicketUrl}
       />
     </EventThemeWrapper>
+    </EventManageShell>
   );
 }
