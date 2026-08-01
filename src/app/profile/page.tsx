@@ -88,9 +88,12 @@ function ProfileContent() {
       ],
     },
     {
+      section: "Profile",
+      items: [{ icon: User, label: "Edit profile", href: "/profile/edit" }],
+    },
+    {
       section: "Preferences",
       items: [
-        { icon: User, label: "Edit profile & preferences", href: "/profile/edit" },
         {
           icon: Palette,
           label: "Appearance",
@@ -102,14 +105,14 @@ function ProfileContent() {
           icon: Languages,
           label: "Language",
           value: languageLabel,
-          href: "/profile/edit",
+          href: "/profile/preferences",
           srState: `Current language: ${languageLabel}.`,
         },
         {
           icon: Bell,
           label: "Event update emails",
           value: emailUpdatesLabel,
-          href: "/profile/edit",
+          href: "/profile/preferences",
           srState: `Event update emails are ${emailUpdatesLabel}.`,
         },
       ],
