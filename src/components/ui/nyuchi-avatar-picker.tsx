@@ -1,5 +1,8 @@
 "use client";
 
+// ── INFRASTRUCTURE HARNESS (auto-wired) ──
+import { useNyuchiHarness } from "@/components/ui/harness";
+
 import { useId, useRef, useState } from "react";
 import { Loader2, Upload, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -8,8 +11,22 @@ import { AVATAR_STICKERS } from "@/lib/avatar-stickers";
 import { getInitials } from "@/lib/avatar-initials";
 import { uploadMedia, getMediaUrl } from "@/lib/api";
 
-interface AvatarPickerProps {
+/* ═══════════════════════════════════════════════════════════════
+   nyuchi avatar picker — brand identity component.
+
+   Universal avatar-selection surface for any profile-edit screen
+   across the ecosystem: upload a photo (to whichever object storage
+   the host app wires in), adopt a Gravatar (resolved by the caller —
+   this component never talks to Gravatar or storage directly, so it
+   has no opinion on upload endpoint or hashing), or pick one of a
+   small preset "sticker" set with no upload or network call at all.
+   Falls back to initials-on-mineral when nothing is set yet.
+   ═══════════════════════════════════════════════════════════════ */
+
+interface NyuchiAvatarPickerProps {
+  /** Person's display name — used for the initials fallback and the sticker/upload labels. */
   name: string;
+  /** Current avatar: an image URL, a Gravatar URL, or a sticker data: URI. */
   value?: string;
   onChange: (url: string) => void;
   /** Resolve the signed-in person's Gravatar, or null if they have none set. */
@@ -18,14 +35,15 @@ interface AvatarPickerProps {
   className?: string;
 }
 
-function AvatarPicker({
+function NyuchiAvatarPicker({
   name,
   value,
   onChange,
   onCheckGravatar,
   disabled = false,
   className,
-}: AvatarPickerProps) {
+}: NyuchiAvatarPickerProps) {
+  const { animStyle, announce } = useNyuchiHarness("avatar-picker");
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [checkingGravatar, setCheckingGravatar] = useState(false);
@@ -39,6 +57,7 @@ function AvatarPicker({
     try {
       const { key } = await uploadMedia(file);
       onChange(getMediaUrl(key));
+      announce("Photo uploaded");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -54,6 +73,7 @@ function AvatarPicker({
       const url = await onCheckGravatar();
       if (url) {
         onChange(url);
+        announce("Gravatar applied");
       } else {
         setGravatarNotFound(true);
       }
@@ -67,7 +87,7 @@ function AvatarPicker({
   const busy = uploading || checkingGravatar || disabled;
 
   return (
-    <div data-slot="avatar-picker" className={cn("space-y-4", className)}>
+    <div data-slot="nyuchi-avatar-picker" style={animStyle()} className={cn("space-y-4", className)}>
       <div className="flex items-center gap-4">
         <div
           className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary"
@@ -143,7 +163,10 @@ function AvatarPicker({
               disabled={busy}
               aria-label={`Use the ${sticker.label} sticker as your avatar`}
               aria-pressed={value === sticker.dataUri}
-              onClick={() => onChange(sticker.dataUri)}
+              onClick={() => {
+                onChange(sticker.dataUri);
+                announce(`${sticker.label} sticker applied`);
+              }}
               className={cn(
                 "flex size-11 items-center justify-center overflow-hidden rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 value === sticker.dataUri && "ring-2 ring-primary ring-offset-2 ring-offset-background",
@@ -159,5 +182,5 @@ function AvatarPicker({
   );
 }
 
-export { AvatarPicker };
-export type { AvatarPickerProps };
+export { NyuchiAvatarPicker };
+export type { NyuchiAvatarPickerProps };

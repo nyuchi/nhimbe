@@ -9,7 +9,7 @@ import { AuthGuard } from "@/components/auth/auth-guard";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { AvatarPicker } from "@/components/ui/avatar-picker";
+import { NyuchiAvatarPicker } from "@/components/ui/nyuchi-avatar-picker";
 import { Button } from "@/components/ui/button";
 import { type Category } from "@/lib/api";
 import { getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
@@ -197,7 +197,7 @@ function ProfileEditContent() {
       <div className="space-y-6">
         {/* Avatar */}
         <Panel title="Avatar" description="Upload a photo, use your Gravatar, or pick a sticker.">
-          <AvatarPicker
+          <NyuchiAvatarPicker
             name={name || "User"}
             value={picture}
             onChange={setPicture}

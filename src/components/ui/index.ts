@@ -1,6 +1,6 @@
 export { Button } from "./button";
 export { Avatar } from "./avatar";
-export { AvatarPicker } from "./avatar-picker";
+export { NyuchiAvatarPicker } from "./nyuchi-avatar-picker";
 export { Badge } from "./badge";
 export { Card, CardHeader, CardFooter, CardTitle, CardAction, CardDescription, CardContent } from "./card";
 export { CopyButton } from "./copy-button";
