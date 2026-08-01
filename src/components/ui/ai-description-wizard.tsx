@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, ArrowRight, ArrowLeft, Loader2, RefreshCw, Check, X } from "lucide-react";
+import { Bot, ArrowRight, ArrowLeft, Loader2, RefreshCw, Check, X } from "lucide-react";
 import { Button } from "./button";
 import { Textarea } from "./textarea";
 import type { DescriptionContext, GeneratedDescription } from "@/lib/api";
@@ -267,7 +267,7 @@ export function AIDescriptionWizard({
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
                   {/* Shamwari AI glyph — sodalite mineral (intelligence, depth) */}
-                  <Sparkles className="dikdik w-5 h-5" />
+                  <Bot className="dikdik w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-semibold">Shamwari</h3>
@@ -390,7 +390,7 @@ export function AIDescriptionWizard({
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
                 {/* Shamwari AI glyph — sodalite mineral (intelligence, depth) */}
-                <Sparkles className="dikdik w-5 h-5" />
+                <Bot className="dikdik w-5 h-5" />
               </div>
               <div>
                 <h3 className="font-semibold">Shamwari</h3>
@@ -466,7 +466,7 @@ export function AIDescriptionWizard({
               </>
             ) : isLastStep ? (
               <>
-                <Sparkles className="w-4 h-4" />
+                <Bot className="w-4 h-4" />
                 Generate Description
               </>
             ) : (
@@ -510,7 +510,7 @@ export function AIDescriptionBadge({
         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-medium transition-colors border border-primary/20 h-auto min-h-0"
         title="Ask Shamwari to help write your description"
       >
-        <Sparkles className="w-3.5 h-3.5" />
+        <Bot className="w-3.5 h-3.5" />
         Ask Shamwari
       </Button>
 

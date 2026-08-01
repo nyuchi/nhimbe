@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Search, X, Sparkles, Loader2, Clock, TrendingUp } from "lucide-react";
+import { Search, X, Bot, Loader2, Clock, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNyuchiHarness } from "@/components/ui/harness";
 import { FilterBar, type FilterOption } from "@/components/ui/filter-bar";
@@ -161,7 +161,7 @@ export function NyuchiSearchView({
       {/* Shamwari AI summary */}
       {aiSummary && (
         <div className="flex items-start gap-3 rounded-[var(--radius-lg,14px)] border border-primary/20 bg-primary/10 p-4">
-          <Sparkles className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
+          <Bot className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
           <p className="text-sm leading-relaxed text-foreground">{aiSummary}</p>
         </div>
       )}
