@@ -52,12 +52,13 @@ function NyuchiProfileSettings({
   saving = false,
   className,
 }: NyuchiProfileSettingsProps) {
-  useNyuchiHarness("profile-settings");
+  const { motion } = useNyuchiHarness("profile-settings");
 
   const [internalActive, setInternalActive] = React.useState(
     defaultActiveId ?? sections[0]?.id,
   );
   const active = activeId ?? internalActive;
+  const activeTabRef = React.useRef<HTMLButtonElement>(null);
 
   const setActive = (id: string) => {
     if (activeId == null) setInternalActive(id);
@@ -65,6 +66,17 @@ function NyuchiProfileSettings({
   };
 
   const activeSection = sections.find((s) => s.id === active) ?? sections[0];
+
+  // Keep the active tab in view on the horizontally-scrolling mobile nav row —
+  // otherwise a deep-linked (`defaultActiveId`) section beyond the first
+  // screenful renders its content with no visibly-selected tab in sight.
+  React.useEffect(() => {
+    activeTabRef.current?.scrollIntoView?.({
+      behavior: motion.prefersReduced ? "instant" : "smooth",
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [active, motion.prefersReduced]);
 
   return (
     <div
@@ -81,6 +93,7 @@ function NyuchiProfileSettings({
             return (
               <button
                 key={section.id}
+                ref={isActive ? activeTabRef : undefined}
                 type="button"
                 aria-current={isActive ? "page" : undefined}
                 onClick={() => setActive(section.id)}
