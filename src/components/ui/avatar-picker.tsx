@@ -5,6 +5,7 @@ import { Loader2, Upload, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { AVATAR_STICKERS } from "@/lib/avatar-stickers";
+import { getInitials } from "@/lib/avatar-initials";
 import { uploadMedia, getMediaUrl } from "@/lib/api";
 
 interface AvatarPickerProps {
@@ -15,15 +16,6 @@ interface AvatarPickerProps {
   onCheckGravatar: () => Promise<string | null>;
   disabled?: boolean;
   className?: string;
-}
-
-function initialsOf(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
 }
 
 function AvatarPicker({
@@ -85,7 +77,7 @@ function AvatarPicker({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={value} alt="" className="size-full object-cover" />
           ) : (
-            <span className="text-2xl font-bold text-primary-foreground">{initialsOf(name)}</span>
+            <span className="text-2xl font-bold text-primary-foreground">{getInitials(name)}</span>
           )}
         </div>
 

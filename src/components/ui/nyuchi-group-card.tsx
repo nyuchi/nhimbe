@@ -5,6 +5,7 @@ import { useNyuchiHarness } from "@/components/ui/harness";
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { getInitials } from "@/lib/avatar-initials";
 
 /* ═══════════════════════════════════════════════════════════════
    nyuchi group card — brand identity component.
@@ -132,7 +133,7 @@ function NyuchiGroupCard({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={m.avatarUrl} alt={m.name} className="size-full object-cover" />
                 ) : (
-                  m.name.charAt(0).toUpperCase()
+                  getInitials(m.name, 1)
                 )}
               </div>
             ))}

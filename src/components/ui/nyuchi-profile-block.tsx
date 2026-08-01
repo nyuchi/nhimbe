@@ -6,6 +6,7 @@ import { useNyuchiHarness } from "@/components/ui/harness";
 import * as React from "react";
 import { Shield, Activity, Star, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getInitials } from "@/lib/avatar-initials";
 import type { PlatformStatus, VerificationTier } from "@/components/ui/verified-badge";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -107,12 +108,7 @@ function NyuchiProfileBlock({
     );
   }
 
-  const initials = name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  const initials = getInitials(name);
 
   const tierConfig = TIER_DISPLAY[verificationTier];
   const statusConfig = STATUS_DISPLAY[platformStatus];
