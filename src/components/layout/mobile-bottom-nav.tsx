@@ -30,9 +30,9 @@ export function MobileBottomNav() {
   return (
     <nav
       aria-label="Mobile navigation"
-      className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] z-40 md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-elevated bg-background/90 backdrop-blur-xl pb-[env(safe-area-inset-bottom,0px)] md:hidden"
     >
-      <div className="flex items-center justify-around px-2 h-14 mx-auto max-w-100 rounded-full bg-background/90 backdrop-blur-xl border border-elevated shadow-lg">
+      <div className="flex items-center justify-around px-2 h-14">
         {mobileNavItems.map((item) => {
           // For profile, redirect to sign-in if not authenticated
           const href =
