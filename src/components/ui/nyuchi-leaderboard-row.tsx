@@ -6,6 +6,7 @@ import { useNyuchiHarness } from "@/components/ui/harness";
 import * as React from "react";
 import { TrendingUp, TrendingDown, Minus, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getInitials } from "@/lib/avatar-initials";
 
 /* ═══════════════════════════════════════════════════════════════
    nyuchi leaderboard row — brand identity component.
@@ -71,11 +72,7 @@ function NyuchiLeaderboardRow({
 
   const isPodium = position <= 3;
   const podiumColor = isPodium ? podiumColors[position - 1] : undefined;
-  const initials = name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2);
+  const initials = getInitials(name);
 
   return (
     <div

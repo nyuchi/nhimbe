@@ -5,15 +5,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Loader2,
   MapPin,
+  Check,
+  User,
+  Heart,
+  Bell,
   Languages,
+  SlidersHorizontal,
   Monitor,
   Moon,
   Sun,
-  UserRound,
-  SlidersHorizontal,
-  Check,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
 import { AuthGuard } from "@/components/auth/auth-guard";
@@ -24,11 +25,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { AvatarPicker } from "@/components/ui/avatar-picker";
-import {
-  NyuchiProfileSettings,
-  type SettingsSection,
-} from "@/components/ui/nyuchi-profile-settings";
+import { NyuchiAvatarPicker } from "@/components/ui/nyuchi-avatar-picker";
+import { NyuchiProfileSettings, type SettingsSection } from "@/components/ui/nyuchi-profile-settings";
 import { type Category } from "@/lib/api";
 import { getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
 import { updateMyProfile, getMyGravatarUrlAction, type ProfileFields } from "@/app/actions/profile";
@@ -50,10 +48,7 @@ function Panel({
       aria-labelledby={headingId}
       className="rounded-[var(--radius-xl,17px)] bg-card p-5 ring-1 ring-foreground/10"
     >
-      <h3
-        id={headingId}
-        className="text-sm font-semibold uppercase tracking-wider text-foreground"
-      >
+      <h3 id={headingId} className="text-sm font-semibold uppercase tracking-wider text-foreground">
         {title}
       </h3>
       {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
@@ -61,6 +56,8 @@ function Panel({
     </section>
   );
 }
+
+const VALID_SECTION_IDS = ["profile", "location", "interests", "notifications", "language", "appearance"];
 
 function ProfileEditContent() {
   const router = useRouter();
@@ -71,32 +68,44 @@ function ProfileEditContent() {
   const nameFieldId = useId();
   const locationGroupId = useId();
   const interestsGroupId = useId();
-  const themeGroupId = useId();
-  const notifyId = useId();
   const nicknameFieldId = useId();
   const usernameFieldId = useId();
   const phoneFieldId = useId();
   const birthdateFieldId = useId();
   const genderFieldId = useId();
+  const notifyId = useId();
 
   const [name, setName] = useState("");
   const [picture, setPicture] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
   const [interests, setInterests] = useState<string[]>([]);
-  const [eventUpdates, setEventUpdates] = useState(true);
-  const [uiLocale, setUiLocale] = useState<Locale>(locale);
   const [nickname, setNickname] = useState("");
   const [preferredUsername, setPreferredUsername] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [birthdate, setBirthdate] = useState("");
   const [gender, setGender] = useState("");
+  const [eventUpdates, setEventUpdates] = useState(true);
+  const [uiLocale, setUiLocale] = useState<Locale>(locale);
 
   const [cities, setCities] = useState<{ addressLocality: string; addressCountry: string }[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dataLoaded, setDataLoaded] = useState(false);
+  // Deep-link support: `?section=notifications` etc. from the profile hub, so
+  // its Appearance/Language/Notifications rows land on the right tab. Read
+  // from window.location (client-only, lazily) to avoid a useSearchParams
+  // Suspense boundary on this leaf page (matches the /search `?q=` pattern).
+  // Safe as a one-time initializer: AuthGuard only mounts this content after
+  // the client-side auth check resolves, so there's no SSR render to diverge
+  // from and NyuchiProfileSettings' active-tab state is uncontrolled after
+  // mount.
+  const [defaultSection] = useState(() => {
+    if (typeof window === "undefined") return "profile";
+    const requested = new URLSearchParams(window.location.search).get("section");
+    return requested && VALID_SECTION_IDS.includes(requested) ? requested : "profile";
+  });
 
   // Pre-populate from the resolved user.
   useEffect(() => {
@@ -106,16 +115,17 @@ function ProfileEditContent() {
       setCity(user.addressLocality || "");
       setCountry(user.addressCountry || "");
       setInterests(user.interests || []);
-      setEventUpdates(user.subscribedToEventUpdates !== false);
-      setUiLocale(user.locale || locale);
       setNickname(user.nickname || "");
       setPreferredUsername(user.preferredUsername || "");
       setPhoneNumber(user.phoneNumber || "");
       setBirthdate(user.birthdate || "");
       setGender(user.gender || "");
+      setEventUpdates(user.subscribedToEventUpdates !== false);
+      setUiLocale(user.locale ?? locale);
       setDataLoaded(true);
     }
-  }, [user, dataLoaded, locale]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, dataLoaded]);
 
   // Load cities and categories once.
   useEffect(() => {
@@ -135,13 +145,10 @@ function ProfileEditContent() {
 
   const toggleInterest = useCallback((categoryId: string) => {
     setInterests((prev) =>
-      prev.includes(categoryId)
-        ? prev.filter((i) => i !== categoryId)
-        : [...prev, categoryId],
+      prev.includes(categoryId) ? prev.filter((i) => i !== categoryId) : [...prev, categoryId],
     );
   }, []);
 
-  // Language + theme apply immediately (client-side prefs) for instant feedback.
   const onLocaleChange = useCallback(
     (next: Locale) => {
       setUiLocale(next);
@@ -168,12 +175,6 @@ function ProfileEditContent() {
       if (JSON.stringify(interests) !== JSON.stringify(user.interests || [])) {
         changedFields.interests = interests;
       }
-      if (eventUpdates !== (user.subscribedToEventUpdates !== false)) {
-        changedFields.subscribeToEventUpdates = eventUpdates;
-      }
-      if (uiLocale !== (user.locale || "en")) {
-        changedFields.locale = uiLocale;
-      }
       if (nickname !== (user.nickname || "")) changedFields.nickname = nickname;
       if (preferredUsername !== (user.preferredUsername || "")) {
         changedFields.preferredUsername = preferredUsername;
@@ -181,6 +182,10 @@ function ProfileEditContent() {
       if (phoneNumber !== (user.phoneNumber || "")) changedFields.phoneNumber = phoneNumber;
       if (birthdate !== (user.birthdate || "")) changedFields.birthdate = birthdate;
       if (gender !== (user.gender || "")) changedFields.gender = gender;
+      if (eventUpdates !== (user.subscribedToEventUpdates !== false)) {
+        changedFields.subscribeToEventUpdates = eventUpdates;
+      }
+      if (uiLocale !== (user.locale ?? "en")) changedFields.locale = uiLocale;
 
       if (Object.keys(changedFields).length > 0) {
         await updateMyProfile(changedFields);
@@ -208,9 +213,8 @@ function ProfileEditContent() {
 
   const profileSection = (
     <div className="space-y-6">
-      {/* Avatar */}
       <Panel title="Avatar" description="Upload a photo, use your Gravatar, or pick a sticker.">
-        <AvatarPicker
+        <NyuchiAvatarPicker
           name={name || "User"}
           value={picture}
           onChange={setPicture}
@@ -218,7 +222,6 @@ function ProfileEditContent() {
         />
       </Panel>
 
-      {/* Name */}
       <Panel title="Name" description="This is how you'll appear to other attendees and hosts.">
         <Label htmlFor={nameFieldId} className="sr-only">
           Your name
@@ -233,8 +236,10 @@ function ProfileEditContent() {
         />
       </Panel>
 
-      {/* Personal details */}
-      <Panel title="Personal details" description="Optional — shown only where a handle or contact detail is relevant.">
+      <Panel
+        title="Personal details"
+        description="Optional — shown only where a handle or contact detail is relevant."
+      >
         <div className="space-y-4">
           <div>
             <Label htmlFor={nicknameFieldId} className="text-sm font-medium text-foreground">
@@ -307,229 +312,196 @@ function ProfileEditContent() {
           </div>
         </div>
       </Panel>
+    </div>
+  );
 
-      {/* Location */}
-      <div
-        role="group"
-        aria-labelledby={locationGroupId}
-        className="rounded-[var(--radius-xl,17px)] bg-card p-5 ring-1 ring-foreground/10"
+  const locationSection = (
+    <div
+      role="group"
+      aria-labelledby={locationGroupId}
+      className="rounded-[var(--radius-xl,17px)] bg-card p-5 ring-1 ring-foreground/10"
+    >
+      <h3 id={locationGroupId} className="text-sm font-semibold uppercase tracking-wider text-foreground">
+        Location
+      </h3>
+      <p className="mt-1 text-sm text-muted-foreground">Set your home city so we can surface nearby events.</p>
+      <RadioGroup
+        className="mt-4 max-h-72 gap-2 overflow-y-auto pr-1"
+        value={city ? `${city}|${country}` : undefined}
+        onValueChange={selectCity}
+        aria-label="Home city"
       >
-        <h3
-          id={locationGroupId}
-          className="text-sm font-semibold uppercase tracking-wider text-foreground"
-        >
-          Location
-        </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Set your home city so we can surface nearby events.
-        </p>
-        <RadioGroup
-          className="mt-4 max-h-72 gap-2 overflow-y-auto pr-1"
-          value={city ? `${city}|${country}` : undefined}
-          onValueChange={selectCity}
-          aria-label="Home city"
-        >
-          {cities.map((loc) => {
-            const value = `${loc.addressLocality}|${loc.addressCountry}`;
-            const id = `city-${loc.addressLocality}-${loc.addressCountry}`.replace(/\s+/g, "-");
-            const selected = city === loc.addressLocality && country === loc.addressCountry;
-            return (
-              <label
-                key={value}
-                htmlFor={id}
-                className={`flex min-h-[44px] cursor-pointer items-center gap-3 rounded-[var(--radius-lg,14px)] border px-4 py-2.5 transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-card ${
-                  selected
-                    ? "border-primary bg-primary/10"
-                    : "border-border bg-background hover:border-primary/50"
-                }`}
-              >
-                <RadioGroupItem id={id} value={value} />
-                <MapPin className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <span className="flex-1">
-                  <span className="block font-medium text-foreground">{loc.addressLocality}</span>
-                  <span className="block text-sm text-muted-foreground">{loc.addressCountry}</span>
-                </span>
-              </label>
-            );
-          })}
-          {cities.length === 0 && (
-            <p className="py-2 text-sm text-muted-foreground">Loading locations…</p>
-          )}
-        </RadioGroup>
-      </div>
+        {cities.map((loc) => {
+          const value = `${loc.addressLocality}|${loc.addressCountry}`;
+          const id = `city-${loc.addressLocality}-${loc.addressCountry}`.replace(/\s+/g, "-");
+          const selected = city === loc.addressLocality && country === loc.addressCountry;
+          return (
+            <label
+              key={value}
+              htmlFor={id}
+              className={`flex min-h-[44px] cursor-pointer items-center gap-3 rounded-[var(--radius-lg,14px)] border px-4 py-2.5 transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-card ${
+                selected ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/50"
+              }`}
+            >
+              <RadioGroupItem id={id} value={value} />
+              <MapPin className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="flex-1">
+                <span className="block font-medium text-foreground">{loc.addressLocality}</span>
+                <span className="block text-sm text-muted-foreground">{loc.addressCountry}</span>
+              </span>
+            </label>
+          );
+        })}
+        {cities.length === 0 && <p className="py-2 text-sm text-muted-foreground">Loading locations…</p>}
+      </RadioGroup>
+    </div>
+  );
 
-      {/* Interests */}
-      <div
-        role="group"
-        aria-labelledby={interestsGroupId}
-        className="rounded-[var(--radius-xl,17px)] bg-card p-5 ring-1 ring-foreground/10"
-      >
-        <h3
-          id={interestsGroupId}
-          className="text-sm font-semibold uppercase tracking-wider text-foreground"
-        >
-          Interests
-        </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Pick the categories you care about to personalize discovery.
-        </p>
-        <div className="mt-4 space-y-4">
-          {Object.entries(categoryGroups).map(([group, cats]) => (
-            <div key={group}>
-              <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {group}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {cats.map((category) => {
-                  const active = interests.includes(category.id);
-                  return (
-                    <button
-                      key={category.id}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => toggleInterest(category.id)}
-                      className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card ${
-                        active
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-background text-foreground hover:border-primary/50"
-                      }`}
-                    >
-                      {active && <Check className="size-3.5" aria-hidden="true" />}
-                      {category.name}
-                    </button>
-                  );
-                })}
-              </div>
+  const interestsSection = (
+    <div
+      role="group"
+      aria-labelledby={interestsGroupId}
+      className="rounded-[var(--radius-xl,17px)] bg-card p-5 ring-1 ring-foreground/10"
+    >
+      <h3 id={interestsGroupId} className="text-sm font-semibold uppercase tracking-wider text-foreground">
+        Interests
+      </h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Pick the categories you care about to personalize discovery.
+      </p>
+      <div className="mt-4 space-y-4">
+        {Object.entries(categoryGroups).map(([group, cats]) => (
+          <div key={group}>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">{group}</p>
+            <div className="flex flex-wrap gap-2">
+              {cats.map((category) => {
+                const active = interests.includes(category.id);
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => toggleInterest(category.id)}
+                    className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card ${
+                      active
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background text-foreground hover:border-primary/50"
+                    }`}
+                  >
+                    {active && <Check className="size-3.5" aria-hidden="true" />}
+                    {category.name}
+                  </button>
+                );
+              })}
             </div>
-          ))}
-          {categories.length === 0 && (
-            <p className="text-sm text-muted-foreground">Loading categories…</p>
-          )}
-        </div>
+          </div>
+        ))}
+        {categories.length === 0 && <p className="text-sm text-muted-foreground">Loading categories…</p>}
       </div>
     </div>
   );
 
-  const preferencesSection = (
-    <div className="space-y-6">
-      {/* Notifications */}
-      <Panel title="Notifications">
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <Label htmlFor={notifyId} className="text-base font-medium text-foreground">
-              Event update emails
-            </Label>
-            <p id={`${notifyId}-desc`} className="mt-1 text-sm text-muted-foreground">
-              Get emails when hosts of events you attend or help run post an update.
-            </p>
-          </div>
-          <Switch
-            id={notifyId}
-            checked={eventUpdates}
-            onCheckedChange={setEventUpdates}
-            aria-describedby={`${notifyId}-desc`}
-          />
+  const notificationsSection = (
+    <div className="rounded-[var(--radius-xl,17px)] bg-card p-5 ring-1 ring-foreground/10">
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground">Notifications</h3>
+      <div className="mt-4 flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <Label htmlFor={notifyId} className="text-sm font-medium text-foreground">
+            Event update emails
+          </Label>
+          <p id={`${notifyId}-desc`} className="mt-1 text-sm text-muted-foreground">
+            Get emails when hosts of events you attend or help run post an update.
+          </p>
         </div>
-      </Panel>
-
-      {/* Language */}
-      <Panel title="Language" description="Choose the language for the Nhimbe interface.">
-        <fieldset>
-          <legend className="sr-only">Interface language</legend>
-          <RadioGroup
-            className="gap-2"
-            value={uiLocale}
-            onValueChange={(v) => onLocaleChange(v as Locale)}
-          >
-            {[
-              { value: "en" as Locale, label: "English" },
-              { value: "sn" as Locale, label: "Shona (chiShona)" },
-            ].map((opt) => {
-              const id = `lang-${opt.value}`;
-              const active = uiLocale === opt.value;
-              return (
-                <label
-                  key={opt.value}
-                  htmlFor={id}
-                  className={`flex min-h-[44px] cursor-pointer items-center gap-3 rounded-[var(--radius-lg,14px)] border px-4 py-2.5 transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-card ${
-                    active
-                      ? "border-primary bg-primary/10"
-                      : "border-border bg-background hover:border-primary/50"
-                  }`}
-                >
-                  <RadioGroupItem id={id} value={opt.value} />
-                  <Languages className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                  <span className="font-medium text-foreground">{opt.label}</span>
-                </label>
-              );
-            })}
-          </RadioGroup>
-        </fieldset>
-      </Panel>
-
-      {/* Appearance / Theme */}
-      <div
-        role="group"
-        aria-labelledby={themeGroupId}
-        className="rounded-[var(--radius-xl,17px)] bg-card p-5 ring-1 ring-foreground/10"
-      >
-        <h3
-          id={themeGroupId}
-          className="text-sm font-semibold uppercase tracking-wider text-foreground"
-        >
-          Appearance
-        </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          &ldquo;System&rdquo; follows your device&apos;s light or dark setting.
-        </p>
-        <fieldset className="mt-4">
-          <legend className="sr-only">Theme</legend>
-          <RadioGroup
-            className="grid grid-cols-3 gap-2"
-            value={theme}
-            onValueChange={(v) => setTheme(v as "light" | "dark" | "system")}
-          >
-            {themeOptions.map((opt) => {
-              const Icon = opt.icon;
-              const id = `theme-${opt.value}`;
-              const active = theme === opt.value;
-              return (
-                <label
-                  key={opt.value}
-                  htmlFor={id}
-                  className={`flex min-h-[44px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius-lg,14px)] border px-3 py-4 text-center transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-card ${
-                    active
-                      ? "border-primary bg-primary/10"
-                      : "border-border bg-background hover:border-primary/50"
-                  }`}
-                >
-                  <RadioGroupItem id={id} value={opt.value} className="sr-only" />
-                  <Icon
-                    className={`size-5 ${active ? "text-primary" : "text-muted-foreground"}`}
-                    aria-hidden="true"
-                  />
-                  <span className="text-sm font-medium text-foreground">{opt.label}</span>
-                </label>
-              );
-            })}
-          </RadioGroup>
-        </fieldset>
+        <Switch
+          id={notifyId}
+          checked={eventUpdates}
+          onCheckedChange={setEventUpdates}
+          aria-describedby={`${notifyId}-desc`}
+        />
       </div>
+    </div>
+  );
+
+  const languageSection = (
+    <div className="rounded-[var(--radius-xl,17px)] bg-card p-5 ring-1 ring-foreground/10">
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground">Language</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Choose the language for the Nhimbe interface.</p>
+      <fieldset className="mt-4">
+        <legend className="sr-only">Interface language</legend>
+        <RadioGroup className="gap-2" value={uiLocale} onValueChange={(v) => onLocaleChange(v as Locale)}>
+          {[
+            { value: "en" as Locale, label: "English" },
+            { value: "sn" as Locale, label: "Shona (chiShona)" },
+          ].map((opt) => {
+            const id = `lang-${opt.value}`;
+            const active = uiLocale === opt.value;
+            return (
+              <label
+                key={opt.value}
+                htmlFor={id}
+                className={`flex min-h-[44px] cursor-pointer items-center gap-3 rounded-[var(--radius-lg,14px)] border px-4 py-2.5 transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-card ${
+                  active ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/50"
+                }`}
+              >
+                <RadioGroupItem id={id} value={opt.value} />
+                <Languages className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="font-medium text-foreground">{opt.label}</span>
+              </label>
+            );
+          })}
+        </RadioGroup>
+      </fieldset>
+    </div>
+  );
+
+  const appearanceSection = (
+    <div className="rounded-[var(--radius-xl,17px)] bg-card p-5 ring-1 ring-foreground/10">
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground">Appearance</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        &ldquo;System&rdquo; follows your device&apos;s light or dark setting.
+      </p>
+      <fieldset className="mt-4">
+        <legend className="sr-only">Theme</legend>
+        <RadioGroup
+          className="grid grid-cols-3 gap-2"
+          value={theme}
+          onValueChange={(v) => setTheme(v as "light" | "dark" | "system")}
+        >
+          {themeOptions.map((opt) => {
+            const Icon = opt.icon;
+            const id = `theme-${opt.value}`;
+            const active = theme === opt.value;
+            return (
+              <label
+                key={opt.value}
+                htmlFor={id}
+                className={`flex min-h-[44px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--radius-lg,14px)] border px-3 py-4 text-center transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-card ${
+                  active ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/50"
+                }`}
+              >
+                <RadioGroupItem id={id} value={opt.value} className="sr-only" />
+                <Icon className={`size-5 ${active ? "text-primary" : "text-muted-foreground"}`} aria-hidden="true" />
+                <span className="text-sm font-medium text-foreground">{opt.label}</span>
+              </label>
+            );
+          })}
+        </RadioGroup>
+      </fieldset>
     </div>
   );
 
   const sections: SettingsSection[] = [
-    { id: "profile", label: "Profile", icon: UserRound, content: profileSection },
-    {
-      id: "preferences",
-      label: "Preferences",
-      icon: SlidersHorizontal,
-      content: preferencesSection,
-    },
+    { id: "profile", label: "Profile", icon: User, content: profileSection },
+    { id: "location", label: "Location", icon: MapPin, content: locationSection },
+    { id: "interests", label: "Interests", icon: Heart, content: interestsSection },
+    { id: "notifications", label: "Notifications", icon: Bell, content: notificationsSection },
+    { id: "language", label: "Language", icon: Languages, content: languageSection },
+    { id: "appearance", label: "Appearance", icon: SlidersHorizontal, content: appearanceSection },
   ];
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-8">
+    <div className="mx-auto max-w-4xl px-6 py-8">
       {/* Header */}
       <div className="mb-8 flex items-center gap-3">
         <Link
@@ -540,8 +512,8 @@ function ProfileEditContent() {
           <ArrowLeft className="size-5" aria-hidden="true" />
         </Link>
         <div>
-          <h1 className="font-serif text-2xl font-bold text-foreground">Edit profile</h1>
-          <p className="text-sm text-muted-foreground">Update your details and preferences.</p>
+          <h1 className="font-serif text-2xl font-bold text-foreground">Profile settings</h1>
+          <p className="text-sm text-muted-foreground">Everything about your account, in one place.</p>
         </div>
       </div>
 
@@ -557,7 +529,7 @@ function ProfileEditContent() {
 
       <NyuchiProfileSettings
         sections={sections}
-        defaultActiveId="profile"
+        defaultActiveId={defaultSection}
         showSaveBar
         saving={isSaving}
         saveLabel={isSaving ? "Saving…" : "Save changes"}
@@ -569,13 +541,6 @@ function ProfileEditContent() {
       <p className="sr-only" role="status" aria-live="polite">
         {isSaving ? "Saving your changes" : ""}
       </p>
-
-      {isSaving && (
-        <div className="mt-2 flex items-center justify-end gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          Saving…
-        </div>
-      )}
     </div>
   );
 }

@@ -70,11 +70,9 @@ function HookProbe() {
   const h = useNyuchiHarness("probe");
   return (
     <div>
-      <span data-testid="reduced">{String(h.prefersReducedMotion)}</span>
-      <span data-testid="theme">{h.theme}</span>
-      <span data-testid="locale">{h.locale}</span>
+      <span data-testid="reduced">{String(h.motion.prefersReduced)}</span>
       <span data-testid="anim">{h.animStyle().animation ?? "none"}</span>
-      <span data-testid="types">{`${typeof h.log.info}:${typeof h.reportHealth}:${typeof h.announce}`}</span>
+      <span data-testid="types">{`${typeof h.log.info}:${typeof h.announce}`}</span>
     </div>
   );
 }
@@ -85,9 +83,7 @@ describe("useNyuchiHarness", () => {
     render(<HookProbe />);
     expect(screen.getByTestId("reduced").textContent).toBe("false");
     expect(screen.getByTestId("anim").textContent).toContain("nyuchi-fade-slide-up");
-    expect(screen.getByTestId("theme").textContent).toBe("dark");
-    expect(screen.getByTestId("locale").textContent).toBe("en");
-    expect(screen.getByTestId("types").textContent).toBe("function:function:function");
+    expect(screen.getByTestId("types").textContent).toBe("function:function");
   });
 
   it("suppresses animation when the user prefers reduced motion", () => {

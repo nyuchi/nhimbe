@@ -7,6 +7,7 @@ import * as React from "react";
 import Link from "next/link";
 import { LogOut, Settings, User, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getInitials } from "@/lib/avatar-initials";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -51,15 +52,6 @@ interface NyuchiUserMenuProps {
   /** Hide the name/email text next to the avatar (icon-only trigger). */
   compact?: boolean;
   className?: string;
-}
-
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
 }
 
 function NyuchiUserMenu({

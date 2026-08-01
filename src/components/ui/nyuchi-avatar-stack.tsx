@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { getInitials } from "@/lib/avatar-initials";
 
 /* ═══════════════════════════════════════════════════════════════
    NYUCHI AVATAR STACK — overlapping +N social-proof stack.
@@ -30,17 +31,6 @@ interface NyuchiAvatarStackProps {
   label?: string;
   size?: "sm" | "md";
   className?: string;
-}
-
-function initials(name: string): string {
-  return name
-    .trim()
-    .split(/\s+/)
-    .map((w) => w[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
 }
 
 function NyuchiAvatarStack({
@@ -80,7 +70,7 @@ function NyuchiAvatarStack({
             />
           ) : (
             <span key={i} className={bubble}>
-              {initials(person.name)}
+              {getInitials(person.name)}
             </span>
           ),
         )}

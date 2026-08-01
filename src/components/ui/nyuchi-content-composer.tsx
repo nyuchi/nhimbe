@@ -3,6 +3,7 @@
 import * as React from "react";
 import { ImagePlus, AtSign } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getInitials } from "@/lib/avatar-initials";
 import { useNyuchiHarness } from "@/components/ui/harness";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -77,7 +78,7 @@ export function NyuchiContentComposer({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarUrl} alt={userName ?? ""} className="size-full object-cover" />
             ) : (
-              (userName?.charAt(0)?.toUpperCase() ?? "?")
+              (getInitials(userName, 1) || "?")
             )}
           </div>
         )}

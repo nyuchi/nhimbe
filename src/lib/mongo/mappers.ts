@@ -15,6 +15,7 @@
  */
 
 import type { Event, EventLocation, EventOffers, EventOrganizer } from "@/lib/api";
+import { getInitials } from "@/lib/avatar-initials";
 import type { EntityDoc, EventDoc, PersonDoc, PlaceDoc } from "./types";
 
 /** Related documents resolved by the caller before mapping. All optional. */
@@ -56,13 +57,7 @@ function formatDateFragments(date: Date): Event["date"] {
 
 /** Initials from a display name — first letters of up to two words, uppercased. */
 export function initialsFromName(name: string | null | undefined): string {
-  if (!name) return "";
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
+  return getInitials(name);
 }
 
 /** Map the embedded schema.org Place (or a resolved PlaceDoc) to EventLocation. */

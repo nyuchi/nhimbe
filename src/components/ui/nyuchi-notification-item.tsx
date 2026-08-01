@@ -16,6 +16,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getInitials } from "@/lib/avatar-initials";
 import { useNyuchiHarness } from "@/components/ui/harness";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -115,12 +116,7 @@ function NyuchiNotificationItem({
   const config = typeConfig[type] ?? typeConfig.system;
   const Icon = config.icon;
   const time = typeof timestamp === "string" ? timestamp : timestamp.toLocaleDateString();
-  const initials =
-    actorName
-      ?.split(" ")
-      .map((n) => n[0])
-      .join("")
-      .slice(0, 2) ?? "";
+  const initials = getInitials(actorName);
 
   return (
     <div

@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { Star, ThumbsUp } from "lucide-react";
+import { ThumbsUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getInitials } from "@/lib/avatar-initials";
 import { useNyuchiHarness } from "@/components/ui/harness";
+import { Rating } from "@/components/ui/rating";
 
 /* ═══════════════════════════════════════════════════════════════
    NYUCHI REVIEW CARD — universal brand review display.
@@ -111,7 +113,7 @@ export function NyuchiReviewCard({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarUrl} alt={reviewer} className="size-full object-cover" />
             ) : (
-              reviewer.charAt(0).toUpperCase()
+              getInitials(reviewer, 1)
             )}
           </div>
           <div>
@@ -130,19 +132,8 @@ export function NyuchiReviewCard({
             {date && <p className="text-[10px] text-muted-foreground">{date}</p>}
           </div>
         </div>
-        <div className="flex items-center gap-0.5" aria-label={`${rating} out of 5 stars`}>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Star
-              key={i}
-              className={cn(
-                "size-3.5",
-                i < rating
-                  ? "fill-[var(--color-gold)] text-[var(--color-gold)]"
-                  : "text-muted-foreground/20",
-              )}
-              aria-hidden
-            />
-          ))}
+        <div aria-label={`${rating} out of 5 stars`}>
+          <Rating value={rating} readOnly size="sm" />
         </div>
       </div>
 
