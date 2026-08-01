@@ -36,6 +36,14 @@ export interface AppUser {
   addressLocality?: string;
   addressCountry?: string;
   interests: string[];
+  /** Display handle (OIDC `nickname`) — distinct from the full display `name`. */
+  nickname?: string;
+  /** Public @handle (OIDC `preferred_username`). */
+  preferredUsername?: string;
+  phoneNumber?: string;
+  gender?: string;
+  /** ISO `YYYY-MM-DD` — kept a plain string across the server/client boundary. */
+  birthdate?: string;
   role: AppUserRole;
   onboardingCompleted: boolean;
   suspended: boolean;
@@ -64,6 +72,11 @@ export function mapPersonToAppUser(doc: PersonDoc): AppUser {
     addressLocality: doc.addressLocality ?? undefined,
     addressCountry: doc.addressCountry ?? undefined,
     interests: doc.interests ?? [],
+    nickname: doc.nickname ?? undefined,
+    preferredUsername: doc.preferredUsername ?? undefined,
+    phoneNumber: doc.phoneNumber ?? undefined,
+    gender: doc.gender ?? undefined,
+    birthdate: doc.birthdate ? doc.birthdate.toISOString().slice(0, 10) : undefined,
     // Role is an extra (validator-permitted) field set out-of-band on the
     // person doc; unknown/absent values fall back to plain "user".
     role: doc.role && KNOWN_ROLES.has(doc.role) ? (doc.role as AppUserRole) : "user",
@@ -135,7 +148,11 @@ export async function syncPersonFromWorkos(input: SyncPersonInput): Promise<AppU
         name: input.name,
         givenName: input.givenName ?? null,
         familyName: input.familyName ?? null,
-        picture: input.picture ?? null,
+        // Only write a picture WorkOS actually returned — this runs on every
+        // sign-in/refresh, and WorkOS rarely carries a profile picture, so an
+        // unconditional write would clobber a custom avatar (upload/Gravatar/
+        // sticker, set via the profile-edit page) moments after it's saved.
+        ...(input.picture ? { picture: input.picture } : {}),
         // Only write emailVerified when the claim is actually present — a
         // momentarily-missing claim must not regress a verified user to false.
         ...(typeof input.emailVerified === "boolean"

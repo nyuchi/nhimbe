@@ -92,9 +92,14 @@ function createH1Subscription(pathname: string) {
       return () => {};
     }
 
-    // For dynamic pages, observe DOM changes
+    // For dynamic pages, observe DOM changes — scoped to the page content
+    // (#main-content, set by the root layout) rather than the whole body, so
+    // this doesn't re-fire (and re-render the header) on every mutation
+    // inside the header/footer chrome themselves, on top of every route's
+    // own render churn during navigation.
+    const target = document.getElementById("main-content") ?? document.body;
     const observer = new MutationObserver(callback);
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(target, { childList: true, subtree: true });
 
     // Also trigger after a delay for initial render
     const timer = setTimeout(callback, 100);
@@ -250,7 +255,7 @@ export function Header() {
                   : "opacity-100"
               }`}
             >
-              <span className="truncate text-[24px] font-bold text-primary">Nhimbe</span>
+              <span className="truncate font-serif text-[24px] font-bold text-primary">Nhimbe</span>
               <span className="mt-0.5 truncate whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
                 by Mukoko Events
               </span>

@@ -89,15 +89,15 @@ function NyuchiRSVPButton({
         disabled={disabled || loading}
         aria-label={label}
         className={cn(
-          "flex h-[52px] items-center justify-center gap-2 rounded-full text-base font-semibold transition-all",
-          "min-h-[48px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]",
+          "flex min-h-[52px] items-center justify-center gap-2 rounded-full px-6 text-base font-semibold whitespace-nowrap transition-all",
+          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]",
           "disabled:opacity-50",
-          full ? "w-full" : "px-6",
+          full && "w-full",
         )}
         style={{ backgroundColor: config.bg, color: config.fg }}
       >
-        <Icon className={cn("size-5", loading && "animate-spin")} strokeWidth={2.2} />
-        {label}
+        <Icon className={cn("size-5 shrink-0", loading && "animate-spin")} strokeWidth={2.2} />
+        <span className="truncate">{label}</span>
       </button>
       {spotsRemaining != null && status === "none" && (
         <span className="text-center text-[11px] text-muted-foreground">{spotsRemaining} spots remaining</span>

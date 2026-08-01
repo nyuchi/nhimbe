@@ -24,13 +24,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { AvatarPicker } from "@/components/ui/avatar-picker";
 import {
   NyuchiProfileSettings,
   type SettingsSection,
 } from "@/components/ui/nyuchi-profile-settings";
 import { type Category } from "@/lib/api";
 import { getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
-import { updateMyProfile, type ProfileFields } from "@/app/actions/profile";
+import { updateMyProfile, getMyGravatarUrlAction, type ProfileFields } from "@/app/actions/profile";
 
 /** A bordered panel on the solid card surface — the shared shell for a labelled
  *  field group so the whole form reads as one system. */
@@ -72,13 +73,24 @@ function ProfileEditContent() {
   const interestsGroupId = useId();
   const themeGroupId = useId();
   const notifyId = useId();
+  const nicknameFieldId = useId();
+  const usernameFieldId = useId();
+  const phoneFieldId = useId();
+  const birthdateFieldId = useId();
+  const genderFieldId = useId();
 
   const [name, setName] = useState("");
+  const [picture, setPicture] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
   const [interests, setInterests] = useState<string[]>([]);
   const [eventUpdates, setEventUpdates] = useState(true);
   const [uiLocale, setUiLocale] = useState<Locale>(locale);
+  const [nickname, setNickname] = useState("");
+  const [preferredUsername, setPreferredUsername] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [birthdate, setBirthdate] = useState("");
+  const [gender, setGender] = useState("");
 
   const [cities, setCities] = useState<{ addressLocality: string; addressCountry: string }[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -90,11 +102,17 @@ function ProfileEditContent() {
   useEffect(() => {
     if (user && !dataLoaded) {
       setName(user.name || "");
+      setPicture(user.image || "");
       setCity(user.addressLocality || "");
       setCountry(user.addressCountry || "");
       setInterests(user.interests || []);
       setEventUpdates(user.subscribedToEventUpdates !== false);
       setUiLocale(user.locale || locale);
+      setNickname(user.nickname || "");
+      setPreferredUsername(user.preferredUsername || "");
+      setPhoneNumber(user.phoneNumber || "");
+      setBirthdate(user.birthdate || "");
+      setGender(user.gender || "");
       setDataLoaded(true);
     }
   }, [user, dataLoaded, locale]);
@@ -144,6 +162,7 @@ function ProfileEditContent() {
       // Only send changed fields to the server action.
       const changedFields: ProfileFields = {};
       if (name !== (user.name || "")) changedFields.name = name;
+      if (picture !== (user.image || "")) changedFields.picture = picture;
       if (city !== (user.addressLocality || "")) changedFields.addressLocality = city;
       if (country !== (user.addressCountry || "")) changedFields.addressCountry = country;
       if (JSON.stringify(interests) !== JSON.stringify(user.interests || [])) {
@@ -155,6 +174,13 @@ function ProfileEditContent() {
       if (uiLocale !== (user.locale || "en")) {
         changedFields.locale = uiLocale;
       }
+      if (nickname !== (user.nickname || "")) changedFields.nickname = nickname;
+      if (preferredUsername !== (user.preferredUsername || "")) {
+        changedFields.preferredUsername = preferredUsername;
+      }
+      if (phoneNumber !== (user.phoneNumber || "")) changedFields.phoneNumber = phoneNumber;
+      if (birthdate !== (user.birthdate || "")) changedFields.birthdate = birthdate;
+      if (gender !== (user.gender || "")) changedFields.gender = gender;
 
       if (Object.keys(changedFields).length > 0) {
         await updateMyProfile(changedFields);
@@ -182,6 +208,16 @@ function ProfileEditContent() {
 
   const profileSection = (
     <div className="space-y-6">
+      {/* Avatar */}
+      <Panel title="Avatar" description="Upload a photo, use your Gravatar, or pick a sticker.">
+        <AvatarPicker
+          name={name || "User"}
+          value={picture}
+          onChange={setPicture}
+          onCheckGravatar={getMyGravatarUrlAction}
+        />
+      </Panel>
+
       {/* Name */}
       <Panel title="Name" description="This is how you'll appear to other attendees and hosts.">
         <Label htmlFor={nameFieldId} className="sr-only">
@@ -195,6 +231,81 @@ function ProfileEditContent() {
           placeholder="What should we call you?"
           autoComplete="name"
         />
+      </Panel>
+
+      {/* Personal details */}
+      <Panel title="Personal details" description="Optional — shown only where a handle or contact detail is relevant.">
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor={nicknameFieldId} className="text-sm font-medium text-foreground">
+              Nickname
+            </Label>
+            <Input
+              id={nicknameFieldId}
+              type="text"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder="A shorter name friends call you"
+              autoComplete="nickname"
+              className="mt-1.5"
+            />
+          </div>
+          <div>
+            <Label htmlFor={usernameFieldId} className="text-sm font-medium text-foreground">
+              Username
+            </Label>
+            <Input
+              id={usernameFieldId}
+              type="text"
+              value={preferredUsername}
+              onChange={(e) => setPreferredUsername(e.target.value)}
+              placeholder="yourhandle"
+              autoComplete="username"
+              className="mt-1.5"
+            />
+          </div>
+          <div>
+            <Label htmlFor={phoneFieldId} className="text-sm font-medium text-foreground">
+              Phone number
+            </Label>
+            <Input
+              id={phoneFieldId}
+              type="tel"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              placeholder="+263 …"
+              autoComplete="tel"
+              className="mt-1.5"
+            />
+          </div>
+          <div>
+            <Label htmlFor={birthdateFieldId} className="text-sm font-medium text-foreground">
+              Date of birth
+            </Label>
+            <Input
+              id={birthdateFieldId}
+              type="date"
+              value={birthdate}
+              onChange={(e) => setBirthdate(e.target.value)}
+              autoComplete="bday"
+              className="mt-1.5"
+            />
+          </div>
+          <div>
+            <Label htmlFor={genderFieldId} className="text-sm font-medium text-foreground">
+              Gender
+            </Label>
+            <Input
+              id={genderFieldId}
+              type="text"
+              value={gender}
+              onChange={(e) => setGender(e.target.value)}
+              placeholder="e.g. Woman, Man, Non-binary — optional"
+              autoComplete="sex"
+              className="mt-1.5"
+            />
+          </div>
+        </div>
       </Panel>
 
       {/* Location */}

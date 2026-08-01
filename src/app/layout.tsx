@@ -159,7 +159,7 @@ const themeScript = `
 function DegradedShell() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
-      <h1 className="text-2xl font-bold mb-4">Nhimbe</h1>
+      <h1 className="font-serif text-2xl font-bold mb-4">Nhimbe</h1>
       <p className="text-text-secondary mb-6">Something went wrong loading the app. Please refresh the page.</p>
       <a href="/" className="px-6 py-3 bg-primary text-primary-foreground rounded-xl font-semibold">
         Refresh
@@ -172,7 +172,7 @@ function MinimalNav() {
   return (
     <header className="sticky top-0 z-50 bg-background/70 backdrop-blur-xl border-b border-elevated/50">
       <div className="max-w-300 mx-auto px-6 py-4 flex items-center justify-between">
-        <a href="/" className="text-xl font-bold text-primary">Nhimbe</a>
+        <a href="/" className="font-serif text-xl font-bold text-primary">Nhimbe</a>
         <nav className="flex items-center gap-4 text-sm text-text-secondary">
           <a href="/events">Events</a>
           <a href="/search">Search</a>

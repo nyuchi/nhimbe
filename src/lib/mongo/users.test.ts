@@ -170,6 +170,21 @@ describe("syncPersonFromWorkos", () => {
     expect(update.$setOnInsert.emailVerified).toBe(false);
   });
 
+  it("does not overwrite a custom picture when WorkOS provides none", async () => {
+    // WorkOS rarely carries a profile picture, and this sync runs on every
+    // sign-in/refresh — an unconditional $set would clobber a custom avatar
+    // (upload/Gravatar/sticker) set via the profile-edit page moments later.
+    await syncPersonFromWorkos({ workosUserId: "user_123", email: null, name: null, picture: null });
+    const [, update] = persons.findOneAndUpdate.mock.calls[0];
+    expect(update.$set).not.toHaveProperty("picture");
+  });
+
+  it("writes the picture when WorkOS actually returns one", async () => {
+    await syncPersonFromWorkos({ ...input, picture: "https://img.example/a.png" });
+    const [, update] = persons.findOneAndUpdate.mock.calls[0];
+    expect(update.$set.picture).toBe("https://img.example/a.png");
+  });
+
   it("is a replay-safe keyed upsert (same filter on every call)", async () => {
     await syncPersonFromWorkos(input);
     await syncPersonFromWorkos(input);

@@ -13,6 +13,7 @@ import { withAuth } from "@workos-inc/authkit-nextjs";
 import { personsCollection } from "@/lib/mongo/databases";
 import { mapPersonToAppUser, type AppUser, type AppLocale } from "@/lib/mongo/users";
 import { isDevBypass, DEV_WORKOS_ID } from "@/lib/auth/dev";
+import { findGravatarUrl } from "@/lib/gravatar";
 import { log } from "@/lib/observability";
 
 const KNOWN_LOCALES: ReadonlySet<string> = new Set(["en", "sn"]);
@@ -28,16 +29,27 @@ export interface ProfileFields {
   /** Preferred UI language — persisted to the OIDC `locale` field so the
    *  choice follows the person across devices. Ignored if not "en"/"sn". */
   locale?: AppLocale;
+  /** Avatar — an uploaded R2 URL, a Gravatar URL, or one of the preset
+   *  sticker data: URIs. Anything the client resolved to a renderable image. */
+  picture?: string;
+  nickname?: string;
+  preferredUsername?: string;
+  phoneNumber?: string;
+  gender?: string;
+  /** ISO `YYYY-MM-DD`. */
+  birthdate?: string;
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+async function resolveActingWorkosUserId(): Promise<string | null> {
+  if (isDevBypass()) return DEV_WORKOS_ID;
+  const { user } = await withAuth();
+  return user?.id ?? null;
 }
 
 export async function updateMyProfile(fields: ProfileFields): Promise<AppUser | null> {
-  let workosUserId: string | null = null;
-  if (isDevBypass()) {
-    workosUserId = DEV_WORKOS_ID;
-  } else {
-    const { user } = await withAuth();
-    workosUserId = user?.id ?? null;
-  }
+  const workosUserId = await resolveActingWorkosUserId();
   if (!workosUserId) throw new Error("You must be signed in to update your profile.");
 
   const set: Record<string, unknown> = { updatedAt: new Date() };
@@ -53,6 +65,17 @@ export async function updateMyProfile(fields: ProfileFields): Promise<AppUser | 
   if (typeof fields.locale === "string" && KNOWN_LOCALES.has(fields.locale)) {
     set.locale = fields.locale;
   }
+  if (typeof fields.picture === "string") set.picture = fields.picture;
+  if (typeof fields.nickname === "string") set.nickname = fields.nickname.trim();
+  if (typeof fields.preferredUsername === "string") {
+    set.preferredUsername = fields.preferredUsername.trim();
+  }
+  if (typeof fields.phoneNumber === "string") set.phoneNumber = fields.phoneNumber.trim();
+  if (typeof fields.gender === "string") set.gender = fields.gender.trim();
+  // Only a well-formed calendar date reaches the store as a real Date.
+  if (typeof fields.birthdate === "string" && ISO_DATE.test(fields.birthdate)) {
+    set.birthdate = new Date(`${fields.birthdate}T00:00:00.000Z`);
+  }
 
   const persons = await personsCollection();
   const doc = await persons.findOneAndUpdate(
@@ -66,4 +89,19 @@ export async function updateMyProfile(fields: ProfileFields): Promise<AppUser | 
     data: { fields: Object.keys(set).filter((k) => k !== "updatedAt") },
   });
   return mapPersonToAppUser(doc);
+}
+
+/**
+ * Look up a Gravatar for the signed-in person's own email. Returns null if
+ * they have none set — the caller (the avatar picker) shows a "not found"
+ * message rather than silently doing nothing.
+ */
+export async function getMyGravatarUrlAction(): Promise<string | null> {
+  const workosUserId = await resolveActingWorkosUserId();
+  if (!workosUserId) throw new Error("You must be signed in to look up a Gravatar.");
+
+  const persons = await personsCollection();
+  const doc = await persons.findOne({ workosUserId });
+  if (!doc?.email) return null;
+  return findGravatarUrl(doc.email);
 }

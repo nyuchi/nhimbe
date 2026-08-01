@@ -111,7 +111,7 @@ export function Footer() {
                 />
               </div>
               <span className="flex flex-col leading-tight">
-                <span className="text-xl font-bold text-primary">Nhimbe</span>
+                <span className="font-serif text-xl font-bold text-primary">Nhimbe</span>
                 <span className="text-[11px] font-medium uppercase tracking-wide text-text-tertiary">
                   by Mukoko Events
                 </span>

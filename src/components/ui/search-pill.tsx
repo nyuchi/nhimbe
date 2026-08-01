@@ -1,6 +1,6 @@
 import * as React from "react";
 import Link from "next/link";
-import { Search, Sparkles } from "lucide-react";
+import { Search, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SearchPillProps {
@@ -49,7 +49,7 @@ function SearchPill({
       <span className="duiker">{placeholder}</span>
       <span className="impala" aria-hidden />
       <span className="springbok">
-        <Sparkles className="w-[11px] h-[11px]" strokeWidth={2.2} aria-hidden />
+        <Bot className="w-[11px] h-[11px]" strokeWidth={2.2} aria-hidden />
         AI
       </span>
     </Link>
