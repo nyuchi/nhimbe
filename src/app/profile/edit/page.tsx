@@ -11,8 +11,6 @@ import {
   Monitor,
   Moon,
   Sun,
-  UserRound,
-  SlidersHorizontal,
   Check,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
@@ -25,10 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AvatarPicker } from "@/components/ui/avatar-picker";
-import {
-  NyuchiProfileSettings,
-  type SettingsSection,
-} from "@/components/ui/nyuchi-profile-settings";
+import { Button } from "@/components/ui/button";
 import { type Category } from "@/lib/api";
 import { getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
 import { updateMyProfile, getMyGravatarUrlAction, type ProfileFields } from "@/app/actions/profile";
@@ -518,16 +513,6 @@ function ProfileEditContent() {
     </div>
   );
 
-  const sections: SettingsSection[] = [
-    { id: "profile", label: "Profile", icon: UserRound, content: profileSection },
-    {
-      id: "preferences",
-      label: "Preferences",
-      icon: SlidersHorizontal,
-      content: preferencesSection,
-    },
-  ];
-
   return (
     <div className="mx-auto max-w-3xl px-6 py-8">
       {/* Header */}
@@ -555,27 +540,28 @@ function ProfileEditContent() {
         </div>
       )}
 
-      <NyuchiProfileSettings
-        sections={sections}
-        defaultActiveId="profile"
-        showSaveBar
-        saving={isSaving}
-        saveLabel={isSaving ? "Saving…" : "Save changes"}
-        onSave={handleSave}
-        onCancel={() => router.push("/profile")}
-      />
+      {/* One flat, grouped list — no tabs. Every section is a labelled card,
+          always visible and directly editable, so the whole page reads as
+          one system instead of switching between hidden panels. */}
+      <div className="space-y-6">
+        {profileSection}
+        {preferencesSection}
+      </div>
 
       {/* Screen-reader saving status */}
       <p className="sr-only" role="status" aria-live="polite">
         {isSaving ? "Saving your changes" : ""}
       </p>
 
-      {isSaving && (
-        <div className="mt-2 flex items-center justify-end gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          Saving…
-        </div>
-      )}
+      <div className="sticky bottom-0 mt-6 flex items-center justify-end gap-2 border-t border-border bg-background py-4">
+        <Button variant="outline" type="button" onClick={() => router.push("/profile")}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={handleSave} disabled={isSaving}>
+          {isSaving && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+          {isSaving ? "Saving…" : "Save changes"}
+        </Button>
+      </div>
     </div>
   );
 }
