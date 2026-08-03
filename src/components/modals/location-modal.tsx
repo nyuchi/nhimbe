@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
-import { resolveCountryTimezone } from "@/app/actions/geocode";
+import { resolveCountryTimezone, ensurePlaceFromOsmSuggestion } from "@/app/actions/geocode";
 import { timezoneLabel } from "@/lib/timezone";
 
 function isValidMeetingUrl(value: string): boolean {
@@ -157,6 +157,27 @@ export function LocationModal({
                     resolveCountryTimezone(components.country).then((tz) => setSelectedTimezone(tz ?? null));
                   } else {
                     setSelectedTimezone(null);
+                  }
+                  // Promote a confirmed OSM/Nominatim pick into the places
+                  // catalogue so the next search for this venue hits the DB
+                  // tier first — best-effort, fire-and-forget.
+                  if (
+                    components.source === "osm" &&
+                    components.osmType &&
+                    components.osmId !== undefined &&
+                    components.latitude !== undefined &&
+                    components.longitude !== undefined
+                  ) {
+                    ensurePlaceFromOsmSuggestion({
+                      name: components.venue,
+                      address: components.address,
+                      city: components.city,
+                      country: components.country,
+                      latitude: components.latitude,
+                      longitude: components.longitude,
+                      osmType: components.osmType,
+                      osmId: components.osmId,
+                    });
                   }
                 }}
                 placeholder="Search for a venue or address..."

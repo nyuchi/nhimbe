@@ -24,9 +24,10 @@
 
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import tzlookup from "tz-lookup";
-import { placesCollection, placesGeoCollection } from "@/lib/mongo/databases";
+import { placesCollection, placesGeoCollection, entitiesCollection } from "@/lib/mongo/databases";
 import { isDevBypass } from "@/lib/auth/dev";
-import type { PlaceDoc } from "@/lib/mongo/types";
+import { newId, slugify, stampNew } from "@/lib/mongo/ids";
+import type { PlaceDoc, EntityDoc } from "@/lib/mongo/types";
 
 export interface GeocodeSuggestion {
   /** Where the row came from — DB hits are surfaced above OSM hits. */
@@ -47,6 +48,11 @@ export interface GeocodeSuggestion {
   longitude: number;
   /** IANA timezone resolved from the coordinates (e.g. "Africa/Harare"). */
   timezone?: string;
+  /** OSM element type/id backing an `source: "osm"` suggestion — used to
+   *  promote a selected suggestion into the `places.places` catalogue via
+   *  `ensurePlaceFromOsmSuggestion`. Absent for `source: "db"` rows. */
+  osmType?: string;
+  osmId?: number;
 }
 
 /** Resolve an IANA timezone from coordinates; `tzlookup` throws on out-of-range input. */
@@ -65,6 +71,8 @@ const NOMINATIM_ENDPOINT = "https://nominatim.openstreetmap.org";
 // Nominatim usage policy requires an identifying User-Agent that a maintainer
 // could contact. Kept generic (no PII) but app-specific.
 const NOMINATIM_USER_AGENT = "nhimbe/1.0 (+https://nhimbe.com; events discovery)";
+
+const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 
 const DEFAULT_LIMIT = 6;
 const MIN_QUERY_LENGTH = 3;
@@ -222,11 +230,11 @@ function mapNominatimFeature(f: NominatimFeature): GeocodeSuggestion | null {
   const street = [addr.house_number, addr.road].filter(Boolean).join(" ");
   const name = props.name || street || city || (props.display_name ?? "").split(",")[0] || "";
   const osmType = props.osm_type ?? "node";
-  const osmId = props.osm_id ?? "";
+  const osmIdNum = Number(props.osm_id);
 
   return {
     source: "osm",
-    placeId: `osm:${osmType}/${osmId}`,
+    placeId: `osm:${osmType}/${props.osm_id ?? ""}`,
     name,
     address: street,
     city,
@@ -235,6 +243,8 @@ function mapNominatimFeature(f: NominatimFeature): GeocodeSuggestion | null {
     latitude: lat,
     longitude: lng,
     timezone: timezoneForCoords(lat, lng),
+    osmType,
+    osmId: Number.isFinite(osmIdNum) ? osmIdNum : undefined,
   };
 }
 
@@ -377,4 +387,141 @@ export async function resolveCountryTimezone(country: string): Promise<string | 
   const ll = pointLatLng(doc?.geo);
   if (!ll) return undefined;
   return timezoneForCoords(ll[0], ll[1]);
+}
+
+/**
+ * Fetch a single OSM element's raw tags from the Overpass API — a targeted
+ * single-element lookup (fast, not a wide search), used to enrich a
+ * Nominatim hit with the same category/amenity data the Mukoko platform's own
+ * OSM ingestion pipeline reads before promoting it into `places.places`.
+ */
+async function fetchOverpassTags(osmType: string, osmId: number): Promise<Record<string, string> | null> {
+  const kind = osmType === "way" || osmType === "relation" ? osmType : "node";
+  try {
+    const res = await fetch(OVERPASS_ENDPOINT, {
+      method: "POST",
+      body: `data=${encodeURIComponent(`[out:json][timeout:10];${kind}(${osmId});out tags;`)}`,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      next: { revalidate: 86400 },
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { elements?: Array<{ tags?: Record<string, string> }> };
+    return body.elements?.[0]?.tags ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** `places.places.placeType` is a closed enum — map common OSM tags onto it. */
+function inferPlaceType(tags: Record<string, string> | null): PlaceDoc["placeType"] {
+  if (!tags) return ["LocalBusiness"];
+  const tourism = tags.tourism;
+  const amenity = tags.amenity;
+  if (tourism && ["hotel", "guest_house", "motel", "hostel", "apartment", "chalet"].includes(tourism)) {
+    return ["Accommodation"];
+  }
+  if (tourism && ["attraction", "museum", "viewpoint", "artwork", "gallery", "zoo"].includes(tourism)) {
+    return ["TouristAttraction"];
+  }
+  if (amenity && ["restaurant", "cafe", "fast_food", "bar", "pub", "food_court"].includes(amenity)) {
+    return ["Restaurant"];
+  }
+  if (tags.shop) return ["Store"];
+  if (tags.leisure === "park" || tags.leisure === "nature_reserve") return ["Park"];
+  if (tags.natural === "beach") return ["Beach"];
+  if (tags.natural === "peak" || tags.natural === "volcano") return ["Mountain"];
+  if (tags.natural === "water" && tags.water === "lake") return ["Lake"];
+  if (tags.waterway === "river") return ["River"];
+  if (
+    amenity &&
+    ["townhall", "courthouse", "police", "fire_station", "embassy", "public_building"].includes(amenity)
+  ) {
+    return ["CivicStructure"];
+  }
+  if (tags.building === "residential" || tags.building === "house" || tags.building === "apartments") {
+    return ["Residence"];
+  }
+  return ["LocalBusiness"];
+}
+
+export interface EnsurePlaceInput {
+  name: string;
+  address: string;
+  city: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  osmType: string;
+  osmId: number;
+}
+
+/**
+ * Promote a confirmed OSM/Nominatim venue selection into the `places.places`
+ * catalogue (closing the "search then creation" loop) so the NEXT search for
+ * the same venue hits the DB tier instead of Nominatim again.
+ *
+ * Idempotent — keyed on `sourceProvenance.legacyId` (`"<osmType>/<osmId>"`,
+ * the same key the platform's own OSM ingestion pipeline uses), so re-picking
+ * the same venue never inserts a duplicate. Per the `places.places` /
+ * `entity.entities` validators (Rule 10 — every place has an entity owner),
+ * this writes a paired external/organization entity alongside the place,
+ * mirroring the shape already used by every OSM-sourced row in the catalogue
+ * today (confirmed against a live sample via the Mongo/MCP inspection this
+ * function grew out of). Best-effort: never throws, so a catalogue-write
+ * failure never blocks the caller from finishing whatever they were doing
+ * (e.g. selecting a venue for an event).
+ */
+export async function ensurePlaceFromOsmSuggestion(input: EnsurePlaceInput): Promise<string | null> {
+  try {
+    await assertCaller();
+    const places = await placesCollection();
+    const legacyId = `${input.osmType}/${input.osmId}`;
+
+    const existing = await places.findOne({ "sourceProvenance.legacyId": legacyId });
+    if (existing) return existing._id;
+
+    const tags = await fetchOverpassTags(input.osmType, input.osmId);
+    const placeType = inferPlaceType(tags);
+
+    const entities = await entitiesCollection();
+    const entityId = newId();
+    const placeId = newId();
+
+    const entityDoc = {
+      ...stampNew(entityId),
+      entityType: "organization",
+      ecosystemRole: "external",
+      schemaOrgType: "LocalBusiness",
+      slug: slugify(input.name),
+      name: input.name,
+      isActive: true,
+      isPrivateByDefault: false,
+      primaryPlaceId: placeId,
+      sourceProvenance: { legacyId, mirroredFrom: "osm", sourceProject: "nhimbe" },
+    } as EntityDoc;
+    await entities.insertOne(entityDoc);
+
+    const placeDoc = {
+      ...stampNew(placeId),
+      ownerEntityId: entityId,
+      slug: slugify(input.name),
+      name: input.name,
+      isActive: true,
+      placeType,
+      geo: { type: "Point", coordinates: [input.longitude, input.latitude] },
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: input.address,
+        addressLocality: input.city,
+        addressCountry: input.country,
+      },
+      sourceProvenance: { legacyId, dataOrigin: "osm", dataConfidence: 0.6 },
+    } as PlaceDoc;
+    await places.insertOne(placeDoc);
+
+    return placeId;
+  } catch (e) {
+    console.error("[mukoko] ensurePlaceFromOsmSuggestion failed", e);
+    return null;
+  }
 }
