@@ -103,6 +103,7 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
     date: `${event.date.day} ${event.date.month}`,
     location: `${event.location.addressLocality}, ${event.location.addressCountry}`,
     category: event.category,
+    url: shortUrl.replace(/^https?:\/\//, ""),
     gradient: "mixed",
     type: "event",
   });
