@@ -36,8 +36,8 @@ describe("workos-metadata (AuthKit OAuth2 discovery)", () => {
   });
 
   it("uses the custom API domain when WORKOS_API_HOSTNAME is set", () => {
-    process.env.WORKOS_API_HOSTNAME = "authenticate.nyuchi.com";
-    expect(workosApiHost()).toBe("authenticate.nyuchi.com");
+    process.env.WORKOS_API_HOSTNAME = "api.identity.nyuchi.com";
+    expect(workosApiHost()).toBe("api.identity.nyuchi.com");
   });
 
   it("defaults the AuthKit domain to identity.nyuchi.com, overridable via env", () => {

@@ -20,7 +20,7 @@
  *   RFC 9728 `authorization_servers` pointer there gets a 404 and the flow
  *   dead-ends). So discovery advertises the AuthKit domain.
  *
- * - `WORKOS_API_HOSTNAME` — the WorkOS **API** domain (`authenticate.nyuchi.com`
+ * - `WORKOS_API_HOSTNAME` — the WorkOS **API** domain (`api.identity.nyuchi.com`
  *   in production; the `api.workos.com` custom-domain stand-in). This is what
  *   the bearer-token verifier (`src/lib/auth/workos-token.ts`) fetches JWKS from
  *   at `/sso/jwks/${WORKOS_CLIENT_ID}`.
