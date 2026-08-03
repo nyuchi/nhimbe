@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
-import { timezoneForCountry, timezoneLabel } from "@/lib/timezone";
+import { resolveCountryTimezone } from "@/app/actions/geocode";
+import { timezoneLabel } from "@/lib/timezone";
 
 function isValidMeetingUrl(value: string): boolean {
   try {
@@ -147,9 +148,16 @@ export function LocationModal({
                   if (components.city && components.country) {
                     setSelectedCity({ addressLocality: components.city, addressCountry: components.country });
                   }
-                  setSelectedTimezone(
-                    components.timezone ?? (components.country ? timezoneForCountry(components.country) ?? null : null),
-                  );
+                  // Every DB/OSM suggestion carries its own resolved timezone
+                  // (from its actual coordinates); only fall back to a
+                  // country-level lookup on the rare case that failed.
+                  if (components.timezone) {
+                    setSelectedTimezone(components.timezone);
+                  } else if (components.country) {
+                    resolveCountryTimezone(components.country).then((tz) => setSelectedTimezone(tz ?? null));
+                  } else {
+                    setSelectedTimezone(null);
+                  }
                 }}
                 placeholder="Search for a venue or address..."
               />
@@ -195,7 +203,8 @@ export function LocationModal({
                     variant="ghost"
                     onClick={() => {
                       setSelectedCity(c);
-                      setSelectedTimezone(timezoneForCountry(c.addressCountry) ?? null);
+                      setSelectedTimezone(null);
+                      resolveCountryTimezone(c.addressCountry).then((tz) => setSelectedTimezone(tz ?? null));
                     }}
                     className={`px-4 py-3 rounded-xl text-left justify-start h-auto ${
                       selectedCity?.addressLocality === c.addressLocality

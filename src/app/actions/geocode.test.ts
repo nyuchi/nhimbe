@@ -4,8 +4,10 @@ vi.mock("server-only", () => ({}));
 
 // Mongo accessor + auth gate are mocked so the action runs in isolation.
 const places = { find: vi.fn(), aggregate: vi.fn() };
+const placesGeo = { findOne: vi.fn() };
 vi.mock("@/lib/mongo/databases", () => ({
   placesCollection: vi.fn(async () => places),
+  placesGeoCollection: vi.fn(async () => placesGeo),
 }));
 vi.mock("@workos-inc/authkit-nextjs", () => ({
   withAuth: vi.fn(async () => ({ user: { id: "user_1" } })),
@@ -14,7 +16,7 @@ vi.mock("@/lib/auth/dev", () => ({
   isDevBypass: vi.fn(() => true),
 }));
 
-import { geocodeAddress, reverseGeocode } from "./geocode";
+import { geocodeAddress, reverseGeocode, resolveCountryTimezone } from "./geocode";
 
 /** Build a chainable find() result (.limit().toArray()). */
 function findReturning(docs: unknown[]) {
@@ -39,6 +41,7 @@ beforeEach(() => {
   // Simulate Atlas Search being unavailable by default (e.g. no index on a
   // local/test cluster) so existing regex-path tests keep exercising find().
   places.aggregate.mockReturnValue(aggregateReturning(new Error("no such index")));
+  placesGeo.findOne.mockResolvedValue(null);
   global.fetch = vi.fn();
 });
 
@@ -101,6 +104,32 @@ describe("geocodeAddress", () => {
     expect(results).toMatchObject([{ source: "db", placeId: "place-2", name: "National Sports Stadium" }]);
   });
 
+  it("searches searchKeywords via Atlas Search — the field the OSM ingestion pipeline actually populates", async () => {
+    // Real `places.places` docs carry category/city/country terms in
+    // `searchKeywords` (e.g. "Accommodation", "Harare") but are effectively
+    // never populated on `description`/`tags`/`keywords` — a category query
+    // like "Accommodation" must match via searchKeywords, not just name.
+    places.aggregate.mockReturnValue(
+      aggregateReturning([
+        {
+          _id: "place-3",
+          name: "Kuhudzai",
+          isActive: true,
+          address: { addressLocality: "Harare", addressCountry: "Zimbabwe" },
+          geo: { type: "Point", coordinates: [31.05, -17.83] },
+          searchKeywords: ["Accommodation", "Hotels & Stays", "Kuhudzai", "LocalBusiness", "Zimbabwe"],
+        },
+      ]),
+    );
+
+    const results = await geocodeAddress("Accommodation");
+
+    const pipeline = places.aggregate.mock.calls[0][0];
+    const should = pipeline[0].$search.compound.should;
+    expect(should).toContainEqual({ text: { query: "Accommodation", path: "searchKeywords" } });
+    expect(results).toMatchObject([{ source: "db", placeId: "place-3", name: "Kuhudzai" }]);
+  });
+
   it("falls back to the regex scan when the Atlas Search index errors", async () => {
     places.aggregate.mockReturnValue(aggregateReturning(new Error("Atlas Search is not configured")));
     places.find.mockReturnValue(
@@ -119,6 +148,28 @@ describe("geocodeAddress", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({ source: "db", placeId: "place-1", name: "Rainbow Towers" });
+  });
+
+  it("regex fallback also matches on searchKeywords, not just name/address", async () => {
+    places.aggregate.mockReturnValue(aggregateReturning(new Error("Atlas Search is not configured")));
+    places.find.mockReturnValue(
+      findReturning([
+        {
+          _id: "place-3",
+          name: "Kuhudzai",
+          isActive: true,
+          address: { addressLocality: "Harare", addressCountry: "Zimbabwe" },
+          geo: { type: "Point", coordinates: [31.05, -17.83] },
+          searchKeywords: ["Accommodation", "Hotels & Stays", "Kuhudzai", "LocalBusiness", "Zimbabwe"],
+        },
+      ]),
+    );
+
+    const results = await geocodeAddress("Accommodation");
+
+    const filter = places.find.mock.calls[0][0];
+    expect(filter.$or).toContainEqual({ searchKeywords: { $regex: "Accommodation", $options: "i" } });
+    expect(results).toMatchObject([{ source: "db", placeId: "place-3", name: "Kuhudzai" }]);
   });
 
   it("skips DB rows without a usable Point geometry", async () => {
@@ -219,5 +270,39 @@ describe("reverseGeocode", () => {
       json: async () => ({ features: [{ properties: { address: {} } }] }),
     });
     expect(await reverseGeocode(0, 0)).toBeNull();
+  });
+});
+
+describe("resolveCountryTimezone", () => {
+  it("returns undefined for a blank country without touching Mongo", async () => {
+    expect(await resolveCountryTimezone("  ")).toBeUndefined();
+    expect(placesGeo.findOne).not.toHaveBeenCalled();
+  });
+
+  it("resolves a country's timezone from its placesGeo centroid", async () => {
+    placesGeo.findOne.mockResolvedValue({
+      _id: "zw",
+      geoType: "country",
+      name: "Zimbabwe",
+      geo: { type: "Point", coordinates: [29.85, -19.02] },
+    });
+
+    const tz = await resolveCountryTimezone("Zimbabwe");
+
+    expect(placesGeo.findOne).toHaveBeenCalledWith({
+      geoType: "country",
+      name: { $regex: "^Zimbabwe$", $options: "i" },
+    });
+    expect(tz).toBe("Africa/Harare");
+  });
+
+  it("returns undefined when no matching country doc exists", async () => {
+    placesGeo.findOne.mockResolvedValue(null);
+    expect(await resolveCountryTimezone("Atlantis")).toBeUndefined();
+  });
+
+  it("returns undefined when the matched doc has no usable Point geometry", async () => {
+    placesGeo.findOne.mockResolvedValue({ geoType: "country", name: "Nowhere", geo: { type: "Polygon", coordinates: [] } });
+    expect(await resolveCountryTimezone("Nowhere")).toBeUndefined();
   });
 });

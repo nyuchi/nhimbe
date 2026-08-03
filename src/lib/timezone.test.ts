@@ -20,7 +20,6 @@ import {
   formatEventDateTime,
   getCurrentTimeWithTimezone,
   zonedTimeToUtcIso,
-  timezoneForCountry,
 } from './timezone';
 
 // ============================================
@@ -212,21 +211,5 @@ describe('zonedTimeToUtcIso', () => {
   it('falls back to treating input as UTC for an unrecognised zone name', () => {
     const iso = zonedTimeToUtcIso('2026-08-03', '15:00', 'Not/AZone');
     expect(iso).toBe('2026-08-03T15:00:00.000Z');
-  });
-});
-
-describe('timezoneForCountry', () => {
-  it('resolves known single-zone countries', () => {
-    expect(timezoneForCountry('Zimbabwe')).toBe('Africa/Harare');
-    expect(timezoneForCountry('Kenya')).toBe('Africa/Nairobi');
-  });
-
-  it('trims whitespace before lookup', () => {
-    expect(timezoneForCountry(' Zimbabwe ')).toBe('Africa/Harare');
-  });
-
-  it('returns undefined for unknown or multi-zone countries', () => {
-    expect(timezoneForCountry('United States')).toBeUndefined();
-    expect(timezoneForCountry('Atlantis')).toBeUndefined();
   });
 });

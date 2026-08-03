@@ -151,58 +151,6 @@ export function zonedTimeToUtcIso(dateStr: string, timeStr: string, timeZone: st
 }
 
 /**
- * Single primary IANA timezone per country, for countries that only span one
- * zone (covers the app's core African markets plus other common single-zone
- * countries). Deliberately excludes multi-zone countries (US, Canada, Russia,
- * Brazil, Australia, Mexico, …) where a country-level guess would be wrong —
- * those are resolved from coordinates instead (`tz-lookup` in `geocode.ts`).
- */
-export const COUNTRY_TIMEZONES: Record<string, string> = {
-  Zimbabwe: "Africa/Harare",
-  "South Africa": "Africa/Johannesburg",
-  Kenya: "Africa/Nairobi",
-  Nigeria: "Africa/Lagos",
-  Zambia: "Africa/Lusaka",
-  Botswana: "Africa/Gaborone",
-  Namibia: "Africa/Windhoek",
-  Mozambique: "Africa/Maputo",
-  Malawi: "Africa/Blantyre",
-  Tanzania: "Africa/Dar_es_Salaam",
-  Uganda: "Africa/Kampala",
-  Rwanda: "Africa/Kigali",
-  Ghana: "Africa/Accra",
-  Egypt: "Africa/Cairo",
-  Ethiopia: "Africa/Addis_Ababa",
-  Eswatini: "Africa/Mbabane",
-  Lesotho: "Africa/Maseru",
-  Angola: "Africa/Luanda",
-  "United Kingdom": "Europe/London",
-  Ireland: "Europe/Dublin",
-  Portugal: "Europe/Lisbon",
-  France: "Europe/Paris",
-  Germany: "Europe/Berlin",
-  Netherlands: "Europe/Amsterdam",
-  Belgium: "Europe/Brussels",
-  Spain: "Europe/Madrid",
-  Italy: "Europe/Rome",
-  Switzerland: "Europe/Zurich",
-  Sweden: "Europe/Stockholm",
-  Norway: "Europe/Oslo",
-  Denmark: "Europe/Copenhagen",
-  Poland: "Europe/Warsaw",
-  "United Arab Emirates": "Asia/Dubai",
-  "Saudi Arabia": "Asia/Riyadh",
-  India: "Asia/Kolkata",
-  Singapore: "Asia/Singapore",
-  "New Zealand": "Pacific/Auckland",
-};
-
-/** Look up a single-zone country's primary IANA timezone, if known. */
-export function timezoneForCountry(country: string): string | undefined {
-  return COUNTRY_TIMEZONES[country.trim()];
-}
-
-/**
  * The organiser's own device timezone — the fallback used whenever a venue
  * timezone hasn't been resolved yet (online events, or no location picked).
  */
