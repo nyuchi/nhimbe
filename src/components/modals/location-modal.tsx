@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
-import { timezoneForCountry } from "@/lib/timezone";
+import { timezoneForCountry, timezoneLabel } from "@/lib/timezone";
 
 function isValidMeetingUrl(value: string): boolean {
   try {
@@ -214,7 +214,7 @@ export function LocationModal({
             {selectedTimezone && (
               <p className="flex items-center gap-2 text-xs text-text-tertiary">
                 <Clock className="w-3.5 h-3.5 shrink-0" />
-                Times will be set in {selectedTimezone.replace(/_/g, " ")}
+                Times will be set in {timezoneLabel(selectedTimezone)}
               </p>
             )}
           </>

@@ -17,7 +17,7 @@ import { getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
 import { createEvent as createEventAction } from "@/app/actions/events";
 import { getMyCalendarsAction, type MyCalendarSummary } from "@/app/actions/calendars";
 import { mineralThemes, mineralThemeIds, getThemeColors } from "@/lib/themes";
-import { zonedTimeToUtcIso } from "@/lib/timezone";
+import { zonedTimeToUtcIso, resolveEventTimezone, timezoneLabel } from "@/lib/timezone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -110,14 +110,6 @@ const mineralThemeList = mineralThemeIds.map((id) => {
   const theme = mineralThemes[id];
   return { id, name: theme.name, gradient: theme.gradient, colors: getThemeColors(id) };
 });
-
-function getBrowserTimezoneName(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    return "UTC";
-  }
-}
 
 // Basic URL validation
 function isValidUrl(url: string): boolean {
@@ -280,8 +272,8 @@ export default function CreateEventForm() {
 
   // The venue's timezone once a location is picked; the organiser's own
   // browser timezone for online events or before a location is chosen.
-  const effectiveTimezone = !isOnline && selectedTimezone ? selectedTimezone : getBrowserTimezoneName();
-  const tzLabel = effectiveTimezone.replace(/_/g, " ").split("/").pop() || effectiveTimezone;
+  const effectiveTimezone = resolveEventTimezone(isOnline, selectedTimezone);
+  const tzLabel = timezoneLabel(effectiveTimezone);
 
   const formatDateForDisplay = () => {
     if (!eventDate) return "Select Date & Time";

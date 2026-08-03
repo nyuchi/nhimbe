@@ -11,6 +11,13 @@ const GRADIENTS = {
   mixed: "linear-gradient(135deg, #004D40 0%, #4B0082 35%, #5D4037 70%, #00796B 100%)",
   sunset: "linear-gradient(135deg, #FF6B6B 0%, #FFD740 50%, #64FFDA 100%)",
 };
+const ACCENTS: Record<keyof typeof GRADIENTS, string> = {
+  malachite: "#64FFDA",
+  amethyst: "#B388FF",
+  amber: "#FFD740",
+  mixed: "#64FFDA",
+  sunset: "#FFD740",
+};
 
 // Sanitize text input to prevent XSS and injection attacks
 function sanitizeText(input: string | null, maxLength: number = 200): string {
@@ -48,6 +55,7 @@ export async function GET(request: NextRequest) {
     const type = sanitizeText(searchParams.get("type"), 20) || "event"; // event, default
 
     const gradientStyle = GRADIENTS[gradient] || GRADIENTS.mixed;
+    const accent = ACCENTS[gradient] || ACCENTS.mixed;
 
     return new ImageResponse(
       (
@@ -57,92 +65,140 @@ export async function GET(request: NextRequest) {
             width: "100%",
             display: "flex",
             flexDirection: "column",
-            alignItems: "flex-start",
-            justifyContent: "flex-end",
-            padding: "60px",
             background: gradientStyle,
             position: "relative",
+            fontFamily: "sans-serif",
           }}
         >
-          {/* Overlay for better text readability */}
           <div
             style={{
               position: "absolute",
               inset: 0,
-              background: "linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0) 100%)",
+              background: "radial-gradient(circle at 15% 15%, rgba(255,255,255,0.16) 0%, transparent 45%)",
+              display: "flex",
             }}
           />
 
-          {/* Logo/Brand */}
+          {/* Decorative accent blooms, kept behind the content card */}
           <div
             style={{
               position: "absolute",
-              top: 40,
-              left: 60,
+              top: -60,
+              right: -40,
+              width: 320,
+              height: 320,
+              borderRadius: "50%",
+              background: `radial-gradient(circle, ${accent}33 0%, transparent 70%)`,
               display: "flex",
-              alignItems: "center",
-              gap: 12,
             }}
-          >
-            {/* Mukoko Seed-of-Life mark — the full multi-colour flower, never a
-                mono placeholder. Referenced as an absolute PNG URL (not the
-                app SVGs) because Satori's og-image renderer needs a raster
-                source it can fetch. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`${origin}/app-icon-192.png`} width={48} height={48} alt="" />
-            <span style={{ fontSize: 28, fontWeight: 600, color: "#FFFFFF" }}>Nhimbe</span>
-          </div>
-
-          {/* Category badge */}
-          {category && (
-            <div
-              style={{
-                position: "absolute",
-                top: 40,
-                right: 60,
-                background: "#B388FF",
-                color: "#0A0A0A",
-                padding: "8px 16px",
-                borderRadius: 9999,
-                fontSize: 14,
-                fontWeight: 700,
-                textTransform: "uppercase",
-              }}
-            >
-              {category}
-            </div>
-          )}
-
-          {/* Content */}
+          />
           <div
             style={{
+              position: "absolute",
+              bottom: -80,
+              left: -60,
+              width: 280,
+              height: 280,
+              borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(179,136,255,0.25) 0%, transparent 70%)",
+              display: "flex",
+            }}
+          />
+
+          {/* Content card — the GitHub-style structured frame: a header row,
+              a body that always centers the title/description regardless of
+              how much metadata is present, and a footer strip. Nothing is
+              pinned to the literal top or bottom edge of the canvas. */}
+          <div
+            style={{
+              position: "relative",
+              margin: 48,
+              flex: 1,
               display: "flex",
               flexDirection: "column",
-              position: "relative",
-              zIndex: 10,
-              maxWidth: "80%",
+              borderRadius: 28,
+              border: "1px solid rgba(255,255,255,0.14)",
+              background: "rgba(10,10,10,0.38)",
+              padding: "44px 56px",
             }}
           >
-            {/* Date and Location */}
-            {(date || location) && (
-              <div
+            {/* Header: brand mark left, category pill right */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`${origin}/app-icon-192.png`} width={44} height={44} alt="" />
+                <span style={{ fontSize: 26, fontWeight: 600, color: "#FFFFFF" }}>Nhimbe</span>
+              </div>
+              {category && (
+                <div
+                  style={{
+                    display: "flex",
+                    background: accent,
+                    color: "#0A0A0A",
+                    padding: "8px 18px",
+                    borderRadius: 9999,
+                    fontSize: 15,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {category}
+                </div>
+              )}
+            </div>
+
+            {/* Body — vertically centered so the title always lands in the
+                same visual zone whether or not date/location are present. */}
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                gap: 18,
+                maxWidth: "92%",
+              }}
+            >
+              <h1
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 24,
-                  marginBottom: 16,
+                  fontSize: type === "default" ? 68 : 54,
+                  fontWeight: 700,
+                  color: "#FFFFFF",
+                  lineHeight: 1.15,
+                  margin: 0,
                 }}
               >
+                {title}
+              </h1>
+              {subtitle && (
+                <p
+                  style={{
+                    fontSize: 24,
+                    color: "rgba(255,255,255,0.72)",
+                    margin: 0,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {subtitle}
+                </p>
+              )}
+            </div>
+
+            {/* Footer strip — date/location pills left, domain right; the
+                same structural row every render, GitHub-stats-row style. */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingTop: 24,
+                borderTop: "1px solid rgba(255,255,255,0.14)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
                 {date && (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      color: "#64FFDA",
-                      fontSize: 20,
-                    }}
-                  >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 19, color: accent }}>
                     <span>📅</span>
                     <span>{date}</span>
                   </div>
@@ -153,9 +209,8 @@ export async function GET(request: NextRequest) {
                       display: "flex",
                       alignItems: "center",
                       gap: 8,
-                      color: "#FFFFFF",
-                      opacity: 0.9,
-                      fontSize: 20,
+                      fontSize: 19,
+                      color: "rgba(255,255,255,0.85)",
                     }}
                   >
                     <span>📍</span>
@@ -163,62 +218,9 @@ export async function GET(request: NextRequest) {
                   </div>
                 )}
               </div>
-            )}
-
-            {/* Title */}
-            <h1
-              style={{
-                fontSize: type === "default" ? 72 : 56,
-                fontWeight: 700,
-                color: "#FFFFFF",
-                lineHeight: 1.1,
-                margin: 0,
-                marginBottom: 16,
-              }}
-            >
-              {title}
-            </h1>
-
-            {/* Subtitle */}
-            {subtitle && (
-              <p
-                style={{
-                  fontSize: 24,
-                  color: "rgba(255,255,255,0.8)",
-                  margin: 0,
-                  fontStyle: type === "default" ? "italic" : "normal",
-                }}
-              >
-                {subtitle}
-              </p>
-            )}
+              <span style={{ fontSize: 17, color: "rgba(255,255,255,0.45)" }}>events.mukoko.com</span>
+            </div>
           </div>
-
-          {/* Decorative elements */}
-          <div
-            style={{
-              position: "absolute",
-              top: 80,
-              right: 100,
-              width: 200,
-              height: 200,
-              borderRadius: "50%",
-              background: "radial-gradient(circle, rgba(100,255,218,0.3) 0%, transparent 70%)",
-              filter: "blur(40px)",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              bottom: 150,
-              right: 200,
-              width: 150,
-              height: 150,
-              borderRadius: "50%",
-              background: "radial-gradient(circle, rgba(179,136,255,0.3) 0%, transparent 70%)",
-              filter: "blur(30px)",
-            }}
-          />
         </div>
       ),
       {

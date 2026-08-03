@@ -201,3 +201,30 @@ export const COUNTRY_TIMEZONES: Record<string, string> = {
 export function timezoneForCountry(country: string): string | undefined {
   return COUNTRY_TIMEZONES[country.trim()];
 }
+
+/**
+ * The organiser's own device timezone — the fallback used whenever a venue
+ * timezone hasn't been resolved yet (online events, or no location picked).
+ */
+export function getBrowserTimezoneName(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return "UTC";
+  }
+}
+
+/**
+ * Single source of truth for "which timezone does this event's wall-clock
+ * time mean?" — shared by the create and edit event forms so the resolution
+ * rule (venue timezone when picked and in-person, else the organiser's own)
+ * never drifts between the two.
+ */
+export function resolveEventTimezone(isOnline: boolean, selectedTimezone: string | null): string {
+  return !isOnline && selectedTimezone ? selectedTimezone : getBrowserTimezoneName();
+}
+
+/** Short display label for a resolved timezone, e.g. "Africa/Harare" -> "Harare". */
+export function timezoneLabel(timezone: string): string {
+  return timezone.replace(/_/g, " ").split("/").pop() || timezone;
+}

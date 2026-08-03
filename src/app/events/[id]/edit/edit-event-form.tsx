@@ -22,7 +22,7 @@ import { getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
 import { updateEvent } from "@/app/actions/events";
 import { uploadMedia, getMediaUrl, type Category, type Event } from "@/lib/api";
 import { isHttpUrl } from "@/lib/security/request";
-import { zonedTimeToUtcIso } from "@/lib/timezone";
+import { zonedTimeToUtcIso, resolveEventTimezone, timezoneLabel } from "@/lib/timezone";
 import { useToast } from "@/hooks/use-toast";
 
 interface EditEventFormProps {
@@ -38,15 +38,6 @@ function toLocalDateString(d: Date): string {
 
 function toLocalTimeString(d: Date): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-// Mirrors the create-event form's fallback when no venue timezone is known.
-function getBrowserTimezoneName(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    return "UTC";
-  }
 }
 
 /**
@@ -118,8 +109,8 @@ export function EditEventForm({ event }: EditEventFormProps) {
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showDateModal, setShowDateModal] = useState(false);
-  const effectiveTimezone = !isOnline && selectedTimezone ? selectedTimezone : getBrowserTimezoneName();
-  const tzLabel = effectiveTimezone.replace(/_/g, " ").split("/").pop() || effectiveTimezone;
+  const effectiveTimezone = resolveEventTimezone(isOnline, selectedTimezone);
+  const tzLabel = timezoneLabel(effectiveTimezone);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showCapacityModal, setShowCapacityModal] = useState(false);
   const [showTicketingModal, setShowTicketingModal] = useState(false);
@@ -192,7 +183,6 @@ export function EditEventForm({ event }: EditEventFormProps) {
         uploadedImage = null;
       }
 
-      const effectiveTimezone = !isOnline && selectedTimezone ? selectedTimezone : getBrowserTimezoneName();
       const isoStart = zonedTimeToUtcIso(eventDate, startTime, effectiveTimezone);
       const isoEnd = zonedTimeToUtcIso(eventDate, endTime, effectiveTimezone);
 
