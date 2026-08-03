@@ -99,3 +99,80 @@ export function getCurrentTimeWithTimezone(): string {
 // (`weather.mukoko.com/embed/widget`) — see `src/lib/weather.ts` and
 // `src/components/ui/weather-embed.tsx`. The old wttr.in `getWeather` fetch and
 // its `WeatherData` shape were removed with that migration.
+
+/**
+ * Venue-timezone-aware wall-clock <-> UTC conversion for the create/edit event
+ * forms (NYU: "3pm in Harare" must become 13:00 UTC, not whatever offset the
+ * organiser's own browser happens to be in). `tzOffsetMinutes` resolves what
+ * offset a given IANA zone was actually at for a specific instant (DST-aware)
+ * via the same two-pass `Intl.DateTimeFormat` trick `date-fns-tz` uses.
+ */
+function tzOffsetMinutes(utcGuess: Date, timeZone: string): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const parts = dtf.formatToParts(utcGuess).reduce<Record<string, string>>((acc, p) => {
+    acc[p.type] = p.value;
+    return acc;
+  }, {});
+  const asIfUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+  );
+  return (asIfUtc - utcGuess.getTime()) / 60000;
+}
+
+/**
+ * Interpret a `YYYY-MM-DD` date + `HH:MM` wall-clock time as local time in
+ * `timeZone` and return the equivalent UTC ISO string. Falls back to treating
+ * the input as already-UTC if `timeZone` isn't a recognised IANA name.
+ */
+export function zonedTimeToUtcIso(dateStr: string, timeStr: string, timeZone: string): string {
+  const naiveUtcGuess = new Date(`${dateStr}T${timeStr}:00Z`);
+  if (Number.isNaN(naiveUtcGuess.getTime())) return naiveUtcGuess.toISOString();
+  let offsetMinutes = 0;
+  try {
+    offsetMinutes = tzOffsetMinutes(naiveUtcGuess, timeZone);
+  } catch {
+    offsetMinutes = 0; // Unknown zone name — treat the input as UTC.
+  }
+  return new Date(naiveUtcGuess.getTime() - offsetMinutes * 60000).toISOString();
+}
+
+/**
+ * The organiser's own device timezone — the fallback used whenever a venue
+ * timezone hasn't been resolved yet (online events, or no location picked).
+ */
+export function getBrowserTimezoneName(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return "UTC";
+  }
+}
+
+/**
+ * Single source of truth for "which timezone does this event's wall-clock
+ * time mean?" — shared by the create and edit event forms so the resolution
+ * rule (venue timezone when picked and in-person, else the organiser's own)
+ * never drifts between the two.
+ */
+export function resolveEventTimezone(isOnline: boolean, selectedTimezone: string | null): string {
+  return !isOnline && selectedTimezone ? selectedTimezone : getBrowserTimezoneName();
+}
+
+/** Short display label for a resolved timezone, e.g. "Africa/Harare" -> "Harare". */
+export function timezoneLabel(timezone: string): string {
+  return timezone.replace(/_/g, " ").split("/").pop() || timezone;
+}

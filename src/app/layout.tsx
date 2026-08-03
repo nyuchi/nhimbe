@@ -43,7 +43,9 @@ export const viewport: Viewport = {
 // no-go"). `metadataBase` makes this relative URL absolute in the rendered tags.
 const DEFAULT_OG_IMAGE =
   "/api/og?type=default&title=Nhimbe&subtitle=" +
-  encodeURIComponent("Together we gather, together we grow");
+  encodeURIComponent("Together we gather, together we grow") +
+  "&url=" +
+  encodeURIComponent(SITE_URL.replace(/^https?:\/\//, ""));
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

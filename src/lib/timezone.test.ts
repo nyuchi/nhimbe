@@ -19,6 +19,7 @@ import {
   getRelativeDate,
   formatEventDateTime,
   getCurrentTimeWithTimezone,
+  zonedTimeToUtcIso,
 } from './timezone';
 
 // ============================================
@@ -182,5 +183,33 @@ describe('getCurrentTimeWithTimezone', () => {
   it('returns time with GMT offset', () => {
     const result = getCurrentTimeWithTimezone();
     expect(result).toMatch(/\d{1,2}:\d{2}\s*(AM|PM)\s*GMT[+-]\d/);
+  });
+});
+
+// ============================================
+// zonedTimeToUtcIso — the create/edit-event-form fix: "3pm in Harare" must
+// become 13:00 UTC regardless of the organiser's own browser timezone.
+// ============================================
+
+describe('zonedTimeToUtcIso', () => {
+  it('interprets wall-clock time as local to the venue timezone (Africa/Harare, UTC+2)', () => {
+    const iso = zonedTimeToUtcIso('2026-08-03', '15:00', 'Africa/Harare');
+    expect(iso).toBe('2026-08-03T13:00:00.000Z');
+  });
+
+  it('interprets wall-clock time in a negative-offset zone (America/New_York)', () => {
+    // Aug 3 is within US DST (EDT, UTC-4).
+    const iso = zonedTimeToUtcIso('2026-08-03', '09:00', 'America/New_York');
+    expect(iso).toBe('2026-08-03T13:00:00.000Z');
+  });
+
+  it('is a no-op offset for UTC', () => {
+    const iso = zonedTimeToUtcIso('2026-08-03', '15:00', 'UTC');
+    expect(iso).toBe('2026-08-03T15:00:00.000Z');
+  });
+
+  it('falls back to treating input as UTC for an unrecognised zone name', () => {
+    const iso = zonedTimeToUtcIso('2026-08-03', '15:00', 'Not/AZone');
+    expect(iso).toBe('2026-08-03T15:00:00.000Z');
   });
 });

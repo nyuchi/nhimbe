@@ -1,12 +1,14 @@
 "use client";
 
-import { Globe } from "lucide-react";
+import { Globe, Clock } from "lucide-react";
 import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
+import { resolveCountryTimezone } from "@/app/actions/geocode";
+import { timezoneLabel } from "@/lib/timezone";
 
 function isValidMeetingUrl(value: string): boolean {
   try {
@@ -35,6 +37,9 @@ interface LocationModalProps {
   selectedCity: { addressLocality: string; addressCountry: string } | null;
   setSelectedCity: (value: { addressLocality: string; addressCountry: string } | null) => void;
   cities: { addressLocality: string; addressCountry: string }[];
+  /** IANA timezone the venue resolves to — drives what "3pm" means on submit. */
+  selectedTimezone: string | null;
+  setSelectedTimezone: (value: string | null) => void;
 }
 
 export function LocationModal({
@@ -55,6 +60,8 @@ export function LocationModal({
   selectedCity,
   setSelectedCity,
   cities,
+  selectedTimezone,
+  setSelectedTimezone,
 }: LocationModalProps) {
   return (
     <ResponsiveModal open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }} title="Event Location">
@@ -141,6 +148,16 @@ export function LocationModal({
                   if (components.city && components.country) {
                     setSelectedCity({ addressLocality: components.city, addressCountry: components.country });
                   }
+                  // Every DB/OSM suggestion carries its own resolved timezone
+                  // (from its actual coordinates); only fall back to a
+                  // country-level lookup on the rare case that failed.
+                  if (components.timezone) {
+                    setSelectedTimezone(components.timezone);
+                  } else if (components.country) {
+                    resolveCountryTimezone(components.country).then((tz) => setSelectedTimezone(tz ?? null));
+                  } else {
+                    setSelectedTimezone(null);
+                  }
                 }}
                 placeholder="Search for a venue or address..."
               />
@@ -184,7 +201,11 @@ export function LocationModal({
                   <Button
                     key={`${c.addressLocality}-${c.addressCountry}`}
                     variant="ghost"
-                    onClick={() => setSelectedCity(c)}
+                    onClick={() => {
+                      setSelectedCity(c);
+                      setSelectedTimezone(null);
+                      resolveCountryTimezone(c.addressCountry).then((tz) => setSelectedTimezone(tz ?? null));
+                    }}
                     className={`px-4 py-3 rounded-xl text-left justify-start h-auto ${
                       selectedCity?.addressLocality === c.addressLocality
                         ? "bg-primary text-primary-foreground"
@@ -199,6 +220,12 @@ export function LocationModal({
                 ))}
               </div>
             </div>
+            {selectedTimezone && (
+              <p className="flex items-center gap-2 text-xs text-text-tertiary">
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                Times will be set in {timezoneLabel(selectedTimezone)}
+              </p>
+            )}
           </>
         )}
         <div className="pt-2">

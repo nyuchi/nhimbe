@@ -90,6 +90,7 @@ export async function POST(request: Request) {
     streetAddress: body.streetAddress,
     addressLocality: body.addressLocality,
     addressCountry: body.addressCountry,
+    timezone: body.timezone ?? null,
     meetingUrl: body.meetingUrl ?? null,
     meetingPlatform: body.meetingPlatform ?? null,
     maximumAttendeeCapacity: body.maximumAttendeeCapacity ?? null,

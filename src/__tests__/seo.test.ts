@@ -11,7 +11,9 @@ import { describe, it, expect } from 'vitest';
 // a static file. Kept in sync with DEFAULT_OG_IMAGE in layout.tsx.
 const DEFAULT_OG_IMAGE =
   '/api/og?type=default&title=Nhimbe&subtitle=' +
-  encodeURIComponent('Together we gather, together we grow');
+  encodeURIComponent('Together we gather, together we grow') +
+  '&url=' +
+  encodeURIComponent('events.mukoko.com');
 
 // Metadata from layout.tsx
 const metadata = {

@@ -23,7 +23,8 @@
  */
 
 import { withAuth } from "@workos-inc/authkit-nextjs";
-import { placesCollection } from "@/lib/mongo/databases";
+import tzlookup from "tz-lookup";
+import { placesCollection, placesGeoCollection } from "@/lib/mongo/databases";
 import { isDevBypass } from "@/lib/auth/dev";
 import type { PlaceDoc } from "@/lib/mongo/types";
 
@@ -44,6 +45,17 @@ export interface GeocodeSuggestion {
   displayName: string;
   latitude: number;
   longitude: number;
+  /** IANA timezone resolved from the coordinates (e.g. "Africa/Harare"). */
+  timezone?: string;
+}
+
+/** Resolve an IANA timezone from coordinates; `tzlookup` throws on out-of-range input. */
+function timezoneForCoords(latitude: number, longitude: number): string | undefined {
+  try {
+    return tzlookup(latitude, longitude);
+  } catch {
+    return undefined;
+  }
 }
 
 /** Core markets the app serves — used to bias Nominatim results (ISO 3166-1). */
@@ -107,6 +119,7 @@ function mapPlaceDocs(docs: PlaceDoc[], limit: number): GeocodeSuggestion[] {
       displayName: [doc.name, street, city, country].filter(Boolean).join(", "),
       latitude: ll[0],
       longitude: ll[1],
+      timezone: timezoneForCoords(ll[0], ll[1]),
     });
     if (out.length >= limit) break;
   }
@@ -115,8 +128,11 @@ function mapPlaceDocs(docs: PlaceDoc[], limit: number): GeocodeSuggestion[] {
 
 /**
  * Search the nhimbe venue catalogue (`places.places`) case-insensitively
- * against the venue name and address sub-fields via a plain regex scan.
- * Kept as the fallback for `searchPlacesDb` — no Atlas Search dependency.
+ * against the venue name, address sub-fields, and the OSM-derived
+ * `searchKeywords` array (category/city/country terms like "Accommodation",
+ * "Restaurant", the containing city — populated on effectively every row;
+ * see `searchPlacesDb`) via a plain regex scan. Kept as the fallback for
+ * `searchPlacesDb` — no Atlas Search dependency.
  */
 async function searchPlacesDbRegex(query: string, limit: number): Promise<GeocodeSuggestion[]> {
   const places = await placesCollection();
@@ -128,6 +144,7 @@ async function searchPlacesDbRegex(query: string, limit: number): Promise<Geocod
         { name: rx },
         { "address.streetAddress": rx },
         { "address.addressLocality": rx },
+        { searchKeywords: rx },
       ],
     } as Parameters<typeof places.find>[0])
     .limit(limit * 2) // over-fetch; some rows may lack Point coords
@@ -138,10 +155,16 @@ async function searchPlacesDbRegex(query: string, limit: number): Promise<Geocod
 
 /**
  * Search the nhimbe venue catalogue (`places.places`) via the `places_search`
- * Atlas Search index (autocomplete on venue name + full-text on description/
- * tags/keywords, synonym-aware). Falls back to the plain regex scan when
- * Atlas Search isn't available (e.g. a local dev cluster without a Search
- * deployment) so the geocode combobox never hard-fails.
+ * Atlas Search index: autocomplete on venue name, full-text on the
+ * OSM-derived `searchKeywords` array (synonym-aware) so a category or city
+ * term ("Accommodation", "Restaurant", "Harare") surfaces places whose name
+ * has nothing to do with the query, not just name substring matches.
+ * `description`/`tags`/`keywords` are indexed but essentially unpopulated on
+ * real documents (`searchKeywords` is the field the OSM ingestion pipeline
+ * actually fills in) — searched too, for any doc that does carry them.
+ * Falls back to the plain regex scan when Atlas Search isn't available
+ * (e.g. a local dev cluster without a Search deployment) so the geocode
+ * combobox never hard-fails.
  */
 async function searchPlacesDb(query: string, limit: number): Promise<GeocodeSuggestion[]> {
   const places = await placesCollection();
@@ -155,6 +178,7 @@ async function searchPlacesDb(query: string, limit: number): Promise<GeocodeSugg
               filter: [{ equals: { path: "isActive", value: true } }],
               should: [
                 { autocomplete: { query, path: "name", fuzzy: { maxEdits: 1 } } },
+                { text: { query, path: "searchKeywords" } },
                 { text: { query, path: ["description", "tags", "keywords"] } },
               ],
               minimumShouldMatch: 1,
@@ -210,6 +234,7 @@ function mapNominatimFeature(f: NominatimFeature): GeocodeSuggestion | null {
     displayName: props.display_name || [name, city, country].filter(Boolean).join(", "),
     latitude: lat,
     longitude: lng,
+    timezone: timezoneForCoords(lat, lng),
   };
 }
 
@@ -326,4 +351,30 @@ export async function reverseGeocode(
   } catch {
     return null;
   }
+}
+
+/**
+ * Resolve a country's primary IANA timezone from its `places.placesGeo`
+ * centroid — used by the manual city-grid picker in the create/edit event
+ * forms, which (unlike the address-search path) has a country *name* but no
+ * coordinates of its own. Deliberately DB-driven rather than a hardcoded
+ * country->timezone table: `placesGeo` already carries a real seeded/OSM
+ * centroid per country (`geoType: "country"`), so this stays accurate as
+ * that data improves and needs no maintenance for countries outside the
+ * app's core markets.
+ */
+export async function resolveCountryTimezone(country: string): Promise<string | undefined> {
+  const name = country.trim();
+  if (!name) return undefined;
+
+  await assertCaller();
+
+  const placesGeo = await placesGeoCollection();
+  const doc = await placesGeo.findOne({
+    geoType: "country",
+    name: { $regex: `^${escapeRegex(name)}$`, $options: "i" },
+  });
+  const ll = pointLatLng(doc?.geo);
+  if (!ll) return undefined;
+  return timezoneForCoords(ll[0], ll[1]);
 }
