@@ -13,7 +13,8 @@ import { geocodeAddress, type GeocodeSuggestion } from "@/app/actions/geocode";
  *
  * The exported props are unchanged from the previous Google-backed component so
  * every caller keeps working; `AddressComponents` now additionally carries the
- * selected `latitude`/`longitude` (optional — existing callers ignore them).
+ * selected `latitude`/`longitude` and a `timezone` resolved from them
+ * (optional — existing callers ignore them).
  */
 
 interface AddressComponents {
@@ -24,6 +25,8 @@ interface AddressComponents {
   placeId: string;
   latitude?: number;
   longitude?: number;
+  /** IANA timezone resolved from the selected coordinates (e.g. "Africa/Harare"). */
+  timezone?: string;
 }
 
 interface AddressAutocompleteProps {
@@ -121,6 +124,7 @@ export function AddressAutocomplete({
         placeId: s.placeId,
         latitude: s.latitude,
         longitude: s.longitude,
+        timezone: s.timezone,
       });
       onChange(s.displayName);
       setSuggestions([]);

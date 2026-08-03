@@ -49,6 +49,8 @@ export interface CreateEventActionInput {
   streetAddress?: string;
   addressLocality?: string;
   addressCountry?: string;
+  /** IANA timezone the venue resolves to (e.g. "Africa/Harare"). */
+  timezone?: string | null;
   meetingUrl?: string | null;
   meetingPlatform?: string | null;
   maximumAttendeeCapacity?: number | null;
@@ -178,6 +180,7 @@ export async function createEventForPerson(
           addressLocality: input.addressLocality ?? "",
           addressCountry: input.addressCountry ?? "",
         },
+        timezone: input.timezone ?? undefined,
       };
 
   const offers =
@@ -282,6 +285,8 @@ export interface UpdateEventInput {
   streetAddress?: string;
   addressLocality?: string;
   addressCountry?: string;
+  /** IANA timezone the venue resolves to (e.g. "Africa/Harare"). */
+  timezone?: string | null;
   meetingUrl?: string | null;
   meetingPlatform?: string | null;
 }
@@ -399,6 +404,7 @@ export async function updateEventForPerson(
             addressLocality: patch.addressLocality ?? "",
             addressCountry: patch.addressCountry ?? "",
           },
+          timezone: patch.timezone ?? undefined,
         };
     contentChanged = true;
   }

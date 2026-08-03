@@ -99,3 +99,105 @@ export function getCurrentTimeWithTimezone(): string {
 // (`weather.mukoko.com/embed/widget`) — see `src/lib/weather.ts` and
 // `src/components/ui/weather-embed.tsx`. The old wttr.in `getWeather` fetch and
 // its `WeatherData` shape were removed with that migration.
+
+/**
+ * Venue-timezone-aware wall-clock <-> UTC conversion for the create/edit event
+ * forms (NYU: "3pm in Harare" must become 13:00 UTC, not whatever offset the
+ * organiser's own browser happens to be in). `tzOffsetMinutes` resolves what
+ * offset a given IANA zone was actually at for a specific instant (DST-aware)
+ * via the same two-pass `Intl.DateTimeFormat` trick `date-fns-tz` uses.
+ */
+function tzOffsetMinutes(utcGuess: Date, timeZone: string): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const parts = dtf.formatToParts(utcGuess).reduce<Record<string, string>>((acc, p) => {
+    acc[p.type] = p.value;
+    return acc;
+  }, {});
+  const asIfUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+  );
+  return (asIfUtc - utcGuess.getTime()) / 60000;
+}
+
+/**
+ * Interpret a `YYYY-MM-DD` date + `HH:MM` wall-clock time as local time in
+ * `timeZone` and return the equivalent UTC ISO string. Falls back to treating
+ * the input as already-UTC if `timeZone` isn't a recognised IANA name.
+ */
+export function zonedTimeToUtcIso(dateStr: string, timeStr: string, timeZone: string): string {
+  const naiveUtcGuess = new Date(`${dateStr}T${timeStr}:00Z`);
+  if (Number.isNaN(naiveUtcGuess.getTime())) return naiveUtcGuess.toISOString();
+  let offsetMinutes = 0;
+  try {
+    offsetMinutes = tzOffsetMinutes(naiveUtcGuess, timeZone);
+  } catch {
+    offsetMinutes = 0; // Unknown zone name — treat the input as UTC.
+  }
+  return new Date(naiveUtcGuess.getTime() - offsetMinutes * 60000).toISOString();
+}
+
+/**
+ * Single primary IANA timezone per country, for countries that only span one
+ * zone (covers the app's core African markets plus other common single-zone
+ * countries). Deliberately excludes multi-zone countries (US, Canada, Russia,
+ * Brazil, Australia, Mexico, …) where a country-level guess would be wrong —
+ * those are resolved from coordinates instead (`tz-lookup` in `geocode.ts`).
+ */
+export const COUNTRY_TIMEZONES: Record<string, string> = {
+  Zimbabwe: "Africa/Harare",
+  "South Africa": "Africa/Johannesburg",
+  Kenya: "Africa/Nairobi",
+  Nigeria: "Africa/Lagos",
+  Zambia: "Africa/Lusaka",
+  Botswana: "Africa/Gaborone",
+  Namibia: "Africa/Windhoek",
+  Mozambique: "Africa/Maputo",
+  Malawi: "Africa/Blantyre",
+  Tanzania: "Africa/Dar_es_Salaam",
+  Uganda: "Africa/Kampala",
+  Rwanda: "Africa/Kigali",
+  Ghana: "Africa/Accra",
+  Egypt: "Africa/Cairo",
+  Ethiopia: "Africa/Addis_Ababa",
+  Eswatini: "Africa/Mbabane",
+  Lesotho: "Africa/Maseru",
+  Angola: "Africa/Luanda",
+  "United Kingdom": "Europe/London",
+  Ireland: "Europe/Dublin",
+  Portugal: "Europe/Lisbon",
+  France: "Europe/Paris",
+  Germany: "Europe/Berlin",
+  Netherlands: "Europe/Amsterdam",
+  Belgium: "Europe/Brussels",
+  Spain: "Europe/Madrid",
+  Italy: "Europe/Rome",
+  Switzerland: "Europe/Zurich",
+  Sweden: "Europe/Stockholm",
+  Norway: "Europe/Oslo",
+  Denmark: "Europe/Copenhagen",
+  Poland: "Europe/Warsaw",
+  "United Arab Emirates": "Asia/Dubai",
+  "Saudi Arabia": "Asia/Riyadh",
+  India: "Asia/Kolkata",
+  Singapore: "Asia/Singapore",
+  "New Zealand": "Pacific/Auckland",
+};
+
+/** Look up a single-zone country's primary IANA timezone, if known. */
+export function timezoneForCountry(country: string): string | undefined {
+  return COUNTRY_TIMEZONES[country.trim()];
+}

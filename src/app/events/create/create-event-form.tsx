@@ -17,6 +17,7 @@ import { getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
 import { createEvent as createEventAction } from "@/app/actions/events";
 import { getMyCalendarsAction, type MyCalendarSummary } from "@/app/actions/calendars";
 import { mineralThemes, mineralThemeIds, getThemeColors } from "@/lib/themes";
+import { zonedTimeToUtcIso } from "@/lib/timezone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -110,15 +111,6 @@ const mineralThemeList = mineralThemeIds.map((id) => {
   return { id, name: theme.name, gradient: theme.gradient, colors: getThemeColors(id) };
 });
 
-// Get the browser's timezone offset as ±HH:MM
-function getBrowserTimezoneOffset(): string {
-  const offset = -new Date().getTimezoneOffset();
-  const sign = offset >= 0 ? "+" : "-";
-  const hours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0");
-  const minutes = String(Math.abs(offset) % 60).padStart(2, "0");
-  return `${sign}${hours}:${minutes}`;
-}
-
 function getBrowserTimezoneName(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -177,6 +169,10 @@ export default function CreateEventForm() {
   const [address, setAddress] = useState("");
   const [addressSearch, setAddressSearch] = useState("");
   const [selectedCity, setSelectedCity] = useState<{ addressLocality: string; addressCountry: string } | null>(null);
+  // Resolved from the venue when a location is picked (see LocationModal); an
+  // online event or one with no location yet falls back to the organiser's
+  // own browser timezone.
+  const [selectedTimezone, setSelectedTimezone] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(false);
   const [meetingUrl, setMeetingUrl] = useState("");
   const [meetingPlatform, setMeetingPlatform] = useState<"zoom" | "google_meet" | "teams" | "other">("zoom");
@@ -282,9 +278,10 @@ export default function CreateEventForm() {
     setCoverImageFile(null);
   };
 
-  const tzOffset = getBrowserTimezoneOffset();
-  const tzName = getBrowserTimezoneName();
-  const tzLabel = tzName.replace(/_/g, " ").split("/").pop() || `GMT${tzOffset}`;
+  // The venue's timezone once a location is picked; the organiser's own
+  // browser timezone for online events or before a location is chosen.
+  const effectiveTimezone = !isOnline && selectedTimezone ? selectedTimezone : getBrowserTimezoneName();
+  const tzLabel = effectiveTimezone.replace(/_/g, " ").split("/").pop() || effectiveTimezone;
 
   const formatDateForDisplay = () => {
     if (!eventDate) return "Select Date & Time";
@@ -362,8 +359,8 @@ export default function CreateEventForm() {
         }
       }
 
-      const isoStart = new Date(`${eventDate}T${startTime}:00${tzOffset}`).toISOString();
-      const isoEnd = new Date(`${eventDate}T${endTime}:00${tzOffset}`).toISOString();
+      const isoStart = zonedTimeToUtcIso(eventDate, startTime, effectiveTimezone);
+      const isoEnd = zonedTimeToUtcIso(eventDate, endTime, effectiveTimezone);
 
       const result = await createEventAction({
         name: eventName.trim(),
@@ -379,6 +376,7 @@ export default function CreateEventForm() {
         streetAddress: address.trim(),
         addressLocality: selectedCity?.addressLocality,
         addressCountry: selectedCity?.addressCountry,
+        timezone: isOnline ? null : selectedTimezone,
         meetingUrl: isOnline ? meetingUrl.trim() : null,
         meetingPlatform: isOnline ? meetingPlatform : null,
         maximumAttendeeCapacity: capacity,
@@ -624,7 +622,7 @@ export default function CreateEventForm() {
 
       {/* Modals */}
       <DateTimeModal isOpen={showDateModal} onClose={() => { setShowDateModal(false); touchForm(); }} eventDate={eventDate} setEventDate={setEventDate} startTime={startTime} setStartTime={setStartTime} endTime={endTime} setEndTime={setEndTime} />
-      <LocationModal isOpen={showLocationModal} onClose={() => { setShowLocationModal(false); touchForm(); }} isOnline={isOnline} setIsOnline={setIsOnline} meetingPlatform={meetingPlatform} setMeetingPlatform={setMeetingPlatform} meetingUrl={meetingUrl} setMeetingUrl={setMeetingUrl} addressSearch={addressSearch} setAddressSearch={setAddressSearch} venue={venue} setVenue={setVenue} address={address} setAddress={setAddress} selectedCity={selectedCity} setSelectedCity={setSelectedCity} cities={cities} />
+      <LocationModal isOpen={showLocationModal} onClose={() => { setShowLocationModal(false); touchForm(); }} isOnline={isOnline} setIsOnline={setIsOnline} meetingPlatform={meetingPlatform} setMeetingPlatform={setMeetingPlatform} meetingUrl={meetingUrl} setMeetingUrl={setMeetingUrl} addressSearch={addressSearch} setAddressSearch={setAddressSearch} venue={venue} setVenue={setVenue} address={address} setAddress={setAddress} selectedCity={selectedCity} setSelectedCity={setSelectedCity} cities={cities} selectedTimezone={selectedTimezone} setSelectedTimezone={setSelectedTimezone} />
       <CategoryModal isOpen={showCategoryModal} onClose={() => { setShowCategoryModal(false); touchForm(); }} categories={categories} category={category} setCategory={setCategory} tags={tags} tagInput={tagInput} setTagInput={setTagInput} addTag={addTag} removeTag={removeTag} />
       <DescriptionModal isOpen={showDescriptionModal} onClose={() => { setShowDescriptionModal(false); touchForm(); }} description={description} setDescription={setDescription} eventName={eventName} category={category} isOnline={isOnline} />
       <TicketingModal isOpen={showPriceModal} onClose={() => { setShowPriceModal(false); touchForm(); }} isFree={isFree} setIsFree={setIsFree} ticketUrl={ticketUrl} setTicketUrl={setTicketUrl} />

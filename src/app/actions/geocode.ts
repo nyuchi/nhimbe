@@ -23,6 +23,7 @@
  */
 
 import { withAuth } from "@workos-inc/authkit-nextjs";
+import tzlookup from "tz-lookup";
 import { placesCollection } from "@/lib/mongo/databases";
 import { isDevBypass } from "@/lib/auth/dev";
 import type { PlaceDoc } from "@/lib/mongo/types";
@@ -44,6 +45,17 @@ export interface GeocodeSuggestion {
   displayName: string;
   latitude: number;
   longitude: number;
+  /** IANA timezone resolved from the coordinates (e.g. "Africa/Harare"). */
+  timezone?: string;
+}
+
+/** Resolve an IANA timezone from coordinates; `tzlookup` throws on out-of-range input. */
+function timezoneForCoords(latitude: number, longitude: number): string | undefined {
+  try {
+    return tzlookup(latitude, longitude);
+  } catch {
+    return undefined;
+  }
 }
 
 /** Core markets the app serves — used to bias Nominatim results (ISO 3166-1). */
@@ -107,6 +119,7 @@ function mapPlaceDocs(docs: PlaceDoc[], limit: number): GeocodeSuggestion[] {
       displayName: [doc.name, street, city, country].filter(Boolean).join(", "),
       latitude: ll[0],
       longitude: ll[1],
+      timezone: timezoneForCoords(ll[0], ll[1]),
     });
     if (out.length >= limit) break;
   }
@@ -210,6 +223,7 @@ function mapNominatimFeature(f: NominatimFeature): GeocodeSuggestion | null {
     displayName: props.display_name || [name, city, country].filter(Boolean).join(", "),
     latitude: lat,
     longitude: lng,
+    timezone: timezoneForCoords(lat, lng),
   };
 }
 

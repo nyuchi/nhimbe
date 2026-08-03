@@ -22,6 +22,7 @@ import { getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
 import { updateEvent } from "@/app/actions/events";
 import { uploadMedia, getMediaUrl, type Category, type Event } from "@/lib/api";
 import { isHttpUrl } from "@/lib/security/request";
+import { zonedTimeToUtcIso } from "@/lib/timezone";
 import { useToast } from "@/hooks/use-toast";
 
 interface EditEventFormProps {
@@ -39,13 +40,13 @@ function toLocalTimeString(d: Date): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-// Get the browser's timezone offset as ±HH:MM (mirrors the create-event form).
-function getBrowserTimezoneOffset(): string {
-  const offset = -new Date().getTimezoneOffset();
-  const sign = offset >= 0 ? "+" : "-";
-  const hours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0");
-  const minutes = String(Math.abs(offset) % 60).padStart(2, "0");
-  return `${sign}${hours}:${minutes}`;
+// Mirrors the create-event form's fallback when no venue timezone is known.
+function getBrowserTimezoneName(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return "UTC";
+  }
 }
 
 /**
@@ -94,6 +95,9 @@ export function EditEventForm({ event }: EditEventFormProps) {
       ? { addressLocality: event.location.addressLocality, addressCountry: event.location.addressCountry }
       : null,
   );
+  const [selectedTimezone, setSelectedTimezone] = useState<string | null>(
+    !wasOnline ? event.timezone ?? null : null,
+  );
 
   const [capacity, setCapacity] = useState<number | null>(event.maximumAttendeeCapacity ?? null);
   const [isFree, setIsFree] = useState(!event.offers?.url);
@@ -114,6 +118,8 @@ export function EditEventForm({ event }: EditEventFormProps) {
   const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showDateModal, setShowDateModal] = useState(false);
+  const effectiveTimezone = !isOnline && selectedTimezone ? selectedTimezone : getBrowserTimezoneName();
+  const tzLabel = effectiveTimezone.replace(/_/g, " ").split("/").pop() || effectiveTimezone;
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showCapacityModal, setShowCapacityModal] = useState(false);
   const [showTicketingModal, setShowTicketingModal] = useState(false);
@@ -186,9 +192,9 @@ export function EditEventForm({ event }: EditEventFormProps) {
         uploadedImage = null;
       }
 
-      const tzOffset = getBrowserTimezoneOffset();
-      const isoStart = new Date(`${eventDate}T${startTime}:00${tzOffset}`).toISOString();
-      const isoEnd = new Date(`${eventDate}T${endTime}:00${tzOffset}`).toISOString();
+      const effectiveTimezone = !isOnline && selectedTimezone ? selectedTimezone : getBrowserTimezoneName();
+      const isoStart = zonedTimeToUtcIso(eventDate, startTime, effectiveTimezone);
+      const isoEnd = zonedTimeToUtcIso(eventDate, endTime, effectiveTimezone);
 
       await updateEvent(event.id, {
         name: name.trim(),
@@ -206,6 +212,7 @@ export function EditEventForm({ event }: EditEventFormProps) {
         streetAddress: address.trim(),
         addressLocality: selectedCity?.addressLocality,
         addressCountry: selectedCity?.addressCountry,
+        timezone: isOnline ? null : selectedTimezone,
         meetingUrl: isOnline ? meetingUrl.trim() : null,
         meetingPlatform: isOnline ? meetingPlatform : null,
       });
@@ -284,7 +291,7 @@ export function EditEventForm({ event }: EditEventFormProps) {
               day: "numeric",
               month: "long",
             })}
-            secondary={`${startTime} – ${endTime}`}
+            secondary={`${startTime} – ${endTime} ${tzLabel}`}
             trailing={<Pencil className="w-4 h-4 text-muted-foreground" aria-hidden />}
           />
         </button>
@@ -373,6 +380,8 @@ export function EditEventForm({ event }: EditEventFormProps) {
         selectedCity={selectedCity}
         setSelectedCity={setSelectedCity}
         cities={cities}
+        selectedTimezone={selectedTimezone}
+        setSelectedTimezone={setSelectedTimezone}
       />
       <CategoryModal
         isOpen={showCategoryModal}
