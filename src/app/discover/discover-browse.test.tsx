@@ -6,12 +6,31 @@
  * no timeline.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { DiscoverBrowse } from "./discover-browse";
 import type { CategoryWithCount, CityWithCount } from "@/lib/mongo/lookups";
 import type { FeaturedCircle } from "@/lib/mongo/circles";
 import type { FeaturedCalendar } from "@/lib/mongo/calendars";
+
+// The Featured-calendars CTA pulls in the create-calendar modal, whose server
+// action modules (and the host-mode picker's) transitively import the
+// `server-only`-guarded Mongo layer and WorkOS session helpers — stub those
+// boundaries so this presentational test never loads them.
+vi.mock("@/app/actions/calendars", () => ({
+  createCalendarAction: vi.fn(),
+  updateCalendarAction: vi.fn(),
+  getMyCirclesAction: vi.fn(async () => []),
+}));
+vi.mock("@/app/actions/host-entities", () => ({
+  getMyHostEntities: vi.fn(async () => []),
+}));
+// The CTA calls useAuth(), which throws outside an <AuthProvider> — this
+// suite only exercises the server-rendered browse content, so stub a
+// logged-out viewer (the CTA renders nothing, matching real behaviour).
+vi.mock("@/components/auth/auth-context", () => ({
+  useAuth: () => ({ user: null }),
+}));
 
 const categories: CategoryWithCount[] = [
   { id: "tech", name: "Tech & Innovation", group: "Categories", eventCount: 12 },
