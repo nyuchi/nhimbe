@@ -28,6 +28,7 @@ import {
   type CirclePerson,
   type CirclePost,
 } from "@/app/actions/circle-detail";
+import { AttachCalendar } from "./attach-calendar";
 import { useT } from "@/lib/i18n";
 
 interface CircleDetailClientProps {
@@ -62,6 +63,11 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
   const isMember = personId
     ? members.some((m) => m.person_id === personId)
     : false;
+  const isOwner = personId !== null && circle?.owner_person_id === personId;
+
+  const refetchCalendars = useCallback(() => {
+    getCircleCalendars(circleId).then(setCalendars);
+  }, [circleId]);
 
   // Fetch the circle, posts and members once per circleId. Setting state
   // happens only inside the promise resolution, never synchronously in the
@@ -391,6 +397,13 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
             </TabsContent>
 
             <TabsContent value="calendars">
+              {isOwner && (
+                <AttachCalendar
+                  circleId={circleId}
+                  attachedIds={calendars.map((c) => c.id)}
+                  onAttached={refetchCalendars}
+                />
+              )}
               {calendars.length === 0 ? (
                 <Card className="border-0 bg-surface">
                   <CardContent className="p-8 text-center text-text-secondary text-sm">

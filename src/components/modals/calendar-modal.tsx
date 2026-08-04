@@ -47,6 +47,8 @@ interface CalendarModalProps {
   /** Pass the existing calendar to edit it in place rather than create a new one. */
   editing?: CalendarListItem | null;
   onUpdated?: (result: CalendarListItem) => void;
+  /** Pre-select (and pre-attach) a circle when creating from that circle's page. */
+  initialCircleId?: string | null;
 }
 
 export function CreateCalendarModal({
@@ -55,6 +57,7 @@ export function CreateCalendarModal({
   onCreated,
   editing = null,
   onUpdated,
+  initialCircleId = null,
 }: CalendarModalProps) {
   const [name, setName] = useState(editing?.name ?? "");
   const [description, setDescription] = useState(editing?.description ?? "");
@@ -66,7 +69,7 @@ export function CreateCalendarModal({
   const [hostMode, setHostMode] = useState<HostMode>("person");
   const [hostEntityId, setHostEntityId] = useState<string | null>(null);
   const [circles, setCircles] = useState<{ id: string; name: string }[]>([]);
-  const [circleId, setCircleId] = useState<string | null>(editing?.circleId ?? null);
+  const [circleId, setCircleId] = useState<string | null>(editing?.circleId ?? initialCircleId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isEditing = editing !== null;
@@ -122,7 +125,7 @@ export function CreateCalendarModal({
         setSelectedThemeIndex(0);
         setHostMode("person");
         setHostEntityId(null);
-        setCircleId(null);
+        setCircleId(initialCircleId);
       }
       onClose();
     } catch (err) {

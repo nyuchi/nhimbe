@@ -59,6 +59,7 @@ export interface CircleDetail {
   member_count: number | null;
   post_count: number | null;
   linked_event_id: string | null;
+  owner_person_id: string;
 }
 
 /** Post shape the detail stream/archive renders. */
@@ -108,6 +109,7 @@ function mapCircle(doc: CircleDoc): CircleDetail {
     member_count: doc.memberCount ?? null,
     post_count: doc.postCount ?? null,
     linked_event_id: doc.primaryEventId ?? null,
+    owner_person_id: doc.ownerPersonId,
   };
 }
 
