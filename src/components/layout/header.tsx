@@ -14,6 +14,7 @@ import {
   Settings,
   Compass,
   CalendarDays,
+  CalendarRange,
   Users,
   Info,
 } from "lucide-react";
@@ -32,6 +33,7 @@ const PALETTE_NAV: CommandPaletteItem[] = [
   { id: "nav:events", label: "All Events", href: "/events", group: "Go to", icon: CalendarDays },
   { id: "nav:my-events", label: "My Events", href: "/my-events", group: "Go to", icon: Ticket },
   { id: "nav:calendar", label: "Calendar", href: "/calendar", group: "Go to", icon: CalendarDays },
+  { id: "nav:calendars", label: "My Calendars", href: "/calendars", group: "Go to", icon: CalendarRange },
   { id: "nav:create", label: "Create an Event", href: "/events/create", group: "Go to", icon: Plus },
   { id: "nav:circles", label: "Circles", href: "/circles", group: "Go to", icon: Users },
   { id: "nav:profile", label: "Profile", href: "/profile", group: "Go to", icon: User },
@@ -64,6 +66,7 @@ const navLinks = [
   { href: "/discover", label: "Discover" },
   { href: "/my-events", label: "My Events" },
   { href: "/calendar", label: "Calendar" },
+  { href: "/calendars", label: "My Calendars" },
   { href: "/circles", label: "Circles" },
 ];
 
@@ -75,6 +78,7 @@ const pageTitles: Record<string, string> = {
   "/circles": "Circles",
   "/my-events": "My Events",
   "/calendar": "Calendar",
+  "/calendars": "My Calendars",
   "/about": "About",
   "/help": "Help Center",
   "/terms": "Terms of Service",
