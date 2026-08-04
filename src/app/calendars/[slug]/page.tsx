@@ -88,6 +88,7 @@ export default async function CalendarPage({ params }: CalendarPageProps) {
     eventCount: calendar.eventCount ?? 0,
     visibility: calendar.visibility,
     theme: calendar.theme ?? null,
+    circleId: calendar.circleId ?? null,
     ownerName: ownerEntity?.name ?? null,
     circle,
   };
@@ -98,6 +99,7 @@ export default async function CalendarPage({ params }: CalendarPageProps) {
       events={events}
       isAuthenticated={viewer !== null}
       initialFollowing={following}
+      isOwner={viewer !== null && viewer._id === calendar.ownerPersonId}
     />
   );
 }

@@ -16,12 +16,31 @@ import type { Event } from "@/lib/api";
 
 vi.mock("server-only", () => ({}));
 
+// The page's owner actions / Discuss thread pull in server action modules
+// that import WorkOS session helpers transitively — stub the package
+// boundary (same convention as src/app/actions/campfire.test.ts) rather than
+// the app's own auth modules, most of which are mocked individually below.
+vi.mock("@workos-inc/authkit-nextjs", () => ({
+  withAuth: vi.fn(async () => ({ user: null })),
+}));
+vi.mock("@workos-inc/authkit-nextjs/components", () => ({
+  useAuth: () => ({ user: null, loading: false, signOut: vi.fn() }),
+  useAccessToken: () => ({ accessToken: null, loading: false, getAccessToken: vi.fn() }),
+}));
+// The owner-actions edit modal renders a ResponsiveModal, which reads
+// window.matchMedia via useIsMobile — jsdom doesn't implement it, so force
+// the desktop branch (same convention as responsive-modal.a11y.test.tsx).
+vi.mock("@/hooks/use-mobile", () => ({
+  useIsMobile: () => false,
+}));
+
 // notFound must throw (like Next's real one) so the page short-circuits.
 const NOT_FOUND = new Error("NEXT_NOT_FOUND");
 vi.mock("next/navigation", () => ({
   notFound: vi.fn(() => {
     throw NOT_FOUND;
   }),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
 // Data readers — the page only ever touches these mocks.
