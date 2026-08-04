@@ -3,11 +3,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("server-only", () => ({}));
 
 // Mongo accessor + auth gate are mocked so the action runs in isolation.
-const places = { find: vi.fn(), aggregate: vi.fn() };
+const places = { find: vi.fn(), aggregate: vi.fn(), findOne: vi.fn(), insertOne: vi.fn() };
 const placesGeo = { findOne: vi.fn() };
+const entities = { insertOne: vi.fn() };
 vi.mock("@/lib/mongo/databases", () => ({
   placesCollection: vi.fn(async () => places),
   placesGeoCollection: vi.fn(async () => placesGeo),
+  entitiesCollection: vi.fn(async () => entities),
 }));
 vi.mock("@workos-inc/authkit-nextjs", () => ({
   withAuth: vi.fn(async () => ({ user: { id: "user_1" } })),
@@ -16,7 +18,7 @@ vi.mock("@/lib/auth/dev", () => ({
   isDevBypass: vi.fn(() => true),
 }));
 
-import { geocodeAddress, reverseGeocode, resolveCountryTimezone } from "./geocode";
+import { geocodeAddress, reverseGeocode, resolveCountryTimezone, ensurePlaceFromOsmSuggestion } from "./geocode";
 
 /** Build a chainable find() result (.limit().toArray()). */
 function findReturning(docs: unknown[]) {
@@ -41,6 +43,9 @@ beforeEach(() => {
   // Simulate Atlas Search being unavailable by default (e.g. no index on a
   // local/test cluster) so existing regex-path tests keep exercising find().
   places.aggregate.mockReturnValue(aggregateReturning(new Error("no such index")));
+  places.findOne.mockResolvedValue(null);
+  places.insertOne.mockResolvedValue({ acknowledged: true });
+  entities.insertOne.mockResolvedValue({ acknowledged: true });
   placesGeo.findOne.mockResolvedValue(null);
   global.fetch = vi.fn();
 });
@@ -304,5 +309,76 @@ describe("resolveCountryTimezone", () => {
   it("returns undefined when the matched doc has no usable Point geometry", async () => {
     placesGeo.findOne.mockResolvedValue({ geoType: "country", name: "Nowhere", geo: { type: "Polygon", coordinates: [] } });
     expect(await resolveCountryTimezone("Nowhere")).toBeUndefined();
+  });
+});
+
+describe("ensurePlaceFromOsmSuggestion", () => {
+  const input = {
+    name: "Miekles Hotel",
+    address: "Jason Moyo Avenue",
+    city: "Harare",
+    country: "Zimbabwe",
+    latitude: -17.8303379,
+    longitude: 31.0527331,
+    osmType: "way",
+    osmId: 136597457,
+  };
+
+  it("is a no-op (returns the existing id) when the OSM element is already catalogued", async () => {
+    places.findOne.mockResolvedValue({ _id: "existing-place-1" });
+
+    const id = await ensurePlaceFromOsmSuggestion(input);
+
+    expect(places.findOne).toHaveBeenCalledWith({ "sourceProvenance.legacyId": "way/136597457" });
+    expect(id).toBe("existing-place-1");
+    expect(places.insertOne).not.toHaveBeenCalled();
+    expect(entities.insertOne).not.toHaveBeenCalled();
+  });
+
+  it("creates a paired external entity + place, inferring placeType from Overpass tags", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ elements: [{ type: "way", id: 136597457, tags: { tourism: "hotel", name: "Miekles Hotel" } }] }),
+    });
+
+    const id = await ensurePlaceFromOsmSuggestion(input);
+
+    expect(id).toEqual(expect.any(String));
+    expect(entities.insertOne).toHaveBeenCalledTimes(1);
+    const entityDoc = entities.insertOne.mock.calls[0][0];
+    expect(entityDoc).toMatchObject({
+      entityType: "organization",
+      ecosystemRole: "external",
+      name: "Miekles Hotel",
+      primaryPlaceId: id,
+      sourceProvenance: { legacyId: "way/136597457", mirroredFrom: "osm" },
+    });
+
+    expect(places.insertOne).toHaveBeenCalledTimes(1);
+    const placeDoc = places.insertOne.mock.calls[0][0];
+    expect(placeDoc).toMatchObject({
+      _id: id,
+      ownerEntityId: entityDoc._id,
+      name: "Miekles Hotel",
+      placeType: ["Accommodation"],
+      geo: { type: "Point", coordinates: [31.0527331, -17.8303379] },
+      sourceProvenance: { legacyId: "way/136597457", dataOrigin: "osm" },
+    });
+  });
+
+  it("falls back to a generic LocalBusiness placeType when Overpass is unreachable", async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("network down"));
+
+    await ensurePlaceFromOsmSuggestion(input);
+
+    const placeDoc = places.insertOne.mock.calls[0][0];
+    expect(placeDoc.placeType).toEqual(["LocalBusiness"]);
+  });
+
+  it("never throws — swallows a Mongo write failure and returns null", async () => {
+    places.insertOne.mockRejectedValue(new Error("insert failed"));
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, json: async () => ({ elements: [] }) });
+
+    await expect(ensurePlaceFromOsmSuggestion(input)).resolves.toBeNull();
   });
 });

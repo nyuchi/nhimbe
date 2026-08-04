@@ -27,6 +27,11 @@ interface AddressComponents {
   longitude?: number;
   /** IANA timezone resolved from the selected coordinates (e.g. "Africa/Harare"). */
   timezone?: string;
+  /** Set only for `source: "osm"` picks — lets the caller promote the
+   *  selection into the places catalogue via `ensurePlaceFromOsmSuggestion`. */
+  source?: "db" | "osm";
+  osmType?: string;
+  osmId?: number;
 }
 
 interface AddressAutocompleteProps {
@@ -125,6 +130,9 @@ export function AddressAutocomplete({
         latitude: s.latitude,
         longitude: s.longitude,
         timezone: s.timezone,
+        source: s.source,
+        osmType: s.osmType,
+        osmId: s.osmId,
       });
       onChange(s.displayName);
       setSuggestions([]);
