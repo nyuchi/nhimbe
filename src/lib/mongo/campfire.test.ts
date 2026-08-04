@@ -36,6 +36,8 @@ import {
   ensureEventConversation,
   appendSystemMessage,
   notifyAttendeesViaCampfire,
+  buildCalendarConversationDoc,
+  ensureCalendarConversation,
 } from "./campfire";
 
 /** Required fields on the live `campfire.conversations` validator. */
@@ -218,6 +220,67 @@ describe("ensureEventConversation (find-or-create, upsert)", () => {
   it("throws when the conversation cannot be resolved after upsert", async () => {
     conversations.findOne.mockResolvedValueOnce(null);
     await expect(ensureEventConversation(conversationInput)).rejects.toThrow(/could not be resolved/);
+  });
+});
+
+const calendarConversationInput = {
+  calendarId: "calendar-1",
+  calendarName: "Harare Stroller Club",
+  createdByPersonId: "person-1",
+};
+
+describe("buildCalendarConversationDoc", () => {
+  it("emits every validator-required field", () => {
+    const doc = buildCalendarConversationDoc(calendarConversationInput) as unknown as Record<
+      string,
+      unknown
+    >;
+    for (const field of CONVERSATION_REQUIRED_FIELDS) {
+      expect(doc, `missing required field ${field}`).toHaveProperty(field);
+      expect(doc[field], `required field ${field} must not be undefined/null`).not.toBeNull();
+    }
+  });
+
+  it("is a GROUP conversation paired to the calendar, not a system one", () => {
+    const doc = buildCalendarConversationDoc(calendarConversationInput);
+    expect(doc.conversationType).toBe("group");
+    expect(doc.calendarId).toBe("calendar-1");
+    expect(doc.name).toBe("Harare Stroller Club");
+    expect(doc.encryptionMode).toBe("none");
+    expect(doc.mukoko).toEqual({ routingSource: "nhimbe" });
+  });
+});
+
+describe("ensureCalendarConversation (find-or-create, upsert)", () => {
+  it("scopes the find-or-create to the calendar's GROUP conversation only", async () => {
+    conversations.findOne.mockResolvedValueOnce({
+      _id: "conv-1",
+      calendarId: "calendar-1",
+      conversationType: "group",
+    });
+
+    await ensureCalendarConversation(calendarConversationInput);
+
+    const [filter, update, options] = conversations.updateOne.mock.calls[0];
+    expect(filter).toEqual({ calendarId: "calendar-1", conversationType: "group" });
+    expect(options).toEqual({ upsert: true });
+    expect(update.$setOnInsert.conversationType).toBe("group");
+    expect(update.$setOnInsert.calendarId).toBe("calendar-1");
+  });
+
+  it("returns the read-back conversation (upsert does not return the doc)", async () => {
+    const winner = { _id: "conv-winner", calendarId: "calendar-1", conversationType: "group" };
+    conversations.findOne.mockResolvedValueOnce(winner);
+
+    const conversation = await ensureCalendarConversation(calendarConversationInput);
+    expect(conversation).toBe(winner);
+  });
+
+  it("throws when the conversation cannot be resolved after upsert", async () => {
+    conversations.findOne.mockResolvedValueOnce(null);
+    await expect(ensureCalendarConversation(calendarConversationInput)).rejects.toThrow(
+      /could not be resolved/,
+    );
   });
 });
 

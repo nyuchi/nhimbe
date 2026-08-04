@@ -27,7 +27,7 @@ import { EventEntityHostCard } from "./event-entity-host-card";
 import { EventSpecifics } from "./event-specifics";
 import { EventVenueCard } from "./event-venue-card";
 import { EventPolls } from "./event-polls";
-import { EventCampfire } from "./event-campfire";
+import { CampfireThread } from "@/components/ui/campfire-thread";
 import { type UserReferralCode, type EventStats, type ReviewStats } from "@/lib/api";
 import type { Event } from "@/lib/api";
 import { useSaveEvent } from "@/lib/use-save-event";
@@ -323,7 +323,7 @@ export function EventDetailContent({
             {/* Campfire — on-page live chat. Only renders when this event
                 has a campfire.conversation row linked via
                 events.event.campfire_conversation_id. */}
-            <EventCampfire conversationId={event.campfireConversationId} />
+            <CampfireThread conversationId={event.campfireConversationId} />
 
             {/* Location Section - Luma style: heading, venue, address, map */}
             {isInPerson && (

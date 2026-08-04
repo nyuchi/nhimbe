@@ -169,6 +169,66 @@ export async function appendSystemMessage(params: {
   return doc;
 }
 
+export interface EnsureCalendarConversationInput {
+  calendarId: string;
+  /** Calendar name — becomes the conversation name on create. */
+  calendarName: string;
+  /** The person who created the calendar (conversation creator on first use). */
+  createdByPersonId: string;
+}
+
+/**
+ * Pure builder for the calendar-paired discuss conversation. `conversationType:
+ * "group"` (not "system") — this is a user-authored chat, unlike the event
+ * announcement channel above.
+ */
+export function buildCalendarConversationDoc(
+  input: EnsureCalendarConversationInput,
+): CampfireConversationDoc {
+  const now = new Date();
+  return {
+    _id: newId(),
+    _schemaVersion: WRITE_SCHEMA_VERSION,
+    conversationType: "group",
+    createdByPersonId: input.createdByPersonId,
+    encryptionMode: "none",
+    visibility: "private",
+    isActive: true,
+    messageCount: 0,
+    participantCount: 0,
+    calendarId: input.calendarId,
+    name: input.calendarName,
+    mukoko: { routingSource: "nhimbe" },
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Find the calendar's paired discuss conversation, creating it on first use.
+ * Same race-safe upsert pattern as {@link ensureEventConversation}.
+ */
+export async function ensureCalendarConversation(
+  input: EnsureCalendarConversationInput,
+): Promise<CampfireConversationDoc> {
+  const conversations = await campfireConversationsCollection();
+  const filter = { calendarId: input.calendarId, conversationType: "group" };
+
+  await conversations.updateOne(
+    filter,
+    { $setOnInsert: buildCalendarConversationDoc(input) },
+    { upsert: true },
+  );
+
+  const conversation = await conversations.findOne(filter);
+  if (!conversation) {
+    throw new Error(
+      `Campfire discuss conversation for calendar ${input.calendarId} could not be resolved.`,
+    );
+  }
+  return conversation;
+}
+
 // ── best-effort, never-throw entry point (the write-through hook) ────────
 
 export interface CampfireNotifyInput {

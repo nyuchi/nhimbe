@@ -682,6 +682,8 @@ export interface CampfireConversationDoc extends BaseDoc {
   participantCount: number;
   eventId?: string | null;
   circleId?: string | null;
+  /** Paired calendar (NYU-25) — one "Discuss" conversation per calendar. */
+  calendarId?: string | null;
   name?: string | null;
   lastMessageAt?: Date | null;
   mukoko?: Record<string, unknown>;
