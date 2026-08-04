@@ -28,6 +28,7 @@ import { ensureHostEntityForPerson } from "@/lib/mongo/entities";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { isDevBypass, DEV_WORKOS_ID, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
 import { listEvents } from "@/lib/mongo/events";
+import { listCalendarsByCircle } from "@/lib/mongo/calendars";
 import type { Event } from "@/lib/api";
 import type {
   CircleDoc,
@@ -190,6 +191,36 @@ export async function getCircleEvents(circleId: string, limit = 50): Promise<Eve
     return events;
   } catch (err) {
     console.warn("[mukoko] getCircleEvents failed:", err);
+    return [];
+  }
+}
+
+/** The small shape the circle's "Calendars" tab renders. */
+export interface CircleCalendarSummary {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  theme: string | null;
+  followerCount: number;
+  eventCount: number;
+}
+
+/** Public/unlisted calendars streaming through this circle. */
+export async function getCircleCalendars(circleId: string): Promise<CircleCalendarSummary[]> {
+  try {
+    const docs = await listCalendarsByCircle(circleId);
+    return docs.map((d) => ({
+      id: d._id,
+      slug: d.slug,
+      name: d.name,
+      description: d.description ?? null,
+      theme: d.theme ?? null,
+      followerCount: d.followerCount,
+      eventCount: d.eventCount,
+    }));
+  } catch (err) {
+    console.warn("[mukoko] getCircleCalendars failed:", err);
     return [];
   }
 }
