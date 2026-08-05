@@ -2,6 +2,9 @@ import "server-only";
 
 import { personsCollection } from "@/lib/mongo/databases";
 import { verifyBearer } from "@/lib/auth/workos-token";
+import { consumeDailyUsage, UsageLimitExceededError } from "@/lib/mongo/usage-limits";
+import { getPlatformSettings } from "@/lib/mongo/settings";
+import { isMukokoPro } from "@/lib/mongo/entitlements";
 import type { PersonDoc } from "@/lib/mongo/types";
 
 /**
@@ -44,5 +47,31 @@ export async function resolveActorFromBearer(authorization: string | null): Prom
       403,
     );
   }
+
+  await enforceApiRateLimit(person);
   return person;
+}
+
+/**
+ * Google-Maps-style metering for the bearer-authenticated write surface (the
+ * Mukoko Events MCP's create/update tools): a generous free daily quota per
+ * caller, then throttled with a 429 — never a silent/permanent block. Mukoko
+ * Pro removes the daily ceiling entirely (a per-app plan wouldn't fit here —
+ * this is the cross-app entitlement, same as the Shamwari gate).
+ */
+async function enforceApiRateLimit(person: PersonDoc): Promise<void> {
+  if (isMukokoPro(person)) return;
+  const { freeApiWritesPerDayPerCaller } = await getPlatformSettings();
+  try {
+    await consumeDailyUsage({
+      subjectId: person._id,
+      counterType: "apiWrite",
+      limit: freeApiWritesPerDayPerCaller,
+    });
+  } catch (err) {
+    if (err instanceof UsageLimitExceededError) {
+      throw new ActorError(err.message, 429);
+    }
+    throw err;
+  }
 }
