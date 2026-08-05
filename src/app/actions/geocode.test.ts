@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -237,6 +237,120 @@ describe("geocodeAddress", () => {
   it("returns [] (no throw) when both DB is empty and Nominatim errors", async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("network down"));
     await expect(geocodeAddress("anywhere")).resolves.toEqual([]);
+  });
+});
+
+describe("geocodeAddress — reporting a catalogue miss to fundi-ingestion", () => {
+  const ORIGINAL_TOKEN = process.env.FUNDI_API_TOKEN;
+
+  afterEach(() => {
+    if (ORIGINAL_TOKEN === undefined) delete process.env.FUNDI_API_TOKEN;
+    else process.env.FUNDI_API_TOKEN = ORIGINAL_TOKEN;
+  });
+
+  /** Exact-hostname check (not a substring match) so this test double can't
+   *  be confused by an arbitrary host containing the Nominatim domain name. */
+  function isNominatimUrl(url: string): boolean {
+    try {
+      return new URL(String(url)).hostname === "nominatim.openstreetmap.org";
+    } catch {
+      return false;
+    }
+  }
+
+  function mockNominatimHit() {
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+      if (isNominatimUrl(url)) {
+        return {
+          ok: true,
+          json: async () => ({
+            features: [
+              {
+                geometry: { type: "Point", coordinates: [28.6266, -20.1325] },
+                properties: {
+                  display_name: "Bulawayo, Zimbabwe",
+                  name: "Bulawayo",
+                  osm_type: "relation",
+                  osm_id: 12345,
+                  address: { city: "Bulawayo", country: "Zimbabwe" },
+                },
+              },
+            ],
+          }),
+        };
+      }
+      return { ok: true, text: async () => "" };
+    });
+  }
+
+  it("does not call fundi-ingestion when FUNDI_API_TOKEN is unset", async () => {
+    delete process.env.FUNDI_API_TOKEN;
+    mockNominatimHit();
+
+    await geocodeAddress("Bulawayo");
+
+    expect(global.fetch).toHaveBeenCalledTimes(1); // Nominatim only
+  });
+
+  it("reports a search_miss task with the first result's location once a token is set", async () => {
+    process.env.FUNDI_API_TOKEN = "test-token";
+    mockNominatimHit();
+
+    await geocodeAddress("Bulawayo");
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1];
+    expect(String(url)).toBe("https://fundi-ingestion.nyuchi.dev/tasks");
+    expect(init.headers.authorization).toBe("Bearer test-token");
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({
+      region: { kind: "point_radius", center: [28.6266, -20.1325], radiusMeters: 3000 },
+      categories: "all",
+      source: { kind: "search_miss", surface: "geocode-address", query: "Bulawayo" },
+    });
+  });
+
+  it("never reports when the DB already had a match", async () => {
+    process.env.FUNDI_API_TOKEN = "test-token";
+    places.find.mockReturnValue(
+      findReturning([
+        {
+          _id: "place-1",
+          name: "Rainbow Towers",
+          isActive: true,
+          geo: { type: "Point", coordinates: [31.05, -17.83] },
+        },
+      ]),
+    );
+
+    await geocodeAddress("Rainbow");
+
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("swallows a reporting failure without affecting the returned suggestions", async () => {
+    process.env.FUNDI_API_TOKEN = "test-token";
+    (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+      if (isNominatimUrl(url)) {
+        return {
+          ok: true,
+          json: async () => ({
+            features: [
+              {
+                geometry: { type: "Point", coordinates: [28.6266, -20.1325] },
+                properties: { name: "Bulawayo", osm_type: "relation", osm_id: 12345 },
+              },
+            ],
+          }),
+        };
+      }
+      throw new Error("fundi-ingestion is down");
+    });
+
+    const results = await geocodeAddress("Bulawayo");
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ source: "osm", name: "Bulawayo" });
   });
 });
 

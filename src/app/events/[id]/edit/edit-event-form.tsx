@@ -18,7 +18,15 @@ import { CategoryModal } from "@/components/modals/category-modal";
 import { DescriptionModal } from "@/components/modals/description-modal";
 import { TicketingModal } from "@/components/modals/ticketing-modal";
 import { CapacityModal } from "@/components/modals/capacity-modal";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getCategoriesAction, getCitiesAction } from "@/app/actions/discovery";
+import { getMyCalendarsAction, type MyCalendarSummary } from "@/app/actions/calendars";
 import { updateEvent } from "@/app/actions/events";
 import { uploadMedia, getMediaUrl, type Category, type Event } from "@/lib/api";
 import { isHttpUrl } from "@/lib/security/request";
@@ -42,12 +50,14 @@ function toLocalTimeString(d: Date): string {
 
 /**
  * Edit an existing event. Deliberately NOT the create-event wizard — no
- * steps, no host-mode/calendar picks (those aren't something you "edit").
- * Laid out like the event-detail page itself (same meta-tile rows, same
- * theme wash) with each field made editable in place, tapping into the same
+ * steps, no host-mode picks (who's hosting isn't something you "edit"). Laid
+ * out like the event-detail page itself (same meta-tile rows, same theme
+ * wash) with each field made editable in place, tapping into the same
  * ResponsiveModal field editors the create wizard uses (Date & time,
  * Location, Category, Description, Capacity, Ticketing) since those are
- * self-contained editors, not wizard steps.
+ * self-contained editors, not wizard steps. Calendar attach IS editable here
+ * (unlike host mode) — moving an event onto/off a calendar after publishing
+ * is a normal curation action, not a re-hosting one.
  */
 export function EditEventForm({ event }: EditEventFormProps) {
   const router = useRouter();
@@ -97,11 +107,14 @@ export function EditEventForm({ event }: EditEventFormProps) {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [cities, setCities] = useState<{ addressLocality: string; addressCountry: string }[]>([]);
+  const [calendarId, setCalendarId] = useState<string | null>(event.calendarId ?? null);
+  const [myCalendars, setMyCalendars] = useState<MyCalendarSummary[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     getCategoriesAction().then((c) => !cancelled && c.length > 0 && setCategories(c));
     getCitiesAction().then((c) => !cancelled && c.length > 0 && setCities(c));
+    getMyCalendarsAction().then((c) => !cancelled && setMyCalendars(c));
     return () => {
       cancelled = true;
     };
@@ -202,6 +215,7 @@ export function EditEventForm({ event }: EditEventFormProps) {
         venue: venue.trim(),
         streetAddress: address.trim(),
         placeId,
+        calendarId,
         addressLocality: selectedCity?.addressLocality,
         addressCountry: selectedCity?.addressCountry,
         timezone: isOnline ? null : selectedTimezone,
@@ -302,6 +316,30 @@ export function EditEventForm({ event }: EditEventFormProps) {
             trailing={<Pencil className="w-4 h-4 text-muted-foreground" aria-hidden />}
           />
         </button>
+
+        {myCalendars.length > 0 && (
+          <div className="mb-6 sm:mb-8">
+            <label htmlFor="edit-event-calendar" className="block text-sm font-medium text-foreground mb-1.5">
+              Calendar <span className="text-text-tertiary">(optional)</span>
+            </label>
+            <Select
+              value={calendarId ?? "none"}
+              onValueChange={(v) => setCalendarId(v === "none" ? null : v)}
+            >
+              <SelectTrigger id="edit-event-calendar" className="w-full">
+                <SelectValue placeholder="No calendar" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No calendar</SelectItem>
+                {myCalendars.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">

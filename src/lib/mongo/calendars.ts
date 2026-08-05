@@ -186,10 +186,22 @@ export async function listFeaturedCalendars(limit = 6): Promise<FeaturedCalendar
   return docs.map(toFeatured);
 }
 
-/** All of a person's active calendars (any visibility — it's their own list). */
-export async function listCalendarsByOwner(ownerPersonId: string): Promise<CalendarDoc[]> {
+/**
+ * All of a person's active calendars (any visibility — it's their own list):
+ * ones they personally own, plus — when `hostEntityIds` is passed — ones
+ * owned by any entity they host through (Rule 10: entity-centric). Omitting
+ * `hostEntityIds` keeps the old personal-only behaviour.
+ */
+export async function listCalendarsByOwner(
+  ownerPersonId: string,
+  hostEntityIds: string[] = [],
+): Promise<CalendarDoc[]> {
   const col = await calendarsCollection();
-  return col.find({ ownerPersonId, isActive: true }).sort({ createdAt: -1 }).toArray();
+  const filter =
+    hostEntityIds.length > 0
+      ? { isActive: true, $or: [{ ownerPersonId }, { ownerEntityId: { $in: hostEntityIds } }] }
+      : { ownerPersonId, isActive: true };
+  return col.find(filter).sort({ createdAt: -1 }).toArray();
 }
 
 /** A circle's discoverable calendars (private ones stay with their owner). */
@@ -272,6 +284,28 @@ export async function attachEventToCalendar(eventId: string, calendarId: string)
       { $inc: { eventCount: -1 }, $set: { updatedAt: now } },
     );
   }
+}
+
+/**
+ * Remove an event from whichever calendar it's on, if any, keeping
+ * `eventCount` honest. A no-op (never throws) when the event isn't on a
+ * calendar — the inverse of {@link attachEventToCalendar}.
+ */
+export async function detachEventFromCalendar(eventId: string): Promise<void> {
+  const events = await eventsCollection();
+  const now = new Date();
+  const previous = await events.findOneAndUpdate(
+    { _id: eventId, calendarId: { $ne: null } },
+    { $set: { calendarId: null, updatedAt: now } },
+    { returnDocument: "before" },
+  );
+  if (!previous?.calendarId) return;
+
+  const calendars = await calendarsCollection();
+  await calendars.updateOne(
+    { _id: previous.calendarId, eventCount: { $gt: 0 } },
+    { $inc: { eventCount: -1 }, $set: { updatedAt: now } },
+  );
 }
 
 // ── follow / unfollow (idempotent) ───────────────────────────────────

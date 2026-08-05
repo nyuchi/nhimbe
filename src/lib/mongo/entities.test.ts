@@ -27,6 +27,7 @@ vi.mock("@/lib/mongo/databases", () => ({
 import {
   buildWorkosMembershipWrite,
   canManageHostEntity,
+  createCommunityEntityForPerson,
   endWorkosOrganizationMembership,
   ensureEntityForWorkosOrg,
   getPersonHostRoleForEntity,
@@ -361,5 +362,52 @@ describe("setDefaultHostEntityForPerson", () => {
       setDefaultHostEntityForPerson({ personId: "p1", entityId: "e1" }),
     ).rejects.toThrow(/host through/i);
     expect(persons.updateOne).not.toHaveBeenCalled();
+  });
+});
+
+describe("createCommunityEntityForPerson", () => {
+  it("writes a validator-complete community entity and a founder membership", async () => {
+    entities.insertOne.mockResolvedValue({ acknowledged: true });
+    memberships.insertOne.mockResolvedValue({ acknowledged: true });
+
+    const doc = await createCommunityEntityForPerson({
+      personId: "p1",
+      name: "Harare Runners Club",
+      description: "Weekend trail runs.",
+    });
+
+    for (const field of ENTITY_REQUIRED_FIELDS) {
+      expect(doc).toHaveProperty(field);
+    }
+    expect(doc.entityType).toBe("community");
+    expect(doc.schemaOrgType).toBe("Organization");
+    expect(doc.isPrivateByDefault).toBe(false);
+    expect(doc.founderPersonId).toBe("p1");
+    expect(doc.name).toBe("Harare Runners Club");
+    expect(doc.description).toBe("Weekend trail runs.");
+
+    const [membershipDoc] = memberships.insertOne.mock.calls[0];
+    for (const field of MEMBERSHIP_REQUIRED_FIELDS) {
+      expect(membershipDoc).toHaveProperty(field);
+    }
+    expect(membershipDoc.personId).toBe("p1");
+    expect(membershipDoc.entityId).toBe(doc._id);
+    expect(membershipDoc.membershipRole).toBe("founder");
+    expect(membershipDoc.isActive).toBe(true);
+  });
+
+  it("rejects a blank name without writing anything", async () => {
+    await expect(
+      createCommunityEntityForPerson({ personId: "p1", name: "   " }),
+    ).rejects.toThrow(/name/i);
+    expect(entities.insertOne).not.toHaveBeenCalled();
+    expect(memberships.insertOne).not.toHaveBeenCalled();
+  });
+
+  it("rejects a name over the length limit", async () => {
+    await expect(
+      createCommunityEntityForPerson({ personId: "p1", name: "x".repeat(121) }),
+    ).rejects.toThrow(/120/);
+    expect(entities.insertOne).not.toHaveBeenCalled();
   });
 });

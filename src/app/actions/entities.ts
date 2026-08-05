@@ -16,6 +16,7 @@
 import { resolveActingPerson } from "@/lib/auth/current-person";
 import {
   canManageHostEntity,
+  createCommunityEntityForPerson,
   listHostEntitiesWithRoleForPerson,
   renameHostEntityForPerson,
   setDefaultHostEntityForPerson,
@@ -108,5 +109,28 @@ export async function setMyDefaultHostEntity(entityId: string): Promise<EntityMa
   if (!person) throw new Error("You must be signed in to manage your entities.");
 
   await setDefaultHostEntityForPerson({ personId: person._id, entityId });
+  return getMyEntityManagement();
+}
+
+/**
+ * Create a community entity (a club, social enterprise, or other group the
+ * person runs themselves) and join it as founder. The one in-app path to a
+ * second host entity — an `organization` entity still only ever arrives via
+ * a WorkOS org invite (read-only here). Returns the fresh management view so
+ * the new entity shows up immediately, including in the create-event host
+ * picker, which reads the same underlying membership.
+ */
+export async function createMyCommunityEntity(input: {
+  name: string;
+  description?: string | null;
+}): Promise<EntityManagement> {
+  const person = await resolveActingPerson();
+  if (!person) throw new Error("You must be signed in to create a community.");
+
+  await createCommunityEntityForPerson({
+    personId: person._id,
+    name: input.name,
+    description: input.description ?? null,
+  });
   return getMyEntityManagement();
 }

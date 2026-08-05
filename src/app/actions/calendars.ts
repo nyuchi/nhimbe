@@ -173,7 +173,8 @@ export interface MyCalendarSummary {
 export async function getMyCalendarsAction(): Promise<MyCalendarSummary[]> {
   const person = await resolveActingPerson();
   if (!person) return [];
-  const docs = await listCalendarsByOwner(person._id);
+  const hostEntities = await listHostEntitiesForPerson(person._id);
+  const docs = await listCalendarsByOwner(person._id, hostEntities.map((e) => e._id));
   return docs.map((d) => ({ id: d._id, name: d.name }));
 }
 
@@ -218,7 +219,8 @@ function toListItem(d: {
 export async function getMyOwnedCalendarsAction(): Promise<CalendarListItem[]> {
   const person = await resolveActingPerson();
   if (!person) return [];
-  const docs = await listCalendarsByOwner(person._id);
+  const hostEntities = await listHostEntitiesForPerson(person._id);
+  const docs = await listCalendarsByOwner(person._id, hostEntities.map((e) => e._id));
   return docs.map(toListItem);
 }
 

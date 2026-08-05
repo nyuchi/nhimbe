@@ -51,9 +51,11 @@ import {
   followCalendar,
   unfollowCalendar,
   attachEventToCalendar,
+  detachEventFromCalendar,
   updateCalendar,
   archiveCalendar,
   listFollowedCalendars,
+  listCalendarsByOwner,
   type CreateCalendarInput,
   type FollowCalendarInput,
 } from "./calendars";
@@ -368,5 +370,44 @@ describe("attachEventToCalendar", () => {
     expect(incUpdate.$inc).toEqual({ eventCount: 1 });
     expect(decFilter).toEqual({ _id: "cal-old", eventCount: { $gt: 0 } });
     expect(decUpdate.$inc).toEqual({ eventCount: -1 });
+  });
+});
+
+describe("detachEventFromCalendar", () => {
+  it("clears calendarId and decrements the old calendar's eventCount", async () => {
+    events.findOneAndUpdate.mockResolvedValueOnce({ _id: "event-1", calendarId: "cal-1" });
+
+    await detachEventFromCalendar("event-1");
+
+    const [filter, update] = events.findOneAndUpdate.mock.calls[0];
+    expect(filter).toEqual({ _id: "event-1", calendarId: { $ne: null } });
+    expect((update.$set as Record<string, unknown>).calendarId).toBeNull();
+    expect(calendars.updateOne).toHaveBeenCalledTimes(1);
+    const [decFilter, decUpdate] = calendars.updateOne.mock.calls[0];
+    expect(decFilter).toEqual({ _id: "cal-1", eventCount: { $gt: 0 } });
+    expect(decUpdate.$inc).toEqual({ eventCount: -1 });
+  });
+
+  it("is a no-op when the event isn't on a calendar", async () => {
+    events.findOneAndUpdate.mockResolvedValueOnce(null);
+    await detachEventFromCalendar("event-1");
+    expect(calendars.updateOne).not.toHaveBeenCalled();
+  });
+});
+
+describe("listCalendarsByOwner", () => {
+  it("filters by personal ownership alone when no host entity ids are given", async () => {
+    calendars.find.mockReturnValue(cursor([]));
+    await listCalendarsByOwner("person-1");
+    expect(calendars.find).toHaveBeenCalledWith({ ownerPersonId: "person-1", isActive: true });
+  });
+
+  it("also matches calendars owned by any given host entity", async () => {
+    calendars.find.mockReturnValue(cursor([]));
+    await listCalendarsByOwner("person-1", ["entity-a", "entity-b"]);
+    expect(calendars.find).toHaveBeenCalledWith({
+      isActive: true,
+      $or: [{ ownerPersonId: "person-1" }, { ownerEntityId: { $in: ["entity-a", "entity-b"] } }],
+    });
   });
 });
