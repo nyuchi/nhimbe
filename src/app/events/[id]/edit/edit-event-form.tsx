@@ -89,6 +89,7 @@ export function EditEventForm({ event }: EditEventFormProps) {
   const [selectedTimezone, setSelectedTimezone] = useState<string | null>(
     !wasOnline ? event.timezone ?? null : null,
   );
+  const [placeId, setPlaceId] = useState<string | null>(!wasOnline ? event.placeId ?? null : null);
 
   const [capacity, setCapacity] = useState<number | null>(event.maximumAttendeeCapacity ?? null);
   const [isFree, setIsFree] = useState(!event.offers?.url);
@@ -200,6 +201,7 @@ export function EditEventForm({ event }: EditEventFormProps) {
         isOnline,
         venue: venue.trim(),
         streetAddress: address.trim(),
+        placeId,
         addressLocality: selectedCity?.addressLocality,
         addressCountry: selectedCity?.addressCountry,
         timezone: isOnline ? null : selectedTimezone,
@@ -369,6 +371,8 @@ export function EditEventForm({ event }: EditEventFormProps) {
         setAddress={setAddress}
         selectedCity={selectedCity}
         setSelectedCity={setSelectedCity}
+        placeId={placeId}
+        setPlaceId={setPlaceId}
         cities={cities}
         selectedTimezone={selectedTimezone}
         setSelectedTimezone={setSelectedTimezone}

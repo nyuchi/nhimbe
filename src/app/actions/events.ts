@@ -49,6 +49,15 @@ export interface CreateEventActionInput {
   streetAddress?: string;
   addressLocality?: string;
   addressCountry?: string;
+  /**
+   * The `places.places._id` behind the chosen venue, when the location picker
+   * resolved one (a catalogue hit, or a promoted OSM suggestion) — cleared by
+   * the form the moment someone hand-edits the venue/address fields, since a
+   * stale id would point at the wrong place. Never validated server-side
+   * beyond shape: it's a display/verification link, not an authorization
+   * boundary, and a bad id just makes `EventVenueCard`/Kweli lookups no-op.
+   */
+  placeId?: string | null;
   /** IANA timezone the venue resolves to (e.g. "Africa/Harare"). */
   timezone?: string | null;
   meetingUrl?: string | null;
@@ -213,7 +222,7 @@ export async function createEventForPerson(
     totalAttendeeCount: 0,
     surfaceContext: "mukoko_events",
     location,
-    placeId: null,
+    placeId: input.isOnline ? null : input.placeId?.trim() || null,
     circleId: null,
     calendarId: null,
     offers,
@@ -285,6 +294,8 @@ export interface UpdateEventInput {
   streetAddress?: string;
   addressLocality?: string;
   addressCountry?: string;
+  /** See `CreateEventActionInput.placeId`. */
+  placeId?: string | null;
   /** IANA timezone the venue resolves to (e.g. "Africa/Harare"). */
   timezone?: string | null;
   meetingUrl?: string | null;
@@ -406,6 +417,7 @@ export async function updateEventForPerson(
           },
           timezone: patch.timezone ?? undefined,
         };
+    set.placeId = patch.isOnline ? null : patch.placeId?.trim() || null;
     contentChanged = true;
   }
 

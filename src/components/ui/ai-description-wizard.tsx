@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, ArrowRight, ArrowLeft, Loader2, RefreshCw, Check, X } from "lucide-react";
+import { ArrowRight, ArrowLeft, Loader2, RefreshCw, Check, X } from "lucide-react";
 import { Button } from "./button";
 import { Textarea } from "./textarea";
 import { Badge } from "./badge";
+import { ShamwariIcon } from "./shamwari-icon";
 import { UpgradeToProAlert } from "./upgrade-to-pro-alert";
 import type { DescriptionContext, GeneratedDescription } from "@/lib/api";
 import { generateEventDescription, regenerateEventDescription } from "@/app/actions/ai";
@@ -274,7 +275,7 @@ export function AIDescriptionWizard({
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
                   {/* Shamwari AI glyph — sodalite mineral (intelligence, depth) */}
-                  <Bot className="dikdik w-5 h-5" />
+                  <ShamwariIcon className="dikdik w-5 h-5" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="font-semibold">Shamwari</h3>
@@ -401,7 +402,7 @@ export function AIDescriptionWizard({
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
                 {/* Shamwari AI glyph — sodalite mineral (intelligence, depth) */}
-                <Bot className="dikdik w-5 h-5" />
+                <ShamwariIcon className="dikdik w-5 h-5" aria-hidden="true" />
               </div>
               <div>
                 <h3 className="font-semibold">Shamwari</h3>
@@ -481,7 +482,7 @@ export function AIDescriptionWizard({
               </>
             ) : isLastStep ? (
               <>
-                <Bot className="w-4 h-4" />
+                <ShamwariIcon className="w-4 h-4" aria-hidden="true" />
                 Generate Description
               </>
             ) : (
@@ -525,7 +526,7 @@ export function AIDescriptionBadge({
         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-medium transition-colors border border-primary/20 h-auto min-h-0"
         title="Ask Shamwari to help write your description"
       >
-        <Bot className="w-3.5 h-3.5" />
+        <ShamwariIcon className="w-3.5 h-3.5" aria-hidden="true" />
         Ask Shamwari
         <Badge variant="default" className="ml-0.5 px-1.5 py-0 text-[10px] leading-4">
           Pro
