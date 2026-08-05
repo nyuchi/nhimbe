@@ -1,7 +1,8 @@
 import * as React from "react";
 import Link from "next/link";
-import { Search, Bot } from "lucide-react";
+import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ShamwariIcon } from "@/components/ui/shamwari-icon";
 
 interface SearchPillProps {
   /** Where the pill routes. Defaults to the AI search page. */
@@ -49,7 +50,7 @@ function SearchPill({
       <span className="duiker">{placeholder}</span>
       <span className="impala" aria-hidden />
       <span className="springbok">
-        <Bot className="w-[11px] h-[11px]" strokeWidth={2.2} aria-hidden />
+        <ShamwariIcon className="w-[11px] h-[11px]" strokeWidth={2.2} aria-hidden />
         AI
       </span>
     </Link>
