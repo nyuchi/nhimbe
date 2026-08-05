@@ -40,6 +40,23 @@ const VISIBILITY_OPTIONS: { value: CalendarVisibility; label: string; hint: stri
   { value: "private", label: "Private", hint: "Only you can view it" },
 ];
 
+function themeIndexFor(themeId: string | null | undefined): number {
+  const idx = themeId ? themeList.findIndex((t) => t.id === themeId) : -1;
+  return idx >= 0 ? idx : 0;
+}
+
+/** The form's baseline state — used for the initial render, re-seeding on
+ *  edit, and resetting after a successful create, so all three stay in sync. */
+function formStateFor(editing: CalendarListItem | null, initialCircleId: string | null) {
+  return {
+    name: editing?.name ?? "",
+    description: editing?.description ?? "",
+    visibility: (editing?.visibility ?? "public") as CalendarVisibility,
+    themeIndex: themeIndexFor(editing?.theme),
+    circleId: editing?.circleId ?? initialCircleId,
+  };
+}
+
 interface CalendarModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -59,17 +76,15 @@ export function CreateCalendarModal({
   onUpdated,
   initialCircleId = null,
 }: CalendarModalProps) {
-  const [name, setName] = useState(editing?.name ?? "");
-  const [description, setDescription] = useState(editing?.description ?? "");
-  const [visibility, setVisibility] = useState<CalendarVisibility>(editing?.visibility ?? "public");
-  const [selectedThemeIndex, setSelectedThemeIndex] = useState(() => {
-    const idx = editing?.theme ? themeList.findIndex((t) => t.id === editing.theme) : -1;
-    return idx >= 0 ? idx : 0;
-  });
+  const initialState = formStateFor(editing, initialCircleId);
+  const [name, setName] = useState(initialState.name);
+  const [description, setDescription] = useState(initialState.description);
+  const [visibility, setVisibility] = useState<CalendarVisibility>(initialState.visibility);
+  const [selectedThemeIndex, setSelectedThemeIndex] = useState(initialState.themeIndex);
   const [hostMode, setHostMode] = useState<HostMode>("person");
   const [hostEntityId, setHostEntityId] = useState<string | null>(null);
   const [circles, setCircles] = useState<{ id: string; name: string }[]>([]);
-  const [circleId, setCircleId] = useState<string | null>(editing?.circleId ?? initialCircleId);
+  const [circleId, setCircleId] = useState<string | null>(initialState.circleId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isEditing = editing !== null;
@@ -82,13 +97,13 @@ export function CreateCalendarModal({
   // Re-seed form state whenever a different calendar is opened for editing.
   useEffect(() => {
     if (!isOpen || !editing) return;
-    setName(editing.name);
-    setDescription(editing.description ?? "");
-    setVisibility(editing.visibility);
-    setCircleId(editing.circleId ?? null);
-    const idx = editing.theme ? themeList.findIndex((t) => t.id === editing.theme) : -1;
-    setSelectedThemeIndex(idx >= 0 ? idx : 0);
-  }, [isOpen, editing]);
+    const seeded = formStateFor(editing, initialCircleId);
+    setName(seeded.name);
+    setDescription(seeded.description);
+    setVisibility(seeded.visibility);
+    setCircleId(seeded.circleId);
+    setSelectedThemeIndex(seeded.themeIndex);
+  }, [isOpen, editing, initialCircleId]);
 
   async function handleSubmit() {
     setError(null);
@@ -119,13 +134,14 @@ export function CreateCalendarModal({
           hostEntityId,
         });
         onCreated?.(result);
-        setName("");
-        setDescription("");
-        setVisibility("public");
-        setSelectedThemeIndex(0);
+        const reset = formStateFor(null, initialCircleId);
+        setName(reset.name);
+        setDescription(reset.description);
+        setVisibility(reset.visibility);
+        setSelectedThemeIndex(reset.themeIndex);
         setHostMode("person");
         setHostEntityId(null);
-        setCircleId(initialCircleId);
+        setCircleId(reset.circleId);
       }
       onClose();
     } catch (err) {

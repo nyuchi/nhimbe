@@ -16,6 +16,17 @@ import "server-only";
  * monotonic sequence: a single `findOneAndUpdate` `$inc` claims the next
  * ordinal atomically, so two concurrent announcements cannot collide.
  *
+ * Calendars, circles, and events can each also pair with a GROUP conversation
+ * — a WhatsApp-style chat, distinct from the SYSTEM announcement channel and
+ * from a circle's persistent post stream (`circles.posts`). All four pairings
+ * (event/system, event/group, calendar/group, circle/group) share one
+ * find-or-create primitive, `ensurePairedConversation`: race-safe via an
+ * idempotent upsert — `$setOnInsert` seeds every v3.1-required field only on
+ * insert, so concurrent callers converge on one conversation without
+ * depending on a unique index (we do not own indexes on the sibling-product
+ * `campfire.*` DB) — done in a single `findOneAndUpdate` rather than a
+ * separate upsert-then-read.
+ *
  * `notifyAttendeesViaCampfire` is BEST-EFFORT AND NEVER THROWS (same contract
  * as `src/lib/email/resend.ts`): a Campfire failure is logged via the
  * `[mukoko]` observability logger and must never fail the event update that
@@ -33,6 +44,59 @@ import type { CampfireConversationDoc, CampfireMessageDoc } from "./types";
 
 const campfireLog = createLogger("campfire");
 
+type ConversationOwnerField = "eventId" | "calendarId" | "circleId";
+
+interface PairedConversationParams {
+  conversationType: string;
+  ownerField: ConversationOwnerField;
+  ownerId: string;
+  /** Becomes the conversation name on create. */
+  name: string;
+  /** The conversation creator on first use. */
+  createdByPersonId: string;
+}
+
+function buildPairedConversationDoc(params: PairedConversationParams): CampfireConversationDoc {
+  const now = new Date();
+  return {
+    _id: newId(),
+    _schemaVersion: WRITE_SCHEMA_VERSION,
+    conversationType: params.conversationType,
+    createdByPersonId: params.createdByPersonId,
+    encryptionMode: "none",
+    visibility: "private",
+    isActive: true,
+    messageCount: 0,
+    participantCount: 0,
+    [params.ownerField]: params.ownerId,
+    name: params.name,
+    mukoko: { routingSource: "nhimbe" },
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Find the conversation paired to `{ ownerField: ownerId, conversationType }`,
+ * creating it on first use in a single atomic `findOneAndUpdate` upsert.
+ */
+async function ensurePairedConversation(
+  params: PairedConversationParams & { notFoundLabel: string },
+): Promise<CampfireConversationDoc> {
+  const conversations = await campfireConversationsCollection();
+  const filter = { [params.ownerField]: params.ownerId, conversationType: params.conversationType };
+
+  const conversation = await conversations.findOneAndUpdate(
+    filter,
+    { $setOnInsert: buildPairedConversationDoc(params) },
+    { upsert: true, returnDocument: "after" },
+  );
+  if (!conversation) {
+    throw new Error(`Campfire ${params.notFoundLabel} could not be resolved.`);
+  }
+  return conversation;
+}
+
 export interface EnsureEventConversationInput {
   eventId: string;
   /** Event name — becomes the conversation name on create. */
@@ -48,24 +112,13 @@ export interface EnsureEventConversationInput {
 export function buildEventConversationDoc(
   input: EnsureEventConversationInput,
 ): CampfireConversationDoc {
-  const now = new Date();
-  return {
-    _id: newId(),
-    _schemaVersion: WRITE_SCHEMA_VERSION,
+  return buildPairedConversationDoc({
     conversationType: "system",
-    createdByPersonId: input.createdByPersonId,
-    // Server-readable system messages — announcements are not E2E content.
-    encryptionMode: "none",
-    visibility: "private",
-    isActive: true,
-    messageCount: 0,
-    participantCount: 0,
-    eventId: input.eventId,
+    ownerField: "eventId",
+    ownerId: input.eventId,
     name: input.eventName,
-    mukoko: { routingSource: "nhimbe" },
-    createdAt: now,
-    updatedAt: now,
-  };
+    createdByPersonId: input.createdByPersonId,
+  });
 }
 
 export interface SystemMessageInput {
@@ -103,36 +156,21 @@ export function buildSystemMessageDoc(input: SystemMessageInput): CampfireMessag
 
 /**
  * Find the event's paired SYSTEM conversation, creating it on first use.
- *
- * Scoped to `{ eventId, conversationType: "system" }` (M1): a future
- * live-chat conversation on the same event must never receive announcement
- * system messages. Race-safe via an idempotent upsert (M2) — `$setOnInsert`
- * seeds every v3.1-required field only when we create the row, so two
- * concurrent announcements converge on one conversation without depending on a
- * unique index (we do not own indexes on the sibling-product `campfire.*` DB).
- * The doc is read back afterwards because `updateOne` upsert does not return it.
+ * Scoped to `{ eventId, conversationType: "system" }`: a live-chat
+ * conversation on the same event (see `ensureEventChatConversation` below)
+ * must never receive announcement system messages.
  */
 export async function ensureEventConversation(
   input: EnsureEventConversationInput,
 ): Promise<CampfireConversationDoc> {
-  const conversations = await campfireConversationsCollection();
-  const filter = { eventId: input.eventId, conversationType: "system" };
-
-  // $setOnInsert carries the full validator-complete seed; on a match nothing
-  // is written and the existing system conversation is left untouched.
-  await conversations.updateOne(
-    filter,
-    { $setOnInsert: buildEventConversationDoc(input) },
-    { upsert: true },
-  );
-
-  const conversation = await conversations.findOne(filter);
-  if (!conversation) {
-    throw new Error(
-      `Campfire system conversation for event ${input.eventId} could not be resolved.`,
-    );
-  }
-  return conversation;
+  return ensurePairedConversation({
+    conversationType: "system",
+    ownerField: "eventId",
+    ownerId: input.eventId,
+    name: input.eventName,
+    createdByPersonId: input.createdByPersonId,
+    notFoundLabel: `system conversation for event ${input.eventId}`,
+  });
 }
 
 /**
@@ -177,56 +215,31 @@ export interface EnsureCalendarConversationInput {
   createdByPersonId: string;
 }
 
-/**
- * Pure builder for the calendar-paired discuss conversation. `conversationType:
- * "group"` (not "system") — this is a user-authored chat, unlike the event
- * announcement channel above.
- */
+/** Pure builder for the calendar-paired discuss conversation. */
 export function buildCalendarConversationDoc(
   input: EnsureCalendarConversationInput,
 ): CampfireConversationDoc {
-  const now = new Date();
-  return {
-    _id: newId(),
-    _schemaVersion: WRITE_SCHEMA_VERSION,
+  return buildPairedConversationDoc({
     conversationType: "group",
-    createdByPersonId: input.createdByPersonId,
-    encryptionMode: "none",
-    visibility: "private",
-    isActive: true,
-    messageCount: 0,
-    participantCount: 0,
-    calendarId: input.calendarId,
+    ownerField: "calendarId",
+    ownerId: input.calendarId,
     name: input.calendarName,
-    mukoko: { routingSource: "nhimbe" },
-    createdAt: now,
-    updatedAt: now,
-  };
+    createdByPersonId: input.createdByPersonId,
+  });
 }
 
-/**
- * Find the calendar's paired discuss conversation, creating it on first use.
- * Same race-safe upsert pattern as {@link ensureEventConversation}.
- */
+/** Find the calendar's paired discuss conversation, creating it on first use. */
 export async function ensureCalendarConversation(
   input: EnsureCalendarConversationInput,
 ): Promise<CampfireConversationDoc> {
-  const conversations = await campfireConversationsCollection();
-  const filter = { calendarId: input.calendarId, conversationType: "group" };
-
-  await conversations.updateOne(
-    filter,
-    { $setOnInsert: buildCalendarConversationDoc(input) },
-    { upsert: true },
-  );
-
-  const conversation = await conversations.findOne(filter);
-  if (!conversation) {
-    throw new Error(
-      `Campfire discuss conversation for calendar ${input.calendarId} could not be resolved.`,
-    );
-  }
-  return conversation;
+  return ensurePairedConversation({
+    conversationType: "group",
+    ownerField: "calendarId",
+    ownerId: input.calendarId,
+    name: input.calendarName,
+    createdByPersonId: input.createdByPersonId,
+    notFoundLabel: `discuss conversation for calendar ${input.calendarId}`,
+  });
 }
 
 export interface EnsureCircleConversationInput {
@@ -246,48 +259,27 @@ export interface EnsureCircleConversationInput {
 export function buildCircleConversationDoc(
   input: EnsureCircleConversationInput,
 ): CampfireConversationDoc {
-  const now = new Date();
-  return {
-    _id: newId(),
-    _schemaVersion: WRITE_SCHEMA_VERSION,
+  return buildPairedConversationDoc({
     conversationType: "group",
-    createdByPersonId: input.createdByPersonId,
-    encryptionMode: "none",
-    visibility: "private",
-    isActive: true,
-    messageCount: 0,
-    participantCount: 0,
-    circleId: input.circleId,
+    ownerField: "circleId",
+    ownerId: input.circleId,
     name: input.circleName,
-    mukoko: { routingSource: "nhimbe" },
-    createdAt: now,
-    updatedAt: now,
-  };
+    createdByPersonId: input.createdByPersonId,
+  });
 }
 
-/**
- * Find the circle's paired group chat, creating it on first use. Same
- * race-safe upsert pattern as {@link ensureEventConversation}.
- */
+/** Find the circle's paired group chat, creating it on first use. */
 export async function ensureCircleConversation(
   input: EnsureCircleConversationInput,
 ): Promise<CampfireConversationDoc> {
-  const conversations = await campfireConversationsCollection();
-  const filter = { circleId: input.circleId, conversationType: "group" };
-
-  await conversations.updateOne(
-    filter,
-    { $setOnInsert: buildCircleConversationDoc(input) },
-    { upsert: true },
-  );
-
-  const conversation = await conversations.findOne(filter);
-  if (!conversation) {
-    throw new Error(
-      `Campfire group chat for circle ${input.circleId} could not be resolved.`,
-    );
-  }
-  return conversation;
+  return ensurePairedConversation({
+    conversationType: "group",
+    ownerField: "circleId",
+    ownerId: input.circleId,
+    name: input.circleName,
+    createdByPersonId: input.createdByPersonId,
+    notFoundLabel: `group chat for circle ${input.circleId}`,
+  });
 }
 
 export interface EnsureEventChatConversationInput {
@@ -306,23 +298,13 @@ export interface EnsureEventChatConversationInput {
 export function buildEventChatConversationDoc(
   input: EnsureEventChatConversationInput,
 ): CampfireConversationDoc {
-  const now = new Date();
-  return {
-    _id: newId(),
-    _schemaVersion: WRITE_SCHEMA_VERSION,
+  return buildPairedConversationDoc({
     conversationType: "group",
-    createdByPersonId: input.createdByPersonId,
-    encryptionMode: "none",
-    visibility: "private",
-    isActive: true,
-    messageCount: 0,
-    participantCount: 0,
-    eventId: input.eventId,
+    ownerField: "eventId",
+    ownerId: input.eventId,
     name: input.eventName,
-    mukoko: { routingSource: "nhimbe" },
-    createdAt: now,
-    updatedAt: now,
-  };
+    createdByPersonId: input.createdByPersonId,
+  });
 }
 
 /**
@@ -333,22 +315,14 @@ export function buildEventChatConversationDoc(
 export async function ensureEventChatConversation(
   input: EnsureEventChatConversationInput,
 ): Promise<CampfireConversationDoc> {
-  const conversations = await campfireConversationsCollection();
-  const filter = { eventId: input.eventId, conversationType: "group" };
-
-  await conversations.updateOne(
-    filter,
-    { $setOnInsert: buildEventChatConversationDoc(input) },
-    { upsert: true },
-  );
-
-  const conversation = await conversations.findOne(filter);
-  if (!conversation) {
-    throw new Error(
-      `Campfire group chat for event ${input.eventId} could not be resolved.`,
-    );
-  }
-  return conversation;
+  return ensurePairedConversation({
+    conversationType: "group",
+    ownerField: "eventId",
+    ownerId: input.eventId,
+    name: input.eventName,
+    createdByPersonId: input.createdByPersonId,
+    notFoundLabel: `group chat for event ${input.eventId}`,
+  });
 }
 
 // ── best-effort, never-throw entry point (the write-through hook) ────────

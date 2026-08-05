@@ -7,7 +7,6 @@ vi.mock("server-only", () => ({}));
 const conversations = {
   findOne: vi.fn(),
   insertOne: vi.fn(),
-  updateOne: vi.fn(),
   findOneAndUpdate: vi.fn(),
 };
 const messages = { insertOne: vi.fn() };
@@ -91,7 +90,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   conversations.findOne.mockResolvedValue(null);
   conversations.insertOne.mockResolvedValue({ acknowledged: true });
-  conversations.updateOne.mockResolvedValue({ acknowledged: true, upsertedCount: 1 });
   conversations.findOneAndUpdate.mockResolvedValue({ _id: "conv-1", messageCount: 1 });
   messages.insertOne.mockResolvedValue({ acknowledged: true });
 });
@@ -156,9 +154,9 @@ describe("buildSystemMessageDoc", () => {
   });
 });
 
-describe("ensureEventConversation (find-or-create, upsert)", () => {
+describe("ensureEventConversation (find-or-create, atomic upsert)", () => {
   it("scopes the find-or-create to the SYSTEM conversation only (M1)", async () => {
-    conversations.findOne.mockResolvedValueOnce({
+    conversations.findOneAndUpdate.mockResolvedValueOnce({
       _id: "conv-1",
       eventId: "event-1",
       conversationType: "system",
@@ -166,46 +164,43 @@ describe("ensureEventConversation (find-or-create, upsert)", () => {
 
     await ensureEventConversation(conversationInput);
 
-    // Both the upsert filter and the read-back are scoped to the system
-    // conversation, so a live-chat conversation on the same event is untouched.
-    const [filter, update, options] = conversations.updateOne.mock.calls[0];
+    // Scoped to the system conversation, so a live-chat conversation on the
+    // same event is never touched by this upsert.
+    const [filter, update, options] = conversations.findOneAndUpdate.mock.calls[0];
     expect(filter).toEqual({ eventId: "event-1", conversationType: "system" });
-    expect(options).toEqual({ upsert: true });
+    expect(options).toEqual({ upsert: true, returnDocument: "after" });
     expect(update.$setOnInsert.conversationType).toBe("system");
     expect(update.$setOnInsert.eventId).toBe("event-1");
-    expect(conversations.findOne).toHaveBeenCalledWith({
-      eventId: "event-1",
-      conversationType: "system",
-    });
-    // Never a bare findOne/insertOne that could catch a live-chat conversation.
+    // Never a bare insertOne that could race a live-chat conversation.
     expect(conversations.insertOne).not.toHaveBeenCalled();
   });
 
   it("seeds every validator-required field only on insert ($setOnInsert)", async () => {
-    conversations.findOne.mockResolvedValueOnce({ _id: "conv-1", conversationType: "system" });
-
     await ensureEventConversation(conversationInput);
 
-    const seed = conversations.updateOne.mock.calls[0][1].$setOnInsert as Record<string, unknown>;
+    const seed = conversations.findOneAndUpdate.mock.calls[0][1].$setOnInsert as Record<
+      string,
+      unknown
+    >;
     for (const field of CONVERSATION_REQUIRED_FIELDS) {
       expect(seed, `seed missing required field ${field}`).toHaveProperty(field);
       expect(seed[field], `seed field ${field} must not be null`).not.toBeNull();
     }
   });
 
-  it("returns the read-back conversation (upsert does not return the doc)", async () => {
+  it("returns the upserted/matched conversation directly (single atomic call)", async () => {
     const winner = { _id: "conv-winner", eventId: "event-1", conversationType: "system" };
-    conversations.findOne.mockResolvedValueOnce(winner);
+    conversations.findOneAndUpdate.mockResolvedValueOnce(winner);
 
     const conversation = await ensureEventConversation(conversationInput);
     expect(conversation).toBe(winner);
   });
 
   it("is idempotent under a simulated race — both callers converge on one row", async () => {
-    // Two concurrent announcements: each upserts (one inserts, one no-ops), and
-    // both read back the SAME winning system conversation.
+    // Two concurrent announcements: the atomic upsert guarantees both resolve
+    // to the same winning system conversation.
     const winner = { _id: "conv-winner", eventId: "event-1", conversationType: "system" };
-    conversations.findOne.mockResolvedValue(winner);
+    conversations.findOneAndUpdate.mockResolvedValue(winner);
 
     const [a, b] = await Promise.all([
       ensureEventConversation(conversationInput),
@@ -214,15 +209,15 @@ describe("ensureEventConversation (find-or-create, upsert)", () => {
 
     expect(a).toBe(winner);
     expect(b).toBe(winner);
-    expect(conversations.updateOne).toHaveBeenCalledTimes(2);
-    for (const call of conversations.updateOne.mock.calls) {
-      expect(call[2]).toEqual({ upsert: true });
+    expect(conversations.findOneAndUpdate).toHaveBeenCalledTimes(2);
+    for (const call of conversations.findOneAndUpdate.mock.calls) {
+      expect(call[2]).toEqual({ upsert: true, returnDocument: "after" });
     }
     expect(conversations.insertOne).not.toHaveBeenCalled();
   });
 
   it("throws when the conversation cannot be resolved after upsert", async () => {
-    conversations.findOne.mockResolvedValueOnce(null);
+    conversations.findOneAndUpdate.mockResolvedValueOnce(null);
     await expect(ensureEventConversation(conversationInput)).rejects.toThrow(/could not be resolved/);
   });
 });
@@ -255,9 +250,9 @@ describe("buildCalendarConversationDoc", () => {
   });
 });
 
-describe("ensureCalendarConversation (find-or-create, upsert)", () => {
+describe("ensureCalendarConversation (find-or-create, atomic upsert)", () => {
   it("scopes the find-or-create to the calendar's GROUP conversation only", async () => {
-    conversations.findOne.mockResolvedValueOnce({
+    conversations.findOneAndUpdate.mockResolvedValueOnce({
       _id: "conv-1",
       calendarId: "calendar-1",
       conversationType: "group",
@@ -265,23 +260,23 @@ describe("ensureCalendarConversation (find-or-create, upsert)", () => {
 
     await ensureCalendarConversation(calendarConversationInput);
 
-    const [filter, update, options] = conversations.updateOne.mock.calls[0];
+    const [filter, update, options] = conversations.findOneAndUpdate.mock.calls[0];
     expect(filter).toEqual({ calendarId: "calendar-1", conversationType: "group" });
-    expect(options).toEqual({ upsert: true });
+    expect(options).toEqual({ upsert: true, returnDocument: "after" });
     expect(update.$setOnInsert.conversationType).toBe("group");
     expect(update.$setOnInsert.calendarId).toBe("calendar-1");
   });
 
-  it("returns the read-back conversation (upsert does not return the doc)", async () => {
+  it("returns the upserted/matched conversation directly", async () => {
     const winner = { _id: "conv-winner", calendarId: "calendar-1", conversationType: "group" };
-    conversations.findOne.mockResolvedValueOnce(winner);
+    conversations.findOneAndUpdate.mockResolvedValueOnce(winner);
 
     const conversation = await ensureCalendarConversation(calendarConversationInput);
     expect(conversation).toBe(winner);
   });
 
   it("throws when the conversation cannot be resolved after upsert", async () => {
-    conversations.findOne.mockResolvedValueOnce(null);
+    conversations.findOneAndUpdate.mockResolvedValueOnce(null);
     await expect(ensureCalendarConversation(calendarConversationInput)).rejects.toThrow(
       /could not be resolved/,
     );
@@ -315,9 +310,9 @@ describe("buildCircleConversationDoc", () => {
   });
 });
 
-describe("ensureCircleConversation (find-or-create, upsert)", () => {
+describe("ensureCircleConversation (find-or-create, atomic upsert)", () => {
   it("scopes the find-or-create to the circle's GROUP conversation only", async () => {
-    conversations.findOne.mockResolvedValueOnce({
+    conversations.findOneAndUpdate.mockResolvedValueOnce({
       _id: "conv-1",
       circleId: "circle-1",
       conversationType: "group",
@@ -325,23 +320,23 @@ describe("ensureCircleConversation (find-or-create, upsert)", () => {
 
     await ensureCircleConversation(circleConversationInput);
 
-    const [filter, update, options] = conversations.updateOne.mock.calls[0];
+    const [filter, update, options] = conversations.findOneAndUpdate.mock.calls[0];
     expect(filter).toEqual({ circleId: "circle-1", conversationType: "group" });
-    expect(options).toEqual({ upsert: true });
+    expect(options).toEqual({ upsert: true, returnDocument: "after" });
     expect(update.$setOnInsert.conversationType).toBe("group");
     expect(update.$setOnInsert.circleId).toBe("circle-1");
   });
 
-  it("returns the read-back conversation (upsert does not return the doc)", async () => {
+  it("returns the upserted/matched conversation directly", async () => {
     const winner = { _id: "conv-winner", circleId: "circle-1", conversationType: "group" };
-    conversations.findOne.mockResolvedValueOnce(winner);
+    conversations.findOneAndUpdate.mockResolvedValueOnce(winner);
 
     const conversation = await ensureCircleConversation(circleConversationInput);
     expect(conversation).toBe(winner);
   });
 
   it("throws when the conversation cannot be resolved after upsert", async () => {
-    conversations.findOne.mockResolvedValueOnce(null);
+    conversations.findOneAndUpdate.mockResolvedValueOnce(null);
     await expect(ensureCircleConversation(circleConversationInput)).rejects.toThrow(
       /could not be resolved/,
     );
@@ -374,9 +369,9 @@ describe("buildEventChatConversationDoc", () => {
   });
 });
 
-describe("ensureEventChatConversation (find-or-create, upsert)", () => {
+describe("ensureEventChatConversation (find-or-create, atomic upsert)", () => {
   it("scopes the find-or-create to the event's GROUP conversation, never the SYSTEM one", async () => {
-    conversations.findOne.mockResolvedValueOnce({
+    conversations.findOneAndUpdate.mockResolvedValueOnce({
       _id: "conv-1",
       eventId: "event-1",
       conversationType: "group",
@@ -384,22 +379,22 @@ describe("ensureEventChatConversation (find-or-create, upsert)", () => {
 
     await ensureEventChatConversation(eventChatConversationInput);
 
-    const [filter, update, options] = conversations.updateOne.mock.calls[0];
+    const [filter, update, options] = conversations.findOneAndUpdate.mock.calls[0];
     expect(filter).toEqual({ eventId: "event-1", conversationType: "group" });
-    expect(options).toEqual({ upsert: true });
+    expect(options).toEqual({ upsert: true, returnDocument: "after" });
     expect(update.$setOnInsert.conversationType).toBe("group");
   });
 
-  it("returns the read-back conversation (upsert does not return the doc)", async () => {
+  it("returns the upserted/matched conversation directly", async () => {
     const winner = { _id: "conv-winner", eventId: "event-1", conversationType: "group" };
-    conversations.findOne.mockResolvedValueOnce(winner);
+    conversations.findOneAndUpdate.mockResolvedValueOnce(winner);
 
     const conversation = await ensureEventChatConversation(eventChatConversationInput);
     expect(conversation).toBe(winner);
   });
 
   it("throws when the conversation cannot be resolved after upsert", async () => {
-    conversations.findOne.mockResolvedValueOnce(null);
+    conversations.findOneAndUpdate.mockResolvedValueOnce(null);
     await expect(ensureEventChatConversation(eventChatConversationInput)).rejects.toThrow(
       /could not be resolved/,
     );
@@ -443,12 +438,9 @@ describe("appendSystemMessage (sequence)", () => {
 
 describe("notifyAttendeesViaCampfire (the write-through hook)", () => {
   it("routes an announcement end to end: find-or-create, then system message", async () => {
-    conversations.findOne.mockResolvedValueOnce({
-      _id: "conv-1",
-      eventId: "event-1",
-      conversationType: "system",
-    });
-    conversations.findOneAndUpdate.mockResolvedValueOnce({ _id: "conv-1", messageCount: 3 });
+    conversations.findOneAndUpdate
+      .mockResolvedValueOnce({ _id: "conv-1", eventId: "event-1", conversationType: "system" })
+      .mockResolvedValueOnce({ _id: "conv-1", messageCount: 3 });
 
     await notifyAttendeesViaCampfire(notifyInput);
 
@@ -463,7 +455,7 @@ describe("notifyAttendeesViaCampfire (the write-through hook)", () => {
   });
 
   it("never throws when the upsert fails", async () => {
-    conversations.updateOne.mockRejectedValueOnce(new Error("campfire down"));
+    conversations.findOneAndUpdate.mockRejectedValueOnce(new Error("campfire down"));
 
     await expect(notifyAttendeesViaCampfire(notifyInput)).resolves.toBeUndefined();
     expect(messages.insertOne).not.toHaveBeenCalled();
@@ -474,11 +466,9 @@ describe("notifyAttendeesViaCampfire (the write-through hook)", () => {
   });
 
   it("never throws when the message insert fails", async () => {
-    conversations.findOne.mockResolvedValueOnce({
-      _id: "conv-1",
-      eventId: "event-1",
-      conversationType: "system",
-    });
+    conversations.findOneAndUpdate
+      .mockResolvedValueOnce({ _id: "conv-1", eventId: "event-1", conversationType: "system" })
+      .mockResolvedValueOnce({ _id: "conv-1", messageCount: 1 });
     messages.insertOne.mockRejectedValueOnce(new Error("validator rejected"));
 
     await expect(notifyAttendeesViaCampfire(notifyInput)).resolves.toBeUndefined();

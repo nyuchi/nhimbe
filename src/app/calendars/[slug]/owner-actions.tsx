@@ -41,17 +41,19 @@ export function OwnerActions({ calendar }: { calendar: CalendarViewData }) {
     <div className="flex items-center gap-2">
       <Button
         variant="ghost"
+        size="lg"
         onClick={() => setIsEditOpen(true)}
-        className="inline-flex h-10 items-center gap-2 rounded-full bg-foreground/5 px-4 text-sm font-semibold text-foreground hover:bg-foreground/10"
+        className="bg-foreground/5 px-4 font-semibold text-foreground hover:bg-foreground/10"
       >
         <Pencil className="size-4" aria-hidden />
         Edit
       </Button>
       <Button
         variant="ghost"
+        size="lg"
         onClick={handleArchive}
         disabled={isArchiving}
-        className="inline-flex h-10 items-center gap-2 rounded-full bg-foreground/5 px-4 text-sm font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-60"
+        className="bg-foreground/5 px-4 font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-60"
       >
         <Archive className="size-4" aria-hidden />
         {isArchiving ? "Archiving…" : "Archive"}
