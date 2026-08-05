@@ -40,6 +40,9 @@ interface LocationModalProps {
   /** IANA timezone the venue resolves to — drives what "3pm" means on submit. */
   selectedTimezone: string | null;
   setSelectedTimezone: (value: string | null) => void;
+  /** The resolved `places.places._id` behind the venue, when there is one. */
+  placeId: string | null;
+  setPlaceId: (value: string | null) => void;
 }
 
 export function LocationModal({
@@ -62,6 +65,8 @@ export function LocationModal({
   cities,
   selectedTimezone,
   setSelectedTimezone,
+  placeId,
+  setPlaceId,
 }: LocationModalProps) {
   return (
     <ResponsiveModal open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }} title="Event Location">
@@ -158,16 +163,20 @@ export function LocationModal({
                   } else {
                     setSelectedTimezone(null);
                   }
-                  // Promote a confirmed OSM/Nominatim pick into the places
-                  // catalogue so the next search for this venue hits the DB
-                  // tier first — best-effort, fire-and-forget.
-                  if (
-                    components.source === "osm" &&
+                  if (components.source === "db") {
+                    // Already a real places.places._id.
+                    setPlaceId(components.placeId);
+                  } else if (
                     components.osmType &&
                     components.osmId !== undefined &&
                     components.latitude !== undefined &&
                     components.longitude !== undefined
                   ) {
+                    // The suggestion's placeId is a synthetic "osm:type/id"
+                    // placeholder until promoted — swap it for the real
+                    // places.places._id once ensurePlaceFromOsmSuggestion
+                    // creates (or finds) the catalogue row.
+                    setPlaceId(null);
                     ensurePlaceFromOsmSuggestion({
                       name: components.venue,
                       address: components.address,
@@ -177,11 +186,16 @@ export function LocationModal({
                       longitude: components.longitude,
                       osmType: components.osmType,
                       osmId: components.osmId,
-                    });
+                    }).then((resolvedId) => setPlaceId(resolvedId));
+                  } else {
+                    setPlaceId(null);
                   }
                 }}
                 placeholder="Search for a venue or address..."
               />
+              {placeId && (
+                <p className="text-xs text-text-tertiary mt-2">Matched to the places catalogue</p>
+              )}
             </div>
 
             {/* Divider */}
@@ -198,7 +212,7 @@ export function LocationModal({
                 inputMode="text"
                 autoComplete="organization"
                 value={venue}
-                onChange={(e) => setVenue(e.target.value)}
+                onChange={(e) => { setVenue(e.target.value); setPlaceId(null); }}
                 placeholder="e.g., Rainbow Towers Hotel"
                 className="w-full px-4 py-3 bg-surface text-foreground placeholder:text-text-tertiary rounded-xl border border-border outline-none focus-visible:ring-2 focus-visible:ring-ring/50 text-base"
               />
@@ -210,7 +224,7 @@ export function LocationModal({
                 inputMode="text"
                 autoComplete="street-address"
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                onChange={(e) => { setAddress(e.target.value); setPlaceId(null); }}
                 placeholder="Street address"
                 className="w-full px-4 py-3 bg-surface text-foreground placeholder:text-text-tertiary rounded-xl border border-border outline-none focus-visible:ring-2 focus-visible:ring-ring/50 text-base"
               />

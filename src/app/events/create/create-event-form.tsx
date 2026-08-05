@@ -161,6 +161,8 @@ export default function CreateEventForm() {
   const [address, setAddress] = useState("");
   const [addressSearch, setAddressSearch] = useState("");
   const [selectedCity, setSelectedCity] = useState<{ addressLocality: string; addressCountry: string } | null>(null);
+  // The places.places._id behind the venue, when the picker resolved one.
+  const [placeId, setPlaceId] = useState<string | null>(null);
   // Resolved from the venue when a location is picked (see LocationModal); an
   // online event or one with no location yet falls back to the organiser's
   // own browser timezone.
@@ -366,6 +368,7 @@ export default function CreateEventForm() {
         isOnline,
         venue: venue.trim(),
         streetAddress: address.trim(),
+        placeId,
         addressLocality: selectedCity?.addressLocality,
         addressCountry: selectedCity?.addressCountry,
         timezone: isOnline ? null : selectedTimezone,
@@ -614,7 +617,7 @@ export default function CreateEventForm() {
 
       {/* Modals */}
       <DateTimeModal isOpen={showDateModal} onClose={() => { setShowDateModal(false); touchForm(); }} eventDate={eventDate} setEventDate={setEventDate} startTime={startTime} setStartTime={setStartTime} endTime={endTime} setEndTime={setEndTime} />
-      <LocationModal isOpen={showLocationModal} onClose={() => { setShowLocationModal(false); touchForm(); }} isOnline={isOnline} setIsOnline={setIsOnline} meetingPlatform={meetingPlatform} setMeetingPlatform={setMeetingPlatform} meetingUrl={meetingUrl} setMeetingUrl={setMeetingUrl} addressSearch={addressSearch} setAddressSearch={setAddressSearch} venue={venue} setVenue={setVenue} address={address} setAddress={setAddress} selectedCity={selectedCity} setSelectedCity={setSelectedCity} cities={cities} selectedTimezone={selectedTimezone} setSelectedTimezone={setSelectedTimezone} />
+      <LocationModal isOpen={showLocationModal} onClose={() => { setShowLocationModal(false); touchForm(); }} isOnline={isOnline} setIsOnline={setIsOnline} meetingPlatform={meetingPlatform} setMeetingPlatform={setMeetingPlatform} meetingUrl={meetingUrl} setMeetingUrl={setMeetingUrl} addressSearch={addressSearch} setAddressSearch={setAddressSearch} venue={venue} setVenue={setVenue} address={address} setAddress={setAddress} selectedCity={selectedCity} setSelectedCity={setSelectedCity} cities={cities} selectedTimezone={selectedTimezone} setSelectedTimezone={setSelectedTimezone} placeId={placeId} setPlaceId={setPlaceId} />
       <CategoryModal isOpen={showCategoryModal} onClose={() => { setShowCategoryModal(false); touchForm(); }} categories={categories} category={category} setCategory={setCategory} tags={tags} tagInput={tagInput} setTagInput={setTagInput} addTag={addTag} removeTag={removeTag} />
       <DescriptionModal isOpen={showDescriptionModal} onClose={() => { setShowDescriptionModal(false); touchForm(); }} description={description} setDescription={setDescription} eventName={eventName} category={category} isOnline={isOnline} />
       <TicketingModal isOpen={showPriceModal} onClose={() => { setShowPriceModal(false); touchForm(); }} isFree={isFree} setIsFree={setIsFree} ticketUrl={ticketUrl} setTicketUrl={setTicketUrl} />

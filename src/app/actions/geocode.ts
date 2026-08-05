@@ -278,6 +278,43 @@ async function searchNominatim(query: string, limit: number): Promise<GeocodeSug
   }
 }
 
+const FUNDI_INGESTION_URL = process.env.FUNDI_INGESTION_URL ?? "https://fundi-ingestion.nyuchi.dev";
+const SEARCH_MISS_RADIUS_METERS = 3000;
+
+/**
+ * Report a places-catalogue miss to the fundi-ingestion worker so it bulk-seeds
+ * the surrounding area from OSM/Overpass for next time (richer enrichment —
+ * Plus Codes, what3words, Wikidata, AI descriptions — than nhimbe's own
+ * single-pick promotion below can do). Fire-and-forget in effect: awaited so a
+ * serverless invocation doesn't get torn down mid-request, but every failure
+ * (missing token, network, non-2xx) is swallowed — a reporting hiccup must
+ * never affect the address search the caller actually asked for.
+ */
+async function reportSearchMiss(query: string, near: GeocodeSuggestion): Promise<void> {
+  const token = process.env.FUNDI_API_TOKEN;
+  if (!token) return;
+  try {
+    await fetch(`${FUNDI_INGESTION_URL}/tasks`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        region: {
+          kind: "point_radius",
+          center: [near.longitude, near.latitude],
+          radiusMeters: SEARCH_MISS_RADIUS_METERS,
+        },
+        categories: "all",
+        source: { kind: "search_miss", surface: "geocode-address", query },
+      }),
+    });
+  } catch (e) {
+    console.error("[mukoko] reportSearchMiss failed", e);
+  }
+}
+
 /**
  * Geocode a free-text address query.
  *
@@ -299,7 +336,9 @@ export async function geocodeAddress(
   const dbHits = await searchPlacesDb(q, limit);
   if (dbHits.length > 0) return dbHits;
 
-  return searchNominatim(q, limit);
+  const osmHits = await searchNominatim(q, limit);
+  if (osmHits.length > 0) await reportSearchMiss(q, osmHits[0]);
+  return osmHits;
 }
 
 export interface ReverseGeocodeResult {
