@@ -32,12 +32,15 @@ export interface PlatformSettings {
   /** Free-plan daily cap on notifying blasts per event. 0 = unlimited. */
   freeBlastsPerDayPerEvent: number;
   /**
-   * Free-plan daily cap on bearer-authenticated API writes (POST/PATCH
-   * /api/events*, the surface the Mukoko Events MCP calls) per caller.
-   * 0 = unlimited. Google-Maps-style: a generous free quota, then
-   * throttled — Mukoko Pro removes the ceiling (see enforceApiRateLimit).
+   * Daily caps on bearer-authenticated API writes (POST/PATCH
+   * /api/events*, the surface the Mukoko Events MCP calls) per caller,
+   * tiered like the Claude API / Google Maps Platform: free and pro both
+   * have a real ceiling — pro is materially higher, never unlimited — and
+   * the custom tier (usage-based billing, set out-of-band) isn't enforced
+   * here at all. 0 = unlimited for that tier. See enforceApiRateLimit.
    */
   freeApiWritesPerDayPerCaller: number;
+  proApiWritesPerDayPerCaller: number;
 }
 
 interface PlatformSettingsDoc extends BaseDoc, PlatformSettings {}
@@ -58,6 +61,7 @@ export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   allowedDomains: "",
   freeBlastsPerDayPerEvent: 1,
   freeApiWritesPerDayPerCaller: 500,
+  proApiWritesPerDayPerCaller: 5_000,
 };
 
 /** Coerce/clamp a partial, possibly-untrusted settings bag onto the defaults. */
@@ -84,6 +88,10 @@ export function normalizePlatformSettings(raw: Partial<PlatformSettings> | null 
     freeApiWritesPerDayPerCaller: nonNegInt(
       r.freeApiWritesPerDayPerCaller,
       d.freeApiWritesPerDayPerCaller,
+    ),
+    proApiWritesPerDayPerCaller: nonNegInt(
+      r.proApiWritesPerDayPerCaller,
+      d.proApiWritesPerDayPerCaller,
     ),
   };
 }

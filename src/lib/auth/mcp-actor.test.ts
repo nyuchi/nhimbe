@@ -20,8 +20,8 @@ vi.mock("@/lib/mongo/usage-limits", () => ({
 const getPlatformSettings = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/mongo/settings", () => ({ getPlatformSettings }));
 
-const isMukokoPro = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/mongo/entitlements", () => ({ isMukokoPro }));
+const getMukokoPlan = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/mongo/entitlements", () => ({ getMukokoPlan }));
 
 import { resolveActorFromBearer, ActorError } from "./mcp-actor";
 
@@ -31,9 +31,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   verifyBearer.mockResolvedValue({ workosUserId: "workos-1" });
   persons.findOne.mockResolvedValue(person);
-  getPlatformSettings.mockResolvedValue({ freeApiWritesPerDayPerCaller: 500 });
+  getPlatformSettings.mockResolvedValue({
+    freeApiWritesPerDayPerCaller: 500,
+    proApiWritesPerDayPerCaller: 5000,
+  });
   consumeDailyUsage.mockResolvedValue(1);
-  isMukokoPro.mockReturnValue(false);
+  getMukokoPlan.mockReturnValue("free");
 });
 
 describe("resolveActorFromBearer", () => {
@@ -47,8 +50,18 @@ describe("resolveActorFromBearer", () => {
     });
   });
 
-  it("skips the quota check entirely for a Mukoko Pro caller", async () => {
-    isMukokoPro.mockReturnValueOnce(true);
+  it("checks the higher pro quota for a pro caller instead of skipping the check", async () => {
+    getMukokoPlan.mockReturnValueOnce("pro");
+    await resolveActorFromBearer("Bearer token");
+    expect(consumeDailyUsage).toHaveBeenCalledWith({
+      subjectId: "person-1",
+      counterType: "apiWrite",
+      limit: 5000,
+    });
+  });
+
+  it("skips the quota check entirely for a custom (usage-based billing) caller", async () => {
+    getMukokoPlan.mockReturnValueOnce("custom");
     await resolveActorFromBearer("Bearer token");
     expect(consumeDailyUsage).not.toHaveBeenCalled();
   });

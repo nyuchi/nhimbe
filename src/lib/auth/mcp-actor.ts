@@ -4,7 +4,7 @@ import { personsCollection } from "@/lib/mongo/databases";
 import { verifyBearer } from "@/lib/auth/workos-token";
 import { consumeDailyUsage, UsageLimitExceededError } from "@/lib/mongo/usage-limits";
 import { getPlatformSettings } from "@/lib/mongo/settings";
-import { isMukokoPro } from "@/lib/mongo/entitlements";
+import { getMukokoPlan } from "@/lib/mongo/entitlements";
 import type { PersonDoc } from "@/lib/mongo/types";
 
 /**
@@ -53,20 +53,24 @@ export async function resolveActorFromBearer(authorization: string | null): Prom
 }
 
 /**
- * Google-Maps-style metering for the bearer-authenticated write surface (the
- * Mukoko Events MCP's create/update tools): a generous free daily quota per
- * caller, then throttled with a 429 — never a silent/permanent block. Mukoko
- * Pro removes the daily ceiling entirely (a per-app plan wouldn't fit here —
- * this is the cross-app entitlement, same as the Shamwari gate).
+ * Tiered metering for the bearer-authenticated write surface (the Mukoko
+ * Events MCP's create/update tools), mirroring the Claude API / Google Maps
+ * Platform shape: free and pro both carry a real daily ceiling — pro is
+ * materially higher, never unlimited — and custom (usage-based billing,
+ * metered/invoiced outside this repo) isn't capped here at all. Once past
+ * the ceiling the caller gets a 429, never a silent/permanent block.
  */
 async function enforceApiRateLimit(person: PersonDoc): Promise<void> {
-  if (isMukokoPro(person)) return;
-  const { freeApiWritesPerDayPerCaller } = await getPlatformSettings();
+  const plan = getMukokoPlan(person);
+  if (plan === "custom") return;
+
+  const settings = await getPlatformSettings();
+  const limit = plan === "pro" ? settings.proApiWritesPerDayPerCaller : settings.freeApiWritesPerDayPerCaller;
   try {
     await consumeDailyUsage({
       subjectId: person._id,
       counterType: "apiWrite",
-      limit: freeApiWritesPerDayPerCaller,
+      limit,
     });
   } catch (err) {
     if (err instanceof UsageLimitExceededError) {

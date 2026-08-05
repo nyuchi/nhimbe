@@ -288,15 +288,16 @@ export interface PersonDoc extends BaseDoc {
    * Mukoko-platform extras (validator-permitted, additive).
    * - `notifications.eventUpdates` defaults ON (opt-out): absent/undefined
    *   means subscribed.
-   * - `proPlan` is the cross-app Mukoko Pro subscription flag — set by a
-   *   future Mukoko-wide billing service (not owned by nhimbe), read by
-   *   every Mukoko app the same way. See `src/lib/mongo/entitlements.ts`.
+   * - `plan` is the cross-app Mukoko subscription tier — set by a future
+   *   Mukoko-wide billing service (not owned by nhimbe), read by every
+   *   Mukoko app the same way. Absent/undefined means "free". See
+   *   `src/lib/mongo/entitlements.ts`.
    */
   mukoko?: {
     notifications?: {
       eventUpdates?: boolean;
     };
-    proPlan?: boolean;
+    plan?: "free" | "pro" | "custom";
   } | null;
   bundu?: {
     defaultFamilyEntityId?: string;

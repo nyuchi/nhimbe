@@ -41,6 +41,16 @@ describe("normalizePlatformSettings", () => {
     expect(normalizePlatformSettings({ freeBlastsPerDayPerEvent: 0 }).freeBlastsPerDayPerEvent).toBe(0);
   });
 
+  it("clamps both API-write tiers independently, pro higher than free", () => {
+    const out = normalizePlatformSettings({
+      freeApiWritesPerDayPerCaller: -1,
+      proApiWritesPerDayPerCaller: 10_000,
+    });
+    expect(out.freeApiWritesPerDayPerCaller).toBe(DEFAULT_PLATFORM_SETTINGS.freeApiWritesPerDayPerCaller);
+    expect(out.proApiWritesPerDayPerCaller).toBe(10_000);
+    expect(out.proApiWritesPerDayPerCaller).toBeGreaterThan(out.freeApiWritesPerDayPerCaller);
+  });
+
   it("floors fractional numbers", () => {
     expect(normalizePlatformSettings({ maxEventsPerUser: 12.9 }).maxEventsPerUser).toBe(12);
   });
