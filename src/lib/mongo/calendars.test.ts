@@ -54,6 +54,7 @@ import {
   updateCalendar,
   archiveCalendar,
   listFollowedCalendars,
+  listCalendarsByOwner,
   type CreateCalendarInput,
   type FollowCalendarInput,
 } from "./calendars";
@@ -368,5 +369,22 @@ describe("attachEventToCalendar", () => {
     expect(incUpdate.$inc).toEqual({ eventCount: 1 });
     expect(decFilter).toEqual({ _id: "cal-old", eventCount: { $gt: 0 } });
     expect(decUpdate.$inc).toEqual({ eventCount: -1 });
+  });
+});
+
+describe("listCalendarsByOwner", () => {
+  it("filters by personal ownership alone when no host entity ids are given", async () => {
+    calendars.find.mockReturnValue(cursor([]));
+    await listCalendarsByOwner("person-1");
+    expect(calendars.find).toHaveBeenCalledWith({ ownerPersonId: "person-1", isActive: true });
+  });
+
+  it("also matches calendars owned by any given host entity", async () => {
+    calendars.find.mockReturnValue(cursor([]));
+    await listCalendarsByOwner("person-1", ["entity-a", "entity-b"]);
+    expect(calendars.find).toHaveBeenCalledWith({
+      isActive: true,
+      $or: [{ ownerPersonId: "person-1" }, { ownerEntityId: { $in: ["entity-a", "entity-b"] } }],
+    });
   });
 });

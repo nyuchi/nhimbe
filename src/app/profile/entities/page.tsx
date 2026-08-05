@@ -11,17 +11,21 @@ import {
   Home,
   Loader2,
   Pencil,
+  Plus,
   Star,
+  Users,
   X,
 } from "lucide-react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { NyuchiVerifiedBadge } from "@/components/ui/verified-badge";
 import { useToast } from "@/hooks/use-toast";
 import {
+  createMyCommunityEntity,
   getMyEntityManagement,
   renameMyHostEntity,
   setMyDefaultHostEntity,
@@ -32,6 +36,13 @@ import {
 function roleLabel(role: ManagedHostEntity["role"]): string {
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
+
+function entityTypeLabel(entityType: ManagedHostEntity["entityType"]): string {
+  if (entityType === "family") return "Personal";
+  if (entityType === "community") return "Community";
+  return "Organisation";
+}
+
 
 function EntityRow({
   entity,
@@ -48,7 +59,8 @@ function EntityRow({
   const [draft, setDraft] = useState(entity.name);
   const [saving, setSaving] = useState(false);
 
-  const Icon = entity.entityType === "family" ? Home : Building2;
+  const Icon =
+    entity.entityType === "family" ? Home : entity.entityType === "community" ? Users : Building2;
   const inputId = `entity-name-${entity.id}`;
 
   const startEdit = () => {
@@ -132,10 +144,10 @@ function EntityRow({
                 )}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-text-secondary">
-                <span>{entity.entityType === "family" ? "Personal" : "Organisation"}</span>
+                <span>{entityTypeLabel(entity.entityType)}</span>
                 <span aria-hidden="true">·</span>
                 <span>{roleLabel(entity.role)}</span>
-                {entity.entityType === "organization" && entity.memberCount != null && (
+                {entity.entityType !== "family" && entity.memberCount != null && (
                   <>
                     <span aria-hidden="true">·</span>
                     <span>
@@ -189,11 +201,81 @@ function EntityRow({
   );
 }
 
+function CreateCommunityForm({
+  onCreate,
+  onDone,
+}: {
+  onCreate: (name: string, description: string) => Promise<void>;
+  onDone: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const submit = async () => {
+    if (!name.trim() || creating) return;
+    setCreating(true);
+    try {
+      await onCreate(name.trim(), description.trim());
+      onDone();
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="bg-surface rounded-xl p-4 space-y-3">
+      <div>
+        <Label htmlFor="new-community-name" className="text-xs text-text-secondary">
+          Community name
+        </Label>
+        <Input
+          id="new-community-name"
+          value={name}
+          autoFocus
+          maxLength={120}
+          disabled={creating}
+          placeholder="e.g., Harare Runners Club"
+          onChange={(e) => setName(e.target.value)}
+        />
+      </div>
+      <div>
+        <Label htmlFor="new-community-description" className="text-xs text-text-secondary">
+          Description (optional)
+        </Label>
+        <Textarea
+          id="new-community-description"
+          value={description}
+          maxLength={500}
+          disabled={creating}
+          placeholder="What brings this group together?"
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </div>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={submit} disabled={creating || !name.trim()} className="min-h-11 gap-1">
+          {creating ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Check className="size-4" aria-hidden="true" />
+          )}
+          Create
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onDone} disabled={creating} className="min-h-11 gap-1">
+          <X className="size-4" aria-hidden="true" />
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function EntitiesContent() {
   const { toast } = useToast();
   const [data, setData] = useState<EntityManagement | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [showCreateCommunity, setShowCreateCommunity] = useState(false);
 
   useEffect(() => {
     getMyEntityManagement()
@@ -238,6 +320,20 @@ function EntitiesContent() {
     [toast],
   );
 
+  const handleCreateCommunity = useCallback(
+    async (name: string, description: string) => {
+      try {
+        const next = await createMyCommunityEntity({ name, description: description || null });
+        setData(next);
+        toast.success("Community created");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Could not create that community");
+        throw err;
+      }
+    },
+    [toast],
+  );
+
   return (
     <div className="mx-auto max-w-150 px-6 py-8">
       <div className="mb-6 flex items-center gap-3">
@@ -253,9 +349,29 @@ function EntitiesContent() {
 
       <p className="mb-6 text-sm text-text-secondary">
         These are the entities you host gatherings through. Rename your personal
-        entity, and choose which one is used by default when you create an event.
-        Organisations are managed in your Mukoko ID and are read-only here.
+        entity, choose which one is used by default, or create a community for a
+        club or social enterprise you run. Organisations mirrored from your
+        Mukoko ID are managed there and read-only here.
       </p>
+
+      <div className="mb-6">
+        {showCreateCommunity ? (
+          <CreateCommunityForm
+            onCreate={handleCreateCommunity}
+            onDone={() => setShowCreateCommunity(false)}
+          />
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setShowCreateCommunity(true)}
+            className="min-h-11 gap-1"
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            Create a community
+          </Button>
+        )}
+      </div>
 
       {loading ? (
         <div className="flex min-h-40 items-center justify-center">

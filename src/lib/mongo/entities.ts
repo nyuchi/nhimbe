@@ -284,6 +284,67 @@ export async function ensureHostEntityForPerson(person: PersonDoc): Promise<stri
   return entityId;
 }
 
+const MAX_COMMUNITY_NAME_LENGTH = 120;
+const MAX_COMMUNITY_DESCRIPTION_LENGTH = 500;
+
+/**
+ * Create a second entity a person can host through — a club, social
+ * enterprise, or other community group they run themselves, distinct from
+ * their personal `family` entity and from `organization` entities (which are
+ * WorkOS-mirrored and read-only in this repo; see
+ * `mirrorWorkosOrganizationMembership`). Classified `entityType: "community"`
+ * per the schema.org-aligned vocabulary the validator enforces — there is no
+ * more specific "club"/"social enterprise" schema.org type, so
+ * `schemaOrgType: "Organization"` is the correct classification either way.
+ * Public/discoverable by default (unlike the private-by-default family
+ * entity), and the creator becomes its founder.
+ */
+export async function createCommunityEntityForPerson(params: {
+  personId: string;
+  name: string;
+  description?: string | null;
+}): Promise<EntityDoc> {
+  const name = params.name.trim();
+  if (!name) throw new Error("Give your community a name.");
+  if (name.length > MAX_COMMUNITY_NAME_LENGTH) {
+    throw new Error(`Name must be ${MAX_COMMUNITY_NAME_LENGTH} characters or fewer.`);
+  }
+  const description = params.description?.trim() || null;
+  if (description && description.length > MAX_COMMUNITY_DESCRIPTION_LENGTH) {
+    throw new Error(`Description must be ${MAX_COMMUNITY_DESCRIPTION_LENGTH} characters or fewer.`);
+  }
+
+  const entityId = newId();
+  const now = new Date();
+
+  const entities = await entitiesCollection();
+  const doc = {
+    ...stampNew(entityId),
+    entityType: "community",
+    ecosystemRole: "external",
+    schemaOrgType: "Organization",
+    slug: slugify(name),
+    name,
+    description,
+    isActive: true,
+    isPrivateByDefault: false,
+    founderPersonId: params.personId,
+  } as EntityDoc;
+  await entities.insertOne(doc);
+
+  const memberships = await entityMembershipsCollection();
+  await memberships.insertOne({
+    ...stampNew(),
+    personId: params.personId,
+    entityId,
+    membershipRole: "founder",
+    isActive: true,
+    joinedAt: now,
+  } as EntityMembershipDoc);
+
+  return doc;
+}
+
 // ── WorkOS organization → entity membership mirror (issue #70) ─────────
 //
 // WorkOS organization memberships are mirrored into `entity.memberships` so a

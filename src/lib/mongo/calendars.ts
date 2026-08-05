@@ -186,10 +186,22 @@ export async function listFeaturedCalendars(limit = 6): Promise<FeaturedCalendar
   return docs.map(toFeatured);
 }
 
-/** All of a person's active calendars (any visibility — it's their own list). */
-export async function listCalendarsByOwner(ownerPersonId: string): Promise<CalendarDoc[]> {
+/**
+ * All of a person's active calendars (any visibility — it's their own list):
+ * ones they personally own, plus — when `hostEntityIds` is passed — ones
+ * owned by any entity they host through (Rule 10: entity-centric). Omitting
+ * `hostEntityIds` keeps the old personal-only behaviour.
+ */
+export async function listCalendarsByOwner(
+  ownerPersonId: string,
+  hostEntityIds: string[] = [],
+): Promise<CalendarDoc[]> {
   const col = await calendarsCollection();
-  return col.find({ ownerPersonId, isActive: true }).sort({ createdAt: -1 }).toArray();
+  const filter =
+    hostEntityIds.length > 0
+      ? { isActive: true, $or: [{ ownerPersonId }, { ownerEntityId: { $in: hostEntityIds } }] }
+      : { ownerPersonId, isActive: true };
+  return col.find(filter).sort({ createdAt: -1 }).toArray();
 }
 
 /** A circle's discoverable calendars (private ones stay with their owner). */

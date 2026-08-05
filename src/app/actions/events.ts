@@ -143,26 +143,35 @@ export async function createEventForPerson(
   if (input.ticketUrl && !isHttpUrl(input.ticketUrl)) {
     throw new Error("The ticket URL must be a valid http(s) link.");
   }
-  if ((input.hostMode === "organization" || input.hostMode === "family") && !input.hostEntityId) {
+  const explicitHostEntityId =
+    input.hostMode === "organization" || input.hostMode === "family" ? input.hostEntityId : null;
+  if ((input.hostMode === "organization" || input.hostMode === "family") && !explicitHostEntityId) {
     throw new Error(`Pick which ${input.hostMode} is hosting, or switch back to a personal host.`);
   }
+  if (explicitHostEntityId) {
+    const hostable = await listHostEntitiesForPerson(person._id);
+    if (!hostable.some((e) => e._id === explicitHostEntityId)) {
+      throw new Error("You do not have permission to host through that entity.");
+    }
+  }
 
-  // Optional calendar attach (NYU-25): a host may only stream an event into
-  // one of THEIR OWN calendars. Validate before the insert so a bad id fails
-  // early instead of leaving a half-attached event.
+  // Optional calendar attach (NYU-25): a host may stream into a calendar they
+  // personally own, or one owned by the entity they're hosting through
+  // (Rule 10) — validated with the pure request data above, before any
+  // side-effect writes, so a bad id fails early instead of leaving a
+  // half-attached event.
   if (input.calendarId) {
     const calendar = await getCalendarById(input.calendarId);
-    if (!calendar || calendar.ownerPersonId !== person._id) {
+    const ownsPersonally = calendar?.ownerPersonId === person._id;
+    const ownsThroughEntity = explicitHostEntityId != null && calendar?.ownerEntityId === explicitHostEntityId;
+    if (!calendar || !(ownsPersonally || ownsThroughEntity)) {
       throw new Error("You can only add events to your own calendars.");
     }
   }
 
-  // Resolve the host entity: an explicitly picked org/family, else the
-  // person's (lazily created) default host entity.
-  const primaryHostEntityId =
-    (input.hostMode === "organization" || input.hostMode === "family") && input.hostEntityId
-      ? input.hostEntityId
-      : await ensureHostEntityForPerson(person);
+  // Resolve the host entity: an explicitly picked (and now-authorized)
+  // org/family, else the person's (lazily created) default host entity.
+  const primaryHostEntityId = explicitHostEntityId ?? (await ensureHostEntityForPerson(person));
 
   const start = new Date(input.startDate);
   if (Number.isNaN(start.getTime())) throw new Error("The start date is invalid.");
