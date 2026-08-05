@@ -19,9 +19,14 @@ vi.mock("@/lib/mongo/client", () => ({
 }));
 
 const persons = { findOne: vi.fn() };
+const events = { findOne: vi.fn() };
 vi.mock("@/lib/mongo/databases", () => ({
   personsCollection: vi.fn(async () => persons),
+  eventsCollection: vi.fn(async () => events),
 }));
+
+const ensureEventChatConversation = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/mongo/campfire", () => ({ ensureEventChatConversation }));
 
 const ensureHostEntityForPerson = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/mongo/entities", () => ({ ensureHostEntityForPerson }));
@@ -40,7 +45,7 @@ vi.mock("@workos-inc/authkit-nextjs", () => ({
   withAuth: vi.fn(async () => ({ user: null })),
 }));
 
-import { postCampfireMessage } from "./campfire";
+import { postCampfireMessage, ensureEventChatConversationAction } from "./campfire";
 
 const person = { _id: "person-1", workosUserId: "workos-dev", name: "Dev Person" };
 
@@ -52,6 +57,8 @@ beforeEach(() => {
   messages.insertOne.mockResolvedValue({ acknowledged: true });
   readReceipts.updateOne.mockResolvedValue({ acknowledged: true });
   ensureHostEntityForPerson.mockResolvedValue("entity-1");
+  events.findOne.mockResolvedValue({ _id: "event-1", name: "Harare Farmers Market" });
+  ensureEventChatConversation.mockResolvedValue({ _id: "conv-9" });
 });
 
 describe("postCampfireMessage (atomic sequence — L2)", () => {
@@ -100,5 +107,25 @@ describe("postCampfireMessage (atomic sequence — L2)", () => {
     conversations.findOneAndUpdate.mockResolvedValueOnce(null);
     await expect(postCampfireMessage("conv-gone", "hi")).rejects.toThrow(/no longer available/);
     expect(messages.insertOne).not.toHaveBeenCalled();
+  });
+});
+
+describe("ensureEventChatConversationAction", () => {
+  it("resolves the event's paired group chat conversation id", async () => {
+    const conversationId = await ensureEventChatConversationAction("event-1");
+    expect(conversationId).toBe("conv-9");
+    expect(ensureEventChatConversation).toHaveBeenCalledWith({
+      eventId: "event-1",
+      eventName: "Harare Farmers Market",
+      createdByPersonId: "person-1",
+    });
+  });
+
+  it("throws when the event does not exist", async () => {
+    events.findOne.mockResolvedValueOnce(null);
+    await expect(ensureEventChatConversationAction("nope")).rejects.toThrow(
+      /could not be found/,
+    );
+    expect(ensureEventChatConversation).not.toHaveBeenCalled();
   });
 });

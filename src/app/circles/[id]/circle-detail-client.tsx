@@ -2,29 +2,34 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, Heart, MessageCircle, Users, Flame, Archive } from "lucide-react";
+import { ArrowLeft, CalendarDays, CalendarRange, Heart, MessageCircle, Users, Flame, Archive } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { NyuchiContentComposer } from "@/components/ui/nyuchi-content-composer";
 import { NyuchiTimeline, type TimelineItem } from "@/components/ui/nyuchi-timeline";
 import { categoryToMineral } from "@/lib/category-mineral";
+import { getTheme } from "@/lib/themes";
 import { getMediaUrl, type Event } from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/components/auth/auth-context";
 import {
   createCirclePost,
   getCircle,
+  getCircleCalendars,
   getCircleEvents,
   getCircleMembers,
   getCirclePosts,
   joinCircle,
   togglePostReaction,
+  type CircleCalendarSummary,
   type CircleDetail,
   type CircleMember,
   type CirclePerson,
   type CirclePost,
 } from "@/app/actions/circle-detail";
+import { AttachCalendar } from "./attach-calendar";
+import { CircleDiscuss } from "./circle-discuss";
 import { useT } from "@/lib/i18n";
 
 interface CircleDetailClientProps {
@@ -50,14 +55,20 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
   const [events, setEvents] = useState<Event[]>([]);
   const [posts, setPosts] = useState<CirclePost[]>([]);
   const [members, setMembers] = useState<CircleMember[]>([]);
+  const [calendars, setCalendars] = useState<CircleCalendarSummary[]>([]);
   const [archived, setArchived] = useState<CirclePost[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"events" | "stream" | "members" | "archive">("events");
+  const [tab, setTab] = useState<"events" | "stream" | "members" | "calendars" | "archive">("events");
 
   const isMember = personId
     ? members.some((m) => m.person_id === personId)
     : false;
+  const isOwner = personId !== null && circle?.owner_person_id === personId;
+
+  const refetchCalendars = useCallback(() => {
+    getCircleCalendars(circleId).then(setCalendars);
+  }, [circleId]);
 
   // Fetch the circle, posts and members once per circleId. Setting state
   // happens only inside the promise resolution, never synchronously in the
@@ -69,13 +80,15 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
       getCircleEvents(circleId, 50),
       getCirclePosts(circleId, 30, false),
       getCircleMembers(circleId, 100),
+      getCircleCalendars(circleId),
     ])
-      .then(([c, ev, p, m]) => {
+      .then(([c, ev, p, m, cal]) => {
         if (cancelled) return;
         setCircle(c);
         setEvents(ev);
         setPosts(p);
         setMembers(m);
+        setCalendars(cal);
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load this circle");
@@ -101,7 +114,7 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
   // Lazy-load the archive on tab change. We invoke from the tab handler
   // rather than a useEffect-on-tab so we don't trigger setState in an
   // effect body when nothing has actually changed.
-  const onTabChange = (next: "events" | "stream" | "members" | "archive") => {
+  const onTabChange = (next: "events" | "stream" | "members" | "calendars" | "archive") => {
     setTab(next);
     if (next === "archive") void loadArchive();
   };
@@ -245,11 +258,12 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
             </div>
           )}
 
-          <Tabs value={tab} onValueChange={(v) => onTabChange(v as "events" | "stream" | "members" | "archive")}>
+          <Tabs value={tab} onValueChange={(v) => onTabChange(v as "events" | "stream" | "members" | "calendars" | "archive")}>
             <TabsList className="mb-4">
               <TabsTrigger value="events">{t("circle.tabs.events")}</TabsTrigger>
               <TabsTrigger value="stream">{t("circle.tabs.stream")}</TabsTrigger>
               <TabsTrigger value="members">{t("circle.tabs.members")}</TabsTrigger>
+              <TabsTrigger value="calendars">Calendars</TabsTrigger>
               <TabsTrigger value="archive">{t("circle.tabs.archive")}</TabsTrigger>
             </TabsList>
 
@@ -283,6 +297,9 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
             </TabsContent>
 
             <TabsContent value="stream">
+              {isAuthenticated && isMember && (
+                <CircleDiscuss circleId={circleId} isAuthenticated={isAuthenticated} />
+              )}
               {isAuthenticated && isMember && (
                 <NyuchiContentComposer
                   className="mb-4"
@@ -377,6 +394,57 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
                           </div>
                         </CardContent>
                       </Card>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </TabsContent>
+
+            <TabsContent value="calendars">
+              {isOwner && (
+                <AttachCalendar
+                  circleId={circleId}
+                  attachedIds={calendars.map((c) => c.id)}
+                  onAttached={refetchCalendars}
+                />
+              )}
+              {calendars.length === 0 ? (
+                <Card className="border-0 bg-surface">
+                  <CardContent className="p-8 text-center text-text-secondary text-sm">
+                    <CalendarRange className="w-8 h-8 mx-auto mb-2 text-text-tertiary" aria-hidden />
+                    No calendars stream through this circle yet.
+                  </CardContent>
+                </Card>
+              ) : (
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {calendars.map((c) => (
+                    <li key={c.id}>
+                      <Link
+                        href={`/calendars/${c.slug}`}
+                        className="group flex items-center gap-4 rounded-[var(--radius-card,14px)] border border-border bg-card px-4 py-3.5 transition-shadow hover:shadow-md"
+                      >
+                        <span
+                          className="flex size-12 shrink-0 items-center justify-center rounded-xl text-primary-foreground"
+                          style={{ background: getTheme(c.theme ?? undefined).gradient }}
+                          aria-hidden
+                        >
+                          <CalendarRange className="w-5 h-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                            {c.name}
+                          </span>
+                          {c.description && (
+                            <span className="block text-[13px] text-muted-foreground line-clamp-2">
+                              {c.description}
+                            </span>
+                          )}
+                          <span className="mt-1 inline-flex items-center gap-1 text-xs text-text-tertiary">
+                            <Users className="w-3 h-3" aria-hidden />
+                            {c.followerCount} {c.followerCount === 1 ? "follower" : "followers"}
+                          </span>
+                        </span>
+                      </Link>
                     </li>
                   ))}
                 </ul>

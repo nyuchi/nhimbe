@@ -48,6 +48,28 @@ export async function getCircleSummary(
   return doc ? { id: doc._id, name: doc.name } : null;
 }
 
+/** The small shape a "my circles" picker (e.g. calendar creation) renders. */
+export interface OwnedCircle {
+  id: string;
+  name: string;
+}
+
+/**
+ * Circles a person owns — used to restrict which circle a calendar can be
+ * attached to at creation (a calendar may only attach to a circle its
+ * creator owns). Includes secret circles since this is an owner-scoped read,
+ * not a discovery surface.
+ */
+export async function listCirclesByOwner(ownerPersonId: string): Promise<OwnedCircle[]> {
+  const col = await circlesCollection();
+  const docs = await col
+    .find({ ownerPersonId, isActive: true })
+    .sort({ name: 1 })
+    .project<{ _id: string; name: string }>({ name: 1 })
+    .toArray();
+  return docs.map((d) => ({ id: d._id, name: d.name }));
+}
+
 /**
  * The most active discoverable circles (by members, then posts). Secret
  * circles are excluded at the query, never just at the mapper.

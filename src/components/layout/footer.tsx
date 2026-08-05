@@ -18,6 +18,7 @@ const platformLinks = [
 
 const accountLinks = [
   { href: "/my-events", label: "My Events" },
+  { href: "/calendars", label: "My Calendars" },
   { href: "/profile", label: "Profile" },
   { href: "/profile/entities", label: "Manage Entities" },
 ];

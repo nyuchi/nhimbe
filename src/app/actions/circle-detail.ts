@@ -28,6 +28,8 @@ import { ensureHostEntityForPerson } from "@/lib/mongo/entities";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { isDevBypass, DEV_WORKOS_ID, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
 import { listEvents } from "@/lib/mongo/events";
+import { listCalendarsByCircle } from "@/lib/mongo/calendars";
+import { ensureCircleConversation } from "@/lib/mongo/campfire";
 import type { Event } from "@/lib/api";
 import type {
   CircleDoc,
@@ -58,6 +60,7 @@ export interface CircleDetail {
   member_count: number | null;
   post_count: number | null;
   linked_event_id: string | null;
+  owner_person_id: string;
 }
 
 /** Post shape the detail stream/archive renders. */
@@ -107,6 +110,7 @@ function mapCircle(doc: CircleDoc): CircleDetail {
     member_count: doc.memberCount ?? null,
     post_count: doc.postCount ?? null,
     linked_event_id: doc.primaryEventId ?? null,
+    owner_person_id: doc.ownerPersonId,
   };
 }
 
@@ -190,6 +194,36 @@ export async function getCircleEvents(circleId: string, limit = 50): Promise<Eve
     return events;
   } catch (err) {
     console.warn("[mukoko] getCircleEvents failed:", err);
+    return [];
+  }
+}
+
+/** The small shape the circle's "Calendars" tab renders. */
+export interface CircleCalendarSummary {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  theme: string | null;
+  followerCount: number;
+  eventCount: number;
+}
+
+/** Public/unlisted calendars streaming through this circle. */
+export async function getCircleCalendars(circleId: string): Promise<CircleCalendarSummary[]> {
+  try {
+    const docs = await listCalendarsByCircle(circleId);
+    return docs.map((d) => ({
+      id: d._id,
+      slug: d.slug,
+      name: d.name,
+      description: d.description ?? null,
+      theme: d.theme ?? null,
+      followerCount: d.followerCount,
+      eventCount: d.eventCount,
+    }));
+  } catch (err) {
+    console.warn("[mukoko] getCircleCalendars failed:", err);
     return [];
   }
 }
@@ -285,6 +319,25 @@ export async function createCirclePost(input: {
   );
 
   return mapPost(doc, mapPerson(person));
+}
+
+/**
+ * Resolve (creating on first use) the circle's paired group chat — its
+ * WhatsApp-style Discuss channel, distinct from the persistent post stream
+ * above. Any signed-in visitor may open it (same openness as posting).
+ */
+export async function ensureCircleConversationAction(circleId: string): Promise<string> {
+  const person = await resolveActingPerson();
+  const circles = await circlesCollection();
+  const circle = await circles.findOne({ _id: circleId, isActive: true });
+  if (!circle) throw new Error("This circle could not be found.");
+
+  const conversation = await ensureCircleConversation({
+    circleId,
+    circleName: circle.name,
+    createdByPersonId: person._id,
+  });
+  return conversation._id;
 }
 
 export async function joinCircle(input: { circleId: string }): Promise<void> {

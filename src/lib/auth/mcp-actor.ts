@@ -2,6 +2,9 @@ import "server-only";
 
 import { personsCollection } from "@/lib/mongo/databases";
 import { verifyBearer } from "@/lib/auth/workos-token";
+import { consumeDailyUsage, UsageLimitExceededError } from "@/lib/mongo/usage-limits";
+import { getPlatformSettings, type PlatformSettings } from "@/lib/mongo/settings";
+import { getMukokoPlan } from "@/lib/mongo/entitlements";
 import type { PersonDoc } from "@/lib/mongo/types";
 
 /**
@@ -37,12 +40,46 @@ export async function resolveActorFromBearer(authorization: string | null): Prom
   }
 
   const persons = await personsCollection();
-  const person = await persons.findOne({ workosUserId: verified.workosUserId });
+  // The person lookup and the platform-settings read are independent — kick
+  // both off together rather than sequencing them.
+  const [person, settings] = await Promise.all([
+    persons.findOne({ workosUserId: verified.workosUserId }),
+    getPlatformSettings(),
+  ]);
   if (!person) {
     throw new ActorError(
       "Sign in to Nhimbe once to set up your profile before hosting via the MCP.",
       403,
     );
   }
+
+  await enforceApiRateLimit(person, settings);
   return person;
+}
+
+/**
+ * Tiered metering for the bearer-authenticated write surface (the Mukoko
+ * Events MCP's create/update tools), mirroring the Claude API / Google Maps
+ * Platform shape: free and pro both carry a real daily ceiling — pro is
+ * materially higher, never unlimited — and custom (usage-based billing,
+ * metered/invoiced outside this repo) isn't capped here at all. Once past
+ * the ceiling the caller gets a 429, never a silent/permanent block.
+ */
+async function enforceApiRateLimit(person: PersonDoc, settings: PlatformSettings): Promise<void> {
+  const plan = getMukokoPlan(person);
+  if (plan === "custom") return;
+
+  const limit = plan === "pro" ? settings.proApiWritesPerDayPerCaller : settings.freeApiWritesPerDayPerCaller;
+  try {
+    await consumeDailyUsage({
+      subjectId: person._id,
+      counterType: "apiWrite",
+      limit,
+    });
+  } catch (err) {
+    if (err instanceof UsageLimitExceededError) {
+      throw new ActorError(err.message, 429);
+    }
+    throw err;
+  }
 }

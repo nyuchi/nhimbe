@@ -8,12 +8,25 @@ const calendars = {
   insertOne: vi.fn(),
   findOne: vi.fn(),
   updateOne: vi.fn(),
+  findOneAndUpdate: vi.fn(),
   find: vi.fn(),
 };
 const follows = {
   findOneAndUpdate: vi.fn(),
   findOne: vi.fn(),
+  find: vi.fn(),
 };
+
+/** Minimal chainable cursor stub — `.sort().toArray()` etc, resolving to `docs`. */
+function cursor<T>(docs: T[]) {
+  const c = {
+    sort: vi.fn(() => c),
+    limit: vi.fn(() => c),
+    project: vi.fn(() => c),
+    toArray: vi.fn(async () => docs),
+  };
+  return c;
+}
 const events = {
   findOneAndUpdate: vi.fn(),
   find: vi.fn(),
@@ -38,6 +51,9 @@ import {
   followCalendar,
   unfollowCalendar,
   attachEventToCalendar,
+  updateCalendar,
+  archiveCalendar,
+  listFollowedCalendars,
   type CreateCalendarInput,
   type FollowCalendarInput,
 } from "./calendars";
@@ -246,6 +262,80 @@ describe("unfollowCalendar (idempotent)", () => {
 
     expect(result.stoppedFollowing).toBe(false);
     expect(calendars.updateOne).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateCalendar", () => {
+  it("only $sets the fields explicitly provided, plus updatedAt", async () => {
+    calendars.findOneAndUpdate.mockResolvedValueOnce({ _id: "cal-1", name: "New Name" });
+    await updateCalendar("cal-1", { name: "New Name", visibility: "unlisted" });
+
+    const [filter, update, options] = calendars.findOneAndUpdate.mock.calls[0];
+    expect(filter).toEqual({ _id: "cal-1" });
+    expect(update.$set).toMatchObject({ name: "New Name", visibility: "unlisted" });
+    expect(update.$set).not.toHaveProperty("description");
+    expect(update.$set.updatedAt).toBeInstanceOf(Date);
+    expect(options).toEqual({ returnDocument: "after" });
+  });
+
+  it("trims name/description and null-collapses a blank description", async () => {
+    calendars.findOneAndUpdate.mockResolvedValueOnce({ _id: "cal-1" });
+    await updateCalendar("cal-1", { name: "  Padded  ", description: "   " });
+
+    const update = calendars.findOneAndUpdate.mock.calls[0][1];
+    expect(update.$set.name).toBe("Padded");
+    expect(update.$set.description).toBeNull();
+  });
+
+  it("returns null when the calendar does not exist", async () => {
+    calendars.findOneAndUpdate.mockResolvedValueOnce(null);
+    const result = await updateCalendar("missing", { name: "X" });
+    expect(result).toBeNull();
+  });
+});
+
+describe("archiveCalendar", () => {
+  it("soft-deletes: isActive false, never a hard delete", async () => {
+    await archiveCalendar("cal-1");
+    const [filter, update] = calendars.updateOne.mock.calls[0];
+    expect(filter).toEqual({ _id: "cal-1" });
+    expect(update.$set.isActive).toBe(false);
+    expect(update.$set.updatedAt).toBeInstanceOf(Date);
+  });
+});
+
+describe("listFollowedCalendars", () => {
+  it("returns the person's actively-followed calendars, most recent first", async () => {
+    follows.find.mockReturnValueOnce(
+      cursor([{ calendarId: "cal-1" }, { calendarId: "cal-2" }]),
+    );
+    calendars.find.mockReturnValueOnce(
+      cursor([
+        { _id: "cal-1", name: "First" },
+        { _id: "cal-2", name: "Second" },
+      ]),
+    );
+
+    const result = await listFollowedCalendars("person-1");
+
+    expect(follows.find).toHaveBeenCalledWith({ followerPersonId: "person-1", isActive: true });
+    expect(result.map((d) => d._id)).toEqual(["cal-1", "cal-2"]);
+  });
+
+  it("returns an empty array without querying calendars when there are no follows", async () => {
+    follows.find.mockReturnValueOnce(cursor([]));
+    const result = await listFollowedCalendars("person-1");
+    expect(result).toEqual([]);
+    expect(calendars.find).not.toHaveBeenCalled();
+  });
+
+  it("drops rows whose calendar was deleted/archived out from under the follow", async () => {
+    follows.find.mockReturnValueOnce(cursor([{ calendarId: "cal-1" }, { calendarId: "cal-gone" }]));
+    calendars.find.mockReturnValueOnce(cursor([{ _id: "cal-1", name: "First" }]));
+
+    const result = await listFollowedCalendars("person-1");
+    expect(result).toHaveLength(1);
+    expect(result[0]._id).toBe("cal-1");
   });
 });
 

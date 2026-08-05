@@ -92,6 +92,35 @@ export async function createCalendar(input: CreateCalendarInput): Promise<Calend
   return doc;
 }
 
+export interface UpdateCalendarInput {
+  name?: string;
+  description?: string | null;
+  visibility?: CalendarVisibility;
+  theme?: string | null;
+  circleId?: string | null;
+}
+
+/** Update the owner-editable fields of a calendar. Slug/id/counts never change. */
+export async function updateCalendar(
+  calendarId: string,
+  input: UpdateCalendarInput,
+): Promise<CalendarDoc | null> {
+  const col = await calendarsCollection();
+  const $set: Record<string, unknown> = { updatedAt: new Date() };
+  if (input.name !== undefined) $set.name = input.name.trim();
+  if (input.description !== undefined) $set.description = input.description?.trim() || null;
+  if (input.visibility !== undefined) $set.visibility = input.visibility;
+  if (input.theme !== undefined) $set.theme = input.theme;
+  if (input.circleId !== undefined) $set.circleId = input.circleId;
+  return col.findOneAndUpdate({ _id: calendarId }, { $set }, { returnDocument: "after" });
+}
+
+/** Soft-archive a calendar (never a hard delete — followers/events keep history). */
+export async function archiveCalendar(calendarId: string): Promise<void> {
+  const col = await calendarsCollection();
+  await col.updateOne({ _id: calendarId }, { $set: { isActive: false, updatedAt: new Date() } });
+}
+
 // ── reads ────────────────────────────────────────────────────────────
 
 /** Fetch an active calendar by its unique slug (any visibility — gate at the route). */
@@ -339,6 +368,23 @@ export async function unfollowCalendar(params: {
     { $inc: { followerCount: -1 }, $set: { updatedAt: now } },
   );
   return { stoppedFollowing: true };
+}
+
+/** Calendars a person actively follows, most recently followed first. */
+export async function listFollowedCalendars(followerPersonId: string): Promise<CalendarDoc[]> {
+  const follows = await calendarFollowsCollection();
+  const rows = await follows
+    .find({ followerPersonId, isActive: true })
+    .sort({ followedAt: -1 })
+    .toArray();
+  if (rows.length === 0) return [];
+
+  const calendars = await calendarsCollection();
+  const docs = await calendars
+    .find({ _id: { $in: rows.map((r) => r.calendarId) }, isActive: true })
+    .toArray();
+  const byId = new Map(docs.map((d) => [d._id, d]));
+  return rows.map((r) => byId.get(r.calendarId)).filter((d): d is CalendarDoc => d !== undefined);
 }
 
 /** Is this person an active follower of the calendar? */

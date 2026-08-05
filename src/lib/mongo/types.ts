@@ -284,12 +284,20 @@ export interface PersonDoc extends BaseDoc {
   addressLocality?: string | null;
   addressCountry?: string | null;
   interests?: string[] | null;
-  /** Notification preferences (validator-permitted extra). `eventUpdates`
-   *  defaults ON (opt-out): absent/undefined means subscribed. */
+  /**
+   * Mukoko-platform extras (validator-permitted, additive).
+   * - `notifications.eventUpdates` defaults ON (opt-out): absent/undefined
+   *   means subscribed.
+   * - `plan` is the cross-app Mukoko subscription tier — set by a future
+   *   Mukoko-wide billing service (not owned by nhimbe), read by every
+   *   Mukoko app the same way. Absent/undefined means "free". See
+   *   `src/lib/mongo/entitlements.ts`.
+   */
   mukoko?: {
     notifications?: {
       eventUpdates?: boolean;
     };
+    plan?: "free" | "pro" | "custom";
   } | null;
   bundu?: {
     defaultFamilyEntityId?: string;
@@ -682,6 +690,8 @@ export interface CampfireConversationDoc extends BaseDoc {
   participantCount: number;
   eventId?: string | null;
   circleId?: string | null;
+  /** Paired calendar (NYU-25) — one "Discuss" conversation per calendar. */
+  calendarId?: string | null;
   name?: string | null;
   lastMessageAt?: Date | null;
   mukoko?: Record<string, unknown>;

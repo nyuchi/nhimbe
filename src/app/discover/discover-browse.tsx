@@ -18,6 +18,7 @@ import { getTheme } from "@/lib/themes";
 import type { CategoryWithCount, CityWithCount } from "@/lib/mongo/lookups";
 import type { FeaturedCircle } from "@/lib/mongo/circles";
 import type { FeaturedCalendar } from "@/lib/mongo/calendars";
+import { CreateCalendarCta } from "./create-calendar-cta";
 
 /**
  * /discover browse sections (NYU-24 IA refresh) — a BROWSE surface, not a
@@ -229,10 +230,13 @@ export function DiscoverBrowse({ categories, circles, calendars, cities }: Disco
 
       {/* 3 — Featured calendars (followable event streams — NOT communities) */}
       <section aria-labelledby="discover-calendars" className="mb-12">
-        <SectionHeader
-          title="Featured calendars"
-          subtitle="Curated event streams — follow one and every gathering lands on your radar."
-        />
+        <div className="flex items-end justify-between gap-4">
+          <SectionHeader
+            title="Featured calendars"
+            subtitle="Curated event streams — follow one and every gathering lands on your radar."
+          />
+          <CreateCalendarCta />
+        </div>
         <span id="discover-calendars" className="sr-only">
           Featured calendars
         </span>

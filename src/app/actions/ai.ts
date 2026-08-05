@@ -14,7 +14,23 @@
  */
 
 import { chat, isGatewayConfigured } from "@/lib/ai/gateway";
+import { requireActingPerson } from "@/lib/auth/current-person";
+import { isMukokoPro } from "@/lib/mongo/entitlements";
+import { ShamwariProRequiredError } from "@/lib/ai/shamwari-errors";
 import type { DescriptionContext, GeneratedDescription } from "@/lib/api";
+
+/**
+ * Shamwari generation is gated entirely behind Mukoko Pro — not rationed, not
+ * free-with-a-cap. Mukoko Pro is a cross-app subscription (`isMukokoPro`,
+ * `src/lib/mongo/entitlements.ts`), so this reads the same shared flag every
+ * Mukoko app checks, not a nhimbe-local plan.
+ */
+async function requireShamwariAccess(): Promise<void> {
+  const person = await requireActingPerson("You must be signed in to use Shamwari.");
+  if (!isMukokoPro(person)) {
+    throw new ShamwariProRequiredError();
+  }
+}
 
 const SYSTEM_PROMPT = `You are Shamwari, the AI assistant for Nhimbe - an African events platform.
 "Shamwari" means "friend" in Shona, and you help hosts create compelling event descriptions.
@@ -51,6 +67,8 @@ Write a compelling description that would make someone want to attend this event
 export async function generateEventDescription(
   context: DescriptionContext,
 ): Promise<GeneratedDescription> {
+  await requireShamwariAccess();
+
   if (!isGatewayConfigured()) {
     return { description: fallbackDescription(context) };
   }
@@ -78,6 +96,8 @@ export async function regenerateEventDescription(
   context: DescriptionContext,
   feedback: string,
 ): Promise<GeneratedDescription> {
+  await requireShamwariAccess();
+
   if (!isGatewayConfigured()) {
     return { description: fallbackDescription(context) };
   }

@@ -29,6 +29,18 @@ export interface PlatformSettings {
   maintenanceMode: boolean;
   /** Comma-separated allow-list of email domains; empty = allow all. */
   allowedDomains: string;
+  /** Free-plan daily cap on notifying blasts per event. 0 = unlimited. */
+  freeBlastsPerDayPerEvent: number;
+  /**
+   * Daily caps on bearer-authenticated API writes (POST/PATCH
+   * /api/events*, the surface the Mukoko Events MCP calls) per caller,
+   * tiered like the Claude API / Google Maps Platform: free and pro both
+   * have a real ceiling — pro is materially higher, never unlimited — and
+   * the custom tier (usage-based billing, set out-of-band) isn't enforced
+   * here at all. 0 = unlimited for that tier. See enforceApiRateLimit.
+   */
+  freeApiWritesPerDayPerCaller: number;
+  proApiWritesPerDayPerCaller: number;
 }
 
 interface PlatformSettingsDoc extends BaseDoc, PlatformSettings {}
@@ -47,6 +59,9 @@ export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   enableReferrals: true,
   maintenanceMode: false,
   allowedDomains: "",
+  freeBlastsPerDayPerEvent: 1,
+  freeApiWritesPerDayPerCaller: 500,
+  proApiWritesPerDayPerCaller: 5_000,
 };
 
 /** Coerce/clamp a partial, possibly-untrusted settings bag onto the defaults. */
@@ -69,6 +84,15 @@ export function normalizePlatformSettings(raw: Partial<PlatformSettings> | null 
     enableReferrals: bool(r.enableReferrals, d.enableReferrals),
     maintenanceMode: bool(r.maintenanceMode, d.maintenanceMode),
     allowedDomains: str(r.allowedDomains, d.allowedDomains).trim(),
+    freeBlastsPerDayPerEvent: nonNegInt(r.freeBlastsPerDayPerEvent, d.freeBlastsPerDayPerEvent),
+    freeApiWritesPerDayPerCaller: nonNegInt(
+      r.freeApiWritesPerDayPerCaller,
+      d.freeApiWritesPerDayPerCaller,
+    ),
+    proApiWritesPerDayPerCaller: nonNegInt(
+      r.proApiWritesPerDayPerCaller,
+      d.proApiWritesPerDayPerCaller,
+    ),
   };
 }
 

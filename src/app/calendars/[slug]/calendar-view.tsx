@@ -3,6 +3,8 @@ import { CalendarRange, Rss, Users } from "lucide-react";
 import { EventThemeWrapper } from "@/app/events/[id]/event-theme-wrapper";
 import { NyuchiTimeline, type TimelineItem } from "@/components/ui/nyuchi-timeline";
 import { FollowButton } from "./follow-button";
+import { OwnerActions } from "./owner-actions";
+import { CalendarDiscuss } from "./calendar-discuss";
 import { getTheme } from "@/lib/themes";
 import { categoryToMineral } from "@/lib/category-mineral";
 import { getMediaUrl, type Event } from "@/lib/api";
@@ -28,6 +30,8 @@ export interface CalendarViewData {
   visibility: "public" | "unlisted" | "private";
   /** Washed palette id — grounds the page via EventThemeWrapper. */
   theme: string | null;
+  /** Owning circle id (raw), so the edit modal can re-seed the circle picker. */
+  circleId: string | null;
   /** Curating entity's display name. */
   ownerName: string | null;
   /** Owning circle, when the calendar belongs to a community. */
@@ -39,6 +43,7 @@ interface CalendarViewProps {
   events: Event[];
   isAuthenticated: boolean;
   initialFollowing: boolean;
+  isOwner: boolean;
 }
 
 function toTimelineItem(event: Event): TimelineItem {
@@ -62,6 +67,7 @@ export function CalendarView({
   events,
   isAuthenticated,
   initialFollowing,
+  isOwner,
 }: CalendarViewProps) {
   const theme = getTheme(calendar.theme ?? undefined);
 
@@ -122,13 +128,17 @@ export function CalendarView({
           </div>
 
           <div className="flex shrink-0 flex-col items-start gap-2">
-            <FollowButton
-              calendarId={calendar.id}
-              slug={calendar.slug}
-              isAuthenticated={isAuthenticated}
-              initialFollowing={initialFollowing}
-              initialFollowerCount={calendar.followerCount}
-            />
+            {isOwner ? (
+              <OwnerActions calendar={calendar} />
+            ) : (
+              <FollowButton
+                calendarId={calendar.id}
+                slug={calendar.slug}
+                isAuthenticated={isAuthenticated}
+                initialFollowing={initialFollowing}
+                initialFollowerCount={calendar.followerCount}
+              />
+            )}
             <a
               href={`/calendars/${calendar.slug}/ics`}
               className="inline-flex h-9 items-center gap-1.5 rounded-full bg-foreground/5 px-3.5 text-sm font-medium text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
@@ -150,6 +160,8 @@ export function CalendarView({
             }
           />
         </section>
+
+        <CalendarDiscuss calendarId={calendar.id} isAuthenticated={isAuthenticated} />
       </div>
     </EventThemeWrapper>
   );

@@ -11,10 +11,10 @@ import {
 } from "@/app/actions/campfire";
 
 /**
- * EventCampfire — surfaces the campfire conversation thread attached to an
- * event when events.event.campfireConversationId is set. The campfire is
- * "live chat around the gathering" — distinct from the circle stream (which is
- * the event's persistent community).
+ * CampfireThread — a live chat panel bound to any `campfire.conversations`
+ * row. Fully generic on `conversationId`: the event detail page uses it for
+ * live chat around a gathering, the calendar page uses it for "Discuss" on a
+ * followed stream. Distinct from a circle's persistent post stream.
  *
  * Data path: the browser never touches Mongo. Reads and writes go through the
  * `src/app/actions/campfire.ts` server actions (Node runtime), which resolve
@@ -32,13 +32,19 @@ import {
  * of this slice to keep scope tight — messages refresh on send.
  */
 
-interface EventCampfireProps {
+interface CampfireThreadProps {
   conversationId: string | null | undefined;
+  title?: string;
+  emptyLabel?: string;
 }
 
 const MAX_MESSAGES = 20;
 
-export function EventCampfire({ conversationId }: EventCampfireProps) {
+export function CampfireThread({
+  conversationId,
+  title = "Campfire",
+  emptyLabel = "No messages yet. Light the first flame.",
+}: CampfireThreadProps) {
   const { user } = useAuth();
   const viewerPersonId = user?.personId ?? null;
   const [messages, setMessages] = useState<CampfireMessage[]>([]);
@@ -97,11 +103,11 @@ export function EventCampfire({ conversationId }: EventCampfireProps) {
   if (!conversationId || !loaded) return null;
 
   return (
-    <section data-slot="event-campfire" className="mt-8 rounded-[var(--radius-lg)] bg-card border border-border overflow-hidden">
+    <section data-slot="campfire-thread" className="mt-8 rounded-[var(--radius-lg)] bg-card border border-border overflow-hidden">
       <header className="flex items-center gap-2 px-5 py-3 border-b border-border">
         <Flame className="w-4 h-4" style={{ color: "var(--nh-sunset)" }} aria-hidden />
         <h3 className="text-sm font-semibold uppercase tracking-[0.04em] text-foreground">
-          Campfire
+          {title}
         </h3>
         <span className="text-[10px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
           live chat
@@ -116,9 +122,7 @@ export function EventCampfire({ conversationId }: EventCampfireProps) {
         aria-live="polite"
       >
         {messages.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-8">
-            No messages yet. Light the first flame.
-          </p>
+          <p className="text-sm text-muted-foreground text-center py-8">{emptyLabel}</p>
         )}
         {messages.map((m) => {
           const author = authors.get(m.senderPersonId);

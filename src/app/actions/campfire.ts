@@ -31,8 +31,9 @@
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import type { Collection, Db, Document } from "mongodb";
 import { getMongoClient } from "@/lib/mongo/client";
-import { personsCollection } from "@/lib/mongo/databases";
+import { personsCollection, eventsCollection } from "@/lib/mongo/databases";
 import { ensureHostEntityForPerson } from "@/lib/mongo/entities";
+import { ensureEventChatConversation } from "@/lib/mongo/campfire";
 import { newId, stampNew } from "@/lib/mongo/ids";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import {
@@ -219,6 +220,24 @@ export async function getCampfireThread(
     // Quiet degradation — the component renders an empty campfire.
     return EMPTY_THREAD(conversationId);
   }
+}
+
+/**
+ * Resolve (creating on first use) an event's paired group chat. Any
+ * signed-in visitor may open it — same openness as posting a message.
+ */
+export async function ensureEventChatConversationAction(eventId: string): Promise<string> {
+  const person = await resolveActingPerson();
+  const events = await eventsCollection();
+  const event = await events.findOne({ _id: eventId });
+  if (!event) throw new Error("That event could not be found.");
+
+  const conversation = await ensureEventChatConversation({
+    eventId,
+    eventName: event.name,
+    createdByPersonId: person._id,
+  });
+  return conversation._id;
 }
 
 // ── writes ────────────────────────────────────────────────────────────────
