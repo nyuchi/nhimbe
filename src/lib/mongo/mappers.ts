@@ -207,6 +207,7 @@ export function mapEventDocToApi(doc: EventDoc, relations: EventRelations = {}):
     organizer: mapOrganizer(relations),
     offers: mapOffers(doc),
     placeId: doc.placeId ?? undefined,
+    calendarId: doc.calendarId ?? undefined,
     eventCircleId: doc.circleId ?? undefined,
     timezone: (doc.location as Record<string, unknown> | null | undefined)?.timezone as
       | string

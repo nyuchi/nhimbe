@@ -82,6 +82,8 @@ export interface Event {
   eventCircleId?: string;
   /** FK to places.places.id — drives the design's Where tile + Weather. */
   placeId?: string;
+  /** FK to events.calendars._id — which of the host's own calendars this event streams into, if any. */
+  calendarId?: string;
   /** FK to business.organization.id — when set, host card renders org branch. */
   organizationId?: string;
   /** ISO-8601 duration (e.g. "PT2H30M"). */

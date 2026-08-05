@@ -19,7 +19,7 @@ import { withAuth } from "@workos-inc/authkit-nextjs";
 import { eventsCollection, personsCollection } from "@/lib/mongo/databases";
 import { newId, slugify, stampNew, shortLinkSlug } from "@/lib/mongo/ids";
 import { ensureHostEntityForPerson, getEntityById, listHostEntitiesForPerson } from "@/lib/mongo/entities";
-import { attachEventToCalendar, getCalendarById } from "@/lib/mongo/calendars";
+import { attachEventToCalendar, detachEventFromCalendar, getCalendarById } from "@/lib/mongo/calendars";
 import { indexEventEmbedding } from "@/lib/ai/event-index";
 import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { mapEventDocToApi } from "@/lib/mongo/mappers";
@@ -309,6 +309,12 @@ export interface UpdateEventInput {
   timezone?: string | null;
   meetingUrl?: string | null;
   meetingPlatform?: string | null;
+  /**
+   * Move the event onto a calendar the host owns (personally, or through the
+   * entity already hosting this event), or `null` to take it off whichever
+   * calendar it's currently on. Omit to leave the calendar attachment as-is.
+   */
+  calendarId?: string | null;
 }
 
 /**
@@ -338,6 +344,24 @@ export async function updateEventForPerson(
   }
   if (patch.ticketUrl && !isHttpUrl(patch.ticketUrl)) {
     throw new Error("The ticket URL must be a valid http(s) link.");
+  }
+
+  // Calendar move/detach — a host may attach to a calendar they personally
+  // own, or one owned by the entity already hosting this event (Rule 10).
+  // Handled as its own write (attachEventToCalendar/detachEventFromCalendar
+  // each keep eventCount honest) rather than folded into `set` below.
+  if (patch.calendarId !== undefined) {
+    if (patch.calendarId === null) {
+      await detachEventFromCalendar(eventId);
+    } else {
+      const calendar = await getCalendarById(patch.calendarId);
+      const ownsPersonally = calendar?.ownerPersonId === person._id;
+      const ownsThroughEntity = calendar?.ownerEntityId === event.primaryHostEntityId;
+      if (!calendar || !(ownsPersonally || ownsThroughEntity)) {
+        throw new Error("You can only add events to your own calendars.");
+      }
+      await attachEventToCalendar(eventId, patch.calendarId);
+    }
   }
 
   const set: Record<string, unknown> = { updatedAt: new Date() };
