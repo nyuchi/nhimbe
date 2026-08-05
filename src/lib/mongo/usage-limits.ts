@@ -1,17 +1,18 @@
 /**
  * Free-plan usage caps — a stopgap ahead of real billing.
  *
- * Nhimbe has two cost centers that scale directly with a real per-use bill
- * (Resend email sends on host blasts, Cloudflare AI Gateway calls on the
- * description wizard) and, until now, no limit on either. This tracks a
+ * Host blasts (Resend email sends fanned out to every RSVP) scale directly
+ * with a real per-use bill and, until now, had no limit. This tracks a
  * simple daily per-subject counter in `system.usageCounters` (nhimbe-owned
  * config, not a shared Mukoko substrate) and throws a friendly
  * `UsageLimitExceededError` once the free-tier limit for the day is hit.
  *
- * Deliberately NOT a billing system: there is no "Pro" plan to check against
- * yet, so every caller is on the free limit. The check happens BEFORE the
- * counter increments, so a denied attempt never burns quota — only actually
- * completed actions count.
+ * Shamwari AI generation is NOT rationed this way — it's gated entirely
+ * behind Mukoko Pro instead (see `src/lib/mongo/entitlements.ts`), since a
+ * cost center this direct doesn't get a free daily allowance, it gets a
+ * plan check. This module is for costs worth metering rather than blocking
+ * outright. The check happens BEFORE the counter increments, so a denied
+ * attempt never burns quota — only actually completed actions count.
  */
 
 import "server-only";
@@ -19,7 +20,7 @@ import { getCollection, DB } from "./databases";
 import { WRITE_SCHEMA_VERSION } from "./ids";
 import type { BaseDoc } from "./types";
 
-export type UsageCounterType = "aiGeneration" | "blast";
+export type UsageCounterType = "blast" | "apiWrite";
 
 interface UsageCounterDoc extends BaseDoc {
   subjectId: string;

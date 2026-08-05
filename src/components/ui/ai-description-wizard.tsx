@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Bot, ArrowRight, ArrowLeft, Loader2, RefreshCw, Check, X } from "lucide-react";
 import { Button } from "./button";
 import { Textarea } from "./textarea";
+import { Badge } from "./badge";
+import { UpgradeToProAlert } from "./upgrade-to-pro-alert";
 import type { DescriptionContext, GeneratedDescription } from "@/lib/api";
 import { generateEventDescription, regenerateEventDescription } from "@/app/actions/ai";
 import { useAuth } from "@/components/auth/auth-context";
@@ -12,6 +14,11 @@ import {
   logShamwariToolUsage,
   startShamwariConversation,
 } from "@/lib/shamwari";
+
+/** Distinguishes the Mukoko Pro gate from ordinary generation failures. */
+function isProGateMessage(message: string): boolean {
+  return message.includes("Mukoko Pro");
+}
 
 interface WizardStep {
   question: string;
@@ -345,9 +352,13 @@ export function AIDescriptionWizard({
             )}
 
             {error && (
-              <div className="bg-red-500/10 text-red-500 px-4 py-3 rounded-xl text-sm">
-                {error}
-              </div>
+              isProGateMessage(error) ? (
+                <UpgradeToProAlert message={error} />
+              ) : (
+                <div className="bg-red-500/10 text-red-500 px-4 py-3 rounded-xl text-sm">
+                  {error}
+                </div>
+              )
             )}
           </div>
 
@@ -431,9 +442,13 @@ export function AIDescriptionWizard({
           />
 
           {error && (
-            <div className="bg-red-500/10 text-red-500 px-4 py-3 rounded-xl text-sm">
-              {error}
-            </div>
+            isProGateMessage(error) ? (
+              <UpgradeToProAlert message={error} />
+            ) : (
+              <div className="bg-red-500/10 text-red-500 px-4 py-3 rounded-xl text-sm">
+                {error}
+              </div>
+            )
           )}
         </div>
 
@@ -512,6 +527,9 @@ export function AIDescriptionBadge({
       >
         <Bot className="w-3.5 h-3.5" />
         Ask Shamwari
+        <Badge variant="default" className="ml-0.5 px-1.5 py-0 text-[10px] leading-4">
+          Pro
+        </Badge>
       </Button>
 
       {showWizard && (

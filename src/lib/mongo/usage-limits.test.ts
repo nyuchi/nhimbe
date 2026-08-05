@@ -19,11 +19,11 @@ beforeEach(() => {
 
 describe("consumeDailyUsage", () => {
   it("allows and increments the first use of the day", async () => {
-    const count = await consumeDailyUsage({ subjectId: "person-1", counterType: "aiGeneration", limit: 5 });
+    const count = await consumeDailyUsage({ subjectId: "person-1", counterType: "blast", limit: 5 });
     expect(count).toBe(1);
     expect(usageCounters.findOneAndUpdate).toHaveBeenCalledTimes(1);
     const [filter, update, opts] = usageCounters.findOneAndUpdate.mock.calls[0];
-    expect(filter._id).toMatch(/^aiGeneration:person-1:\d{4}-\d{2}-\d{2}$/);
+    expect(filter._id).toMatch(/^blast:person-1:\d{4}-\d{2}-\d{2}$/);
     expect(update.$inc).toEqual({ count: 1 });
     expect(opts).toEqual({ upsert: true, returnDocument: "after" });
   });
@@ -44,7 +44,7 @@ describe("consumeDailyUsage", () => {
   });
 
   it("treats a limit of 0 as unlimited and never touches the collection", async () => {
-    const count = await consumeDailyUsage({ subjectId: "person-1", counterType: "aiGeneration", limit: 0 });
+    const count = await consumeDailyUsage({ subjectId: "person-1", counterType: "blast", limit: 0 });
     expect(count).toBe(0);
     expect(usageCounters.findOne).not.toHaveBeenCalled();
     expect(usageCounters.findOneAndUpdate).not.toHaveBeenCalled();
