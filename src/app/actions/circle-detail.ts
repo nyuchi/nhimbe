@@ -29,6 +29,7 @@ import { syncPersonFromWorkos, type SyncPersonInput } from "@/lib/mongo/users";
 import { isDevBypass, DEV_WORKOS_ID, DEV_EMAIL, DEV_NAME } from "@/lib/auth/dev";
 import { listEvents } from "@/lib/mongo/events";
 import { listCalendarsByCircle } from "@/lib/mongo/calendars";
+import { ensureCircleConversation } from "@/lib/mongo/campfire";
 import type { Event } from "@/lib/api";
 import type {
   CircleDoc,
@@ -318,6 +319,25 @@ export async function createCirclePost(input: {
   );
 
   return mapPost(doc, mapPerson(person));
+}
+
+/**
+ * Resolve (creating on first use) the circle's paired group chat — its
+ * WhatsApp-style Discuss channel, distinct from the persistent post stream
+ * above. Any signed-in visitor may open it (same openness as posting).
+ */
+export async function ensureCircleConversationAction(circleId: string): Promise<string> {
+  const person = await resolveActingPerson();
+  const circles = await circlesCollection();
+  const circle = await circles.findOne({ _id: circleId, isActive: true });
+  if (!circle) throw new Error("This circle could not be found.");
+
+  const conversation = await ensureCircleConversation({
+    circleId,
+    circleName: circle.name,
+    createdByPersonId: person._id,
+  });
+  return conversation._id;
 }
 
 export async function joinCircle(input: { circleId: string }): Promise<void> {

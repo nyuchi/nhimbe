@@ -38,6 +38,10 @@ import {
   notifyAttendeesViaCampfire,
   buildCalendarConversationDoc,
   ensureCalendarConversation,
+  buildCircleConversationDoc,
+  ensureCircleConversation,
+  buildEventChatConversationDoc,
+  ensureEventChatConversation,
 } from "./campfire";
 
 /** Required fields on the live `campfire.conversations` validator. */
@@ -279,6 +283,124 @@ describe("ensureCalendarConversation (find-or-create, upsert)", () => {
   it("throws when the conversation cannot be resolved after upsert", async () => {
     conversations.findOne.mockResolvedValueOnce(null);
     await expect(ensureCalendarConversation(calendarConversationInput)).rejects.toThrow(
+      /could not be resolved/,
+    );
+  });
+});
+
+const circleConversationInput = {
+  circleId: "circle-1",
+  circleName: "Harare Runners",
+  createdByPersonId: "person-1",
+};
+
+describe("buildCircleConversationDoc", () => {
+  it("emits every validator-required field", () => {
+    const doc = buildCircleConversationDoc(circleConversationInput) as unknown as Record<
+      string,
+      unknown
+    >;
+    for (const field of CONVERSATION_REQUIRED_FIELDS) {
+      expect(doc, `missing required field ${field}`).toHaveProperty(field);
+      expect(doc[field], `required field ${field} must not be undefined/null`).not.toBeNull();
+    }
+  });
+
+  it("is a GROUP conversation paired to the circle, distinct from its post stream", () => {
+    const doc = buildCircleConversationDoc(circleConversationInput);
+    expect(doc.conversationType).toBe("group");
+    expect(doc.circleId).toBe("circle-1");
+    expect(doc.name).toBe("Harare Runners");
+    expect(doc.encryptionMode).toBe("none");
+  });
+});
+
+describe("ensureCircleConversation (find-or-create, upsert)", () => {
+  it("scopes the find-or-create to the circle's GROUP conversation only", async () => {
+    conversations.findOne.mockResolvedValueOnce({
+      _id: "conv-1",
+      circleId: "circle-1",
+      conversationType: "group",
+    });
+
+    await ensureCircleConversation(circleConversationInput);
+
+    const [filter, update, options] = conversations.updateOne.mock.calls[0];
+    expect(filter).toEqual({ circleId: "circle-1", conversationType: "group" });
+    expect(options).toEqual({ upsert: true });
+    expect(update.$setOnInsert.conversationType).toBe("group");
+    expect(update.$setOnInsert.circleId).toBe("circle-1");
+  });
+
+  it("returns the read-back conversation (upsert does not return the doc)", async () => {
+    const winner = { _id: "conv-winner", circleId: "circle-1", conversationType: "group" };
+    conversations.findOne.mockResolvedValueOnce(winner);
+
+    const conversation = await ensureCircleConversation(circleConversationInput);
+    expect(conversation).toBe(winner);
+  });
+
+  it("throws when the conversation cannot be resolved after upsert", async () => {
+    conversations.findOne.mockResolvedValueOnce(null);
+    await expect(ensureCircleConversation(circleConversationInput)).rejects.toThrow(
+      /could not be resolved/,
+    );
+  });
+});
+
+const eventChatConversationInput = {
+  eventId: "event-1",
+  eventName: "Harare Farmers Market",
+  createdByPersonId: "person-1",
+};
+
+describe("buildEventChatConversationDoc", () => {
+  it("emits every validator-required field", () => {
+    const doc = buildEventChatConversationDoc(eventChatConversationInput) as unknown as Record<
+      string,
+      unknown
+    >;
+    for (const field of CONVERSATION_REQUIRED_FIELDS) {
+      expect(doc, `missing required field ${field}`).toHaveProperty(field);
+      expect(doc[field], `required field ${field} must not be undefined/null`).not.toBeNull();
+    }
+  });
+
+  it("is a GROUP conversation, distinct from the SYSTEM announcement channel on the same event", () => {
+    const doc = buildEventChatConversationDoc(eventChatConversationInput);
+    expect(doc.conversationType).toBe("group");
+    expect(doc.eventId).toBe("event-1");
+    expect(doc.name).toBe("Harare Farmers Market");
+  });
+});
+
+describe("ensureEventChatConversation (find-or-create, upsert)", () => {
+  it("scopes the find-or-create to the event's GROUP conversation, never the SYSTEM one", async () => {
+    conversations.findOne.mockResolvedValueOnce({
+      _id: "conv-1",
+      eventId: "event-1",
+      conversationType: "group",
+    });
+
+    await ensureEventChatConversation(eventChatConversationInput);
+
+    const [filter, update, options] = conversations.updateOne.mock.calls[0];
+    expect(filter).toEqual({ eventId: "event-1", conversationType: "group" });
+    expect(options).toEqual({ upsert: true });
+    expect(update.$setOnInsert.conversationType).toBe("group");
+  });
+
+  it("returns the read-back conversation (upsert does not return the doc)", async () => {
+    const winner = { _id: "conv-winner", eventId: "event-1", conversationType: "group" };
+    conversations.findOne.mockResolvedValueOnce(winner);
+
+    const conversation = await ensureEventChatConversation(eventChatConversationInput);
+    expect(conversation).toBe(winner);
+  });
+
+  it("throws when the conversation cannot be resolved after upsert", async () => {
+    conversations.findOne.mockResolvedValueOnce(null);
+    await expect(ensureEventChatConversation(eventChatConversationInput)).rejects.toThrow(
       /could not be resolved/,
     );
   });

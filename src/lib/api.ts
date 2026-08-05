@@ -93,8 +93,6 @@ export interface Event {
   /** Free-form per-event metadata jsonb. Outdoor events store
    *  {elevation_m, distance_km, route_summary, profile?}. */
   about?: unknown;
-  /** FK to campfire.conversation — drives the on-page event chat. */
-  campfireConversationId?: string;
 }
 
 export interface EventsResponse {

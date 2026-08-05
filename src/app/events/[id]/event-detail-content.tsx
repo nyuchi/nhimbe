@@ -27,7 +27,7 @@ import { EventEntityHostCard } from "./event-entity-host-card";
 import { EventSpecifics } from "./event-specifics";
 import { EventVenueCard } from "./event-venue-card";
 import { EventPolls } from "./event-polls";
-import { CampfireThread } from "@/components/ui/campfire-thread";
+import { EventDiscuss } from "./event-discuss";
 import { type UserReferralCode, type EventStats, type ReviewStats } from "@/lib/api";
 import type { Event } from "@/lib/api";
 import { useSaveEvent } from "@/lib/use-save-event";
@@ -320,10 +320,9 @@ export function EventDetailContent({
             {/* Contributions board — chips from events.event.contributor jsonb */}
             <EventContributionsBoard event={event} />
 
-            {/* Campfire — on-page live chat. Only renders when this event
-                has a campfire.conversation row linked via
-                events.event.campfire_conversation_id. */}
-            <CampfireThread conversationId={event.campfireConversationId} />
+            {/* Campfire — on-page live group chat, lazily created on first
+                open (mirrors the calendar/circle Discuss threads). */}
+            <EventDiscuss eventId={event.id} />
 
             {/* Location Section - Luma style: heading, venue, address, map */}
             {isInPerson && (

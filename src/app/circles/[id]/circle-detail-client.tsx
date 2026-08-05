@@ -29,6 +29,7 @@ import {
   type CirclePost,
 } from "@/app/actions/circle-detail";
 import { AttachCalendar } from "./attach-calendar";
+import { CircleDiscuss } from "./circle-discuss";
 import { useT } from "@/lib/i18n";
 
 interface CircleDetailClientProps {
@@ -296,6 +297,9 @@ export default function CircleDetailClient({ circleId }: CircleDetailClientProps
             </TabsContent>
 
             <TabsContent value="stream">
+              {isAuthenticated && isMember && (
+                <CircleDiscuss circleId={circleId} isAuthenticated={isAuthenticated} />
+              )}
               {isAuthenticated && isMember && (
                 <NyuchiContentComposer
                   className="mb-4"

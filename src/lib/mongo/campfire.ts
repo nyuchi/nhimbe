@@ -229,6 +229,128 @@ export async function ensureCalendarConversation(
   return conversation;
 }
 
+export interface EnsureCircleConversationInput {
+  circleId: string;
+  /** Circle name — becomes the conversation name on create. */
+  circleName: string;
+  /** The person who owns the circle (conversation creator on first use). */
+  createdByPersonId: string;
+}
+
+/**
+ * Pure builder for the circle-paired group chat — a circle's WhatsApp-style
+ * chat, distinct from its persistent post stream (`circles.posts`). Circles
+ * are the membership/roster substrate; Campfire is the messaging substrate —
+ * this pairs one to the other without merging them.
+ */
+export function buildCircleConversationDoc(
+  input: EnsureCircleConversationInput,
+): CampfireConversationDoc {
+  const now = new Date();
+  return {
+    _id: newId(),
+    _schemaVersion: WRITE_SCHEMA_VERSION,
+    conversationType: "group",
+    createdByPersonId: input.createdByPersonId,
+    encryptionMode: "none",
+    visibility: "private",
+    isActive: true,
+    messageCount: 0,
+    participantCount: 0,
+    circleId: input.circleId,
+    name: input.circleName,
+    mukoko: { routingSource: "nhimbe" },
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Find the circle's paired group chat, creating it on first use. Same
+ * race-safe upsert pattern as {@link ensureEventConversation}.
+ */
+export async function ensureCircleConversation(
+  input: EnsureCircleConversationInput,
+): Promise<CampfireConversationDoc> {
+  const conversations = await campfireConversationsCollection();
+  const filter = { circleId: input.circleId, conversationType: "group" };
+
+  await conversations.updateOne(
+    filter,
+    { $setOnInsert: buildCircleConversationDoc(input) },
+    { upsert: true },
+  );
+
+  const conversation = await conversations.findOne(filter);
+  if (!conversation) {
+    throw new Error(
+      `Campfire group chat for circle ${input.circleId} could not be resolved.`,
+    );
+  }
+  return conversation;
+}
+
+export interface EnsureEventChatConversationInput {
+  eventId: string;
+  /** Event name — becomes the conversation name on create. */
+  eventName: string;
+  /** The person opening the chat (conversation creator on first use). */
+  createdByPersonId: string;
+}
+
+/**
+ * Pure builder for an event's live group chat. `conversationType: "group"`
+ * keeps this distinct from the "system" announcement channel above (same
+ * eventId, different conversationType — the two never collide).
+ */
+export function buildEventChatConversationDoc(
+  input: EnsureEventChatConversationInput,
+): CampfireConversationDoc {
+  const now = new Date();
+  return {
+    _id: newId(),
+    _schemaVersion: WRITE_SCHEMA_VERSION,
+    conversationType: "group",
+    createdByPersonId: input.createdByPersonId,
+    encryptionMode: "none",
+    visibility: "private",
+    isActive: true,
+    messageCount: 0,
+    participantCount: 0,
+    eventId: input.eventId,
+    name: input.eventName,
+    mukoko: { routingSource: "nhimbe" },
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Find the event's paired group chat, creating it on first use. Distinct
+ * from {@link ensureEventConversation} (the "system" announcement channel) —
+ * scoped to `conversationType: "group"` so the two never conflate.
+ */
+export async function ensureEventChatConversation(
+  input: EnsureEventChatConversationInput,
+): Promise<CampfireConversationDoc> {
+  const conversations = await campfireConversationsCollection();
+  const filter = { eventId: input.eventId, conversationType: "group" };
+
+  await conversations.updateOne(
+    filter,
+    { $setOnInsert: buildEventChatConversationDoc(input) },
+    { upsert: true },
+  );
+
+  const conversation = await conversations.findOne(filter);
+  if (!conversation) {
+    throw new Error(
+      `Campfire group chat for event ${input.eventId} could not be resolved.`,
+    );
+  }
+  return conversation;
+}
+
 // ── best-effort, never-throw entry point (the write-through hook) ────────
 
 export interface CampfireNotifyInput {
