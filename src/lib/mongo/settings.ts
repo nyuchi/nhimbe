@@ -29,6 +29,10 @@ export interface PlatformSettings {
   maintenanceMode: boolean;
   /** Comma-separated allow-list of email domains; empty = allow all. */
   allowedDomains: string;
+  /** Free-plan daily cap on notifying blasts per event. 0 = unlimited. */
+  freeBlastsPerDayPerEvent: number;
+  /** Free-plan daily cap on Shamwari AI description generations per person. 0 = unlimited. */
+  freeAiGenerationsPerDayPerPerson: number;
 }
 
 interface PlatformSettingsDoc extends BaseDoc, PlatformSettings {}
@@ -47,6 +51,8 @@ export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   enableReferrals: true,
   maintenanceMode: false,
   allowedDomains: "",
+  freeBlastsPerDayPerEvent: 1,
+  freeAiGenerationsPerDayPerPerson: 5,
 };
 
 /** Coerce/clamp a partial, possibly-untrusted settings bag onto the defaults. */
@@ -69,6 +75,11 @@ export function normalizePlatformSettings(raw: Partial<PlatformSettings> | null 
     enableReferrals: bool(r.enableReferrals, d.enableReferrals),
     maintenanceMode: bool(r.maintenanceMode, d.maintenanceMode),
     allowedDomains: str(r.allowedDomains, d.allowedDomains).trim(),
+    freeBlastsPerDayPerEvent: nonNegInt(r.freeBlastsPerDayPerEvent, d.freeBlastsPerDayPerEvent),
+    freeAiGenerationsPerDayPerPerson: nonNegInt(
+      r.freeAiGenerationsPerDayPerPerson,
+      d.freeAiGenerationsPerDayPerPerson,
+    ),
   };
 }
 

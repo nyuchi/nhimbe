@@ -35,6 +35,15 @@ describe("normalizePlatformSettings", () => {
     expect(out.maxAttendeesDefault).toBe(DEFAULT_PLATFORM_SETTINGS.maxAttendeesDefault);
   });
 
+  it("clamps the free-plan usage caps the same way, and allows 0 (unlimited)", () => {
+    const out = normalizePlatformSettings({
+      freeBlastsPerDayPerEvent: -1,
+      freeAiGenerationsPerDayPerPerson: 0,
+    });
+    expect(out.freeBlastsPerDayPerEvent).toBe(DEFAULT_PLATFORM_SETTINGS.freeBlastsPerDayPerEvent);
+    expect(out.freeAiGenerationsPerDayPerPerson).toBe(0);
+  });
+
   it("floors fractional numbers", () => {
     expect(normalizePlatformSettings({ maxEventsPerUser: 12.9 }).maxEventsPerUser).toBe(12);
   });

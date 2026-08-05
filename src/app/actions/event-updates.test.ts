@@ -20,6 +20,16 @@ vi.mock("@/lib/mongo/entities", () => ({ listHostEntitiesForPerson }));
 const notifyAttendeesViaCampfire = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/mongo/campfire", () => ({ notifyAttendeesViaCampfire }));
 
+const getPlatformSettings = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/mongo/settings", () => ({ getPlatformSettings }));
+
+const consumeDailyUsage = vi.hoisted(() => vi.fn());
+const FakeUsageLimitExceededError = vi.hoisted(() => class extends Error {});
+vi.mock("@/lib/mongo/usage-limits", () => ({
+  consumeDailyUsage,
+  UsageLimitExceededError: FakeUsageLimitExceededError,
+}));
+
 // Act through the local dev bypass so no WorkOS session machinery is needed.
 vi.mock("@/lib/auth/dev", () => ({
   isDevBypass: () => true,
@@ -51,6 +61,8 @@ beforeEach(() => {
   updates.insertOne.mockResolvedValue({ acknowledged: true });
   listHostEntitiesForPerson.mockResolvedValue([{ _id: "entity-1" }]);
   notifyAttendeesViaCampfire.mockResolvedValue(undefined);
+  getPlatformSettings.mockResolvedValue({ freeBlastsPerDayPerEvent: 1 });
+  consumeDailyUsage.mockResolvedValue(1);
 });
 
 describe("postEventUpdate", () => {
@@ -126,6 +138,35 @@ describe("postEventUpdate", () => {
     await expect(
       postEventUpdate({ eventId: "event-1", text: "hijack", notifyAttendees: true }),
     ).rejects.toThrow("Not authorized");
+    expect(updates.insertOne).not.toHaveBeenCalled();
+    expect(notifyAttendeesViaCampfire).not.toHaveBeenCalled();
+  });
+
+  it("checks the free-plan blast cap before writing, keyed by event", async () => {
+    await postEventUpdate({ eventId: "event-1", text: "Gates open at 8am.", notifyAttendees: true });
+
+    expect(consumeDailyUsage).toHaveBeenCalledWith({
+      subjectId: "event-1",
+      counterType: "blast",
+      limit: 1,
+    });
+    // The cap check runs before the insert.
+    expect(consumeDailyUsage.mock.invocationCallOrder[0]).toBeLessThan(
+      updates.insertOne.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("does not check the blast cap for a plain update (no notify)", async () => {
+    await postEventUpdate({ eventId: "event-1", text: "Minor note.", notifyAttendees: false });
+    expect(consumeDailyUsage).not.toHaveBeenCalled();
+  });
+
+  it("refuses to blast once the free-plan daily cap is reached, writing nothing", async () => {
+    consumeDailyUsage.mockRejectedValueOnce(new FakeUsageLimitExceededError("limit reached"));
+
+    await expect(
+      postEventUpdate({ eventId: "event-1", text: "Another blast.", notifyAttendees: true }),
+    ).rejects.toThrow("limit reached");
     expect(updates.insertOne).not.toHaveBeenCalled();
     expect(notifyAttendeesViaCampfire).not.toHaveBeenCalled();
   });

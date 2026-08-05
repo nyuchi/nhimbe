@@ -17,6 +17,8 @@ import { eventUpdatesCollection } from "./databases";
 import { stampNew } from "./ids";
 import { notifyAttendeesViaCampfire } from "./campfire";
 import { listUpdateSubscribers } from "./update-subscribers";
+import { consumeDailyUsage } from "./usage-limits";
+import { getPlatformSettings } from "./settings";
 import { sendEmail } from "@/lib/email/resend";
 import { eventUpdatePosted } from "@/lib/email/templates";
 import { SITE_URL } from "@/lib/site-url";
@@ -78,6 +80,18 @@ export async function writeEventUpdateForHost(
     input.updateType && UPDATE_TYPES.includes(input.updateType)
       ? input.updateType
       : "announcement";
+
+  // Free-plan cap: a notifying blast costs real email volume, so it's the one
+  // update type rate-limited today (a stopgap ahead of real Pro billing — see
+  // src/lib/mongo/usage-limits.ts). A plain update (no notify) is unmetered.
+  if (input.notifyAttendees) {
+    const { freeBlastsPerDayPerEvent } = await getPlatformSettings();
+    await consumeDailyUsage({
+      subjectId: event._id,
+      counterType: "blast",
+      limit: freeBlastsPerDayPerEvent,
+    });
+  }
 
   // The author acts through the event's host entity — the caller has verified
   // the person hosts through it (Rule 10: entity-centric).
