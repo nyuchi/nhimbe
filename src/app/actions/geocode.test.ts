@@ -248,9 +248,19 @@ describe("geocodeAddress — reporting a catalogue miss to fundi-ingestion", () 
     else process.env.FUNDI_API_TOKEN = ORIGINAL_TOKEN;
   });
 
+  /** Exact-hostname check (not a substring match) so this test double can't
+   *  be confused by an arbitrary host containing the Nominatim domain name. */
+  function isNominatimUrl(url: string): boolean {
+    try {
+      return new URL(String(url)).hostname === "nominatim.openstreetmap.org";
+    } catch {
+      return false;
+    }
+  }
+
   function mockNominatimHit() {
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
-      if (String(url).includes("nominatim.openstreetmap.org")) {
+      if (isNominatimUrl(url)) {
         return {
           ok: true,
           json: async () => ({
@@ -321,7 +331,7 @@ describe("geocodeAddress — reporting a catalogue miss to fundi-ingestion", () 
   it("swallows a reporting failure without affecting the returned suggestions", async () => {
     process.env.FUNDI_API_TOKEN = "test-token";
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
-      if (String(url).includes("nominatim.openstreetmap.org")) {
+      if (isNominatimUrl(url)) {
         return {
           ok: true,
           json: async () => ({
