@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "NODE_ENV=test vitest",
     "test:run": "NODE_ENV=test vitest run",
-    "test:coverage": "NODE_ENV=test vitest run --coverage"
+    "test:coverage": "NODE_ENV=test vitest run --coverage",
+    "test:integration": "NODE_ENV=test vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1085.0",
@@ -54,6 +55,7 @@
     "eslint-config-next": "16.2.12",
     "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^29.1.1",
+    "mongodb-memory-server-core": "^11.2.0",
     "tailwindcss": "^4",
     "typescript": "6.0.3",
     "vitest": "^4.1.8",

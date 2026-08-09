@@ -66,6 +66,37 @@ jobs:
       - name: Run tests
         run: npm run test:run
 
+  integration-tests:
+    name: Integration Tests (real MongoDB)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # mongodb-memory-server downloads a ~120MB mongod binary on first use.
+      # Caching it keeps this job to roughly the cost of the unit suite; it is
+      # also why these tests are a separate job rather than folded into
+      # `test:run`, which must stay fast.
+      - name: Cache mongod binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run integration tests
+        run: npm run test:integration
+
   # The Mukoko Events MCP server (nyuchi/mukoko-events-mcp) and the Mukoko
   # Events Admin app (nyuchi/mukoko-events-admin) are now separate repos with
   # their own CI. This workflow covers the public Nhimbe app only.

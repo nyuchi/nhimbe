@@ -21,7 +21,8 @@ npm run lint         # ESLint
 
 # Tests (Vitest)
 npm run test         # Watch mode
-npm run test:run     # Run once (~694 tests)
+npm run test:run     # Run once (~887 tests) — unit only, all I/O mocked
+npm run test:integration   # Against a REAL MongoDB (mongodb-memory-server)
 npm run test:coverage
 npx vitest run src/lib/api.test.ts   # Single test file
 ```
@@ -113,7 +114,7 @@ Mutations and client-invoked reads: `auth`, `events`, `event-updates`, `discover
 
 ### Route Handlers (`src/app/api/`)
 
-Same-origin fallback endpoints: `events`, `events/[id]` (both also take bearer-authed `POST`/`PATCH` for the MCP), `categories`, `cities`, `community/stats`, `og` (OG image), `media/upload` (WorkOS-gated cover-image upload to R2), `webhooks/workos` (guaranteed user provisioning — see Authentication Flow), and `auth/dev-login` (local dev bypass only). Auth itself is handled by the hosted-AuthKit entry route `/auth/hosted` (redirects to WorkOS) and `/callback` — see the Authentication Flow section.
+Same-origin fallback endpoints: `events`, `events/[id]` (both also take bearer-authed `POST`/`PATCH` for the MCP), `categories`, `cities`, `community/stats`, `health` (liveness + Mongo dependency probe — `200 ok` / `503 down`, `X-Health-Status` header, `HEAD` for cheap polling; shaped like kweli's `/api/health` so one monitor config covers both, and necessary because every Mongo read degrades to empty rather than throwing, so a `200` on `/` is NOT evidence the app is healthy), `og` (OG image), `media/upload` (WorkOS-gated cover-image upload to R2), `webhooks/workos` (guaranteed user provisioning — see Authentication Flow), and `auth/dev-login` (local dev bypass only). Auth itself is handled by the hosted-AuthKit entry route `/auth/hosted` (redirects to WorkOS) and `/callback` — see the Authentication Flow section.
 
 **Agent-readiness discovery** — three `.well-known` route handlers (`src/app/.well-known/*/route.ts`, all `force-dynamic`, `Access-Control-Allow-Origin: *`) advertise the **WorkOS AuthKit OAuth 2.1 authorization server** (`identity.nyuchi.com/oauth2/*`) from the Nhimbe origin so MCP agents/clients can run standard discovery: `oauth-authorization-server` (RFC 8414 — authorize/token/JWKS **plus the DCR `registration_endpoint`**), `oauth-protected-resource` (RFC 9728 — Nhimbe as resource server, pointing at `/auth.md`; its `resource` is derived from the request host so the doc self-identifies correctly whether served on `nhimbe.com` or `events.mukoko.com`), and `openid-configuration` (OIDC Discovery 1.0, RS256). All four surfaces (these three + `/auth.md`) derive their endpoints from the single helper `src/lib/auth/workos-metadata.ts` (`WORKOS_AUTHKIT_DOMAIN`, default `identity.nyuchi.com`) — the AuthKit domain that serves its own self-consistent metadata and DCR. This is deliberately **not** the API domain in the RFC 9728 `authorization_servers` pointer: `api.identity.nyuchi.com` serves no authorization-server metadata (a client following a pointer there 404s and the flow dead-ends). WorkOS remains the real authorization server; these endpoints just advertise it. The bearer-token **verifier** (`workos-token.ts`) independently reads JWKS from the **API** domain (`WORKOS_API_HOSTNAME` → `/sso/jwks/{clientId}`); advertising the AuthKit domain while verifying against the API domain is safe because a WorkOS environment signs every access token with one key, published (identical `kid`) at both hosts, and the verifier pins only signature + expiry + subject.
 
@@ -265,7 +266,13 @@ React Context only — `AuthProvider` (user state) and `ThemeProvider` (dark/lig
 
 ## Testing
 
-Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/setup.ts`). Tests colocate with modules or live in `src/__tests__/`. Run with `npm run test:run` (~694 tests across ~95 files). Covered areas include the API client, utils, calendar/timezone/ICS, kweli tier coercion, auth context/guard + `return-to`, SEO metadata, accessibility, the design-token guard (`src/__tests__/design-tokens.test.ts`), the Mongo layer (mappers, calendars, planner, campfire, entities, stats, settings, event-filters, users, ids), and the `nyuchi-*` brand components (each colocated with a `.test.tsx`). The Mukoko Events Admin app (`nyuchi/mukoko-events-admin`) carries its own Vitest suite in its own repo.
+**Two suites, deliberately separate.**
+
+**Unit** — Vitest with jsdom + React plugin (`vitest.config.ts`, setup in `src/__tests__/setup.ts`). Tests colocate with modules or live in `src/__tests__/`. Run with `npm run test:run` (~887 tests across ~108 files). Every I/O boundary is mocked, including the Mongo driver. Covered areas include the API client, utils, calendar/timezone/ICS, kweli tier coercion, auth context/guard + `return-to`, SEO metadata, accessibility, the `/api/health` probe, the design-token guard (`src/__tests__/design-tokens.test.ts`), the Mongo layer (mappers, calendars, planner, campfire, entities, stats, settings, event-filters, users, ids), and the `nyuchi-*` brand components (each colocated with a `.test.tsx`).
+
+**Integration** (`vitest.integration.config.ts`, `npm run test:integration`) — `*.integration.test.ts` files run the real Mongo layer against a real in-memory MongoDB (`mongodb-memory-server-core`, booted once in `src/__integration__/global-setup.ts`). This exists because hand-rolled cursor stubs accept *any* query — a malformed aggregation stage, a non-existent operator, a `findOneAndUpdate` whose options changed shape — so the unit suite proves the code *calls* Mongo, never that Mongo would accept what it sent. Kept out of `test:run` (and excluded from its glob, or it fails there with no server) because the first run downloads a ~120MB `mongod` binary; CI runs it as its own cached job.
+
+The Mukoko Events Admin app (`nyuchi/mukoko-events-admin`) carries its own Vitest suite in its own repo.
 
 ## Key Files
 
