@@ -54,7 +54,8 @@ Concrete detail behind the baseline above, for reviewers and future contributors
     only OpenStreetMap tiles (`*.tile.openstreetmap.org`, CyclOSM, OpenTopoMap),
     OSM Nominatim geocoding (`nominatim.openstreetmap.org`), the Mukoko weather
     embed (`weather.mukoko.com`), Cloudflare R2 assets (`*.mukoko.com`), WorkOS
-    (`api.workos.com`, `api.identity.nyuchi.com`, `identity.nyuchi.com`) and
+    (`api.workos.com`, plus the custom domains `auth.mukoko.com` for the auth
+    API and `accounts.mukoko.com` for the AuthKit issuer) and
     Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`). `script-src`
     still permits `'unsafe-inline'`/`'unsafe-eval'` for Next.js's inline
     hydration bootstrap — tightening this to a per-request nonce /
