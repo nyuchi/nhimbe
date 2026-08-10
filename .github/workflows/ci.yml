@@ -137,7 +137,7 @@ jobs:
             Review this PR for:
             1. Security vulnerabilities (XSS, injection, auth bypass, insecure randomness)
             2. Performance issues
-            3. Code quality and adherence to project conventions (see CLAUDE.md)
+            3. Code quality and adherence to project conventions (see AGENTS.md)
             4. Potential bugs or edge cases
             Be concise. Only flag real issues, not style preferences.
 
