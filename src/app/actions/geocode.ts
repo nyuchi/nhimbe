@@ -536,6 +536,14 @@ export async function ensurePlaceFromOsmSuggestion(input: EnsurePlaceInput): Pro
       isActive: true,
       isPrivateByDefault: false,
       primaryPlaceId: placeId,
+      // Explicitly tier 0, matching what kweli-mcp's writeRecords emits for
+      // the same venue. Both producers dedupe on the same
+      // `sourceProvenance.legacyId`, so a row's shape depended on which one
+      // reached it first — and a row with NO `bundu` block is invisible to
+      // any query filtering on `bundu.verificationTier`, which is not the
+      // same as being tier 0. nhimbe still never writes a tier ABOVE 0;
+      // Kweli remains the only thing that raises one.
+      bundu: { verificationTier: 0 },
       sourceProvenance: { legacyId, mirroredFrom: "osm", sourceProject: "nhimbe" },
     } as EntityDoc;
     await entities.insertOne(entityDoc);
@@ -554,7 +562,16 @@ export async function ensurePlaceFromOsmSuggestion(input: EnsurePlaceInput): Pro
         addressLocality: input.city,
         addressCountry: input.country,
       },
-      sourceProvenance: { legacyId, dataOrigin: "osm", dataConfidence: 0.6 },
+      // Same reasoning as the entity above — an absent tier and tier 0 are
+      // different things to a Mongo query, even though nhimbe's own reader
+      // coerces both to "unverified".
+      bundu: { verificationTier: 0 },
+      sourceProvenance: {
+        legacyId,
+        dataOrigin: "osm",
+        dataConfidence: 0.6,
+        sourceProject: "nhimbe",
+      },
     } as PlaceDoc;
     await places.insertOne(placeDoc);
 
