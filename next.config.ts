@@ -16,8 +16,10 @@ import type { NextConfig } from "next";
  *     fetch; listed in connect-src for defence in depth.
  *   - Mukoko weather embed (weather.mukoko.com) — framed weather widget.
  *   - Cloudflare R2 assets (assets-s001.mukoko.com and the *.mukoko.com zone)
- *   - WorkOS AuthKit (api.workos.com + the api.identity.nyuchi.com custom API
- *     domain + the identity.nyuchi.com AuthKit domain — hosted UI / OAuth)
+ *   - WorkOS AuthKit (api.workos.com + the auth.mukoko.com custom API domain
+ *     + the accounts.mukoko.com AuthKit issuer — hosted UI / OAuth). The
+ *     former identity.nyuchi.com / api.identity.nyuchi.com pair was detached
+ *     in the 10 Aug 2026 issuer migration and no longer resolves.
  *
  * `script-src` still needs `'unsafe-inline'`/`'unsafe-eval'` because the app
  * does not yet emit per-request nonces; tightening to a nonce/`strict-dynamic`
@@ -35,7 +37,7 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: blob: https: https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://*.tile-cyclosm.openstreetmap.fr https://*.tile.opentopomap.org",
   "font-src 'self' data: https://fonts.gstatic.com",
-  "connect-src 'self' https://api.workos.com https://api.identity.nyuchi.com https://identity.nyuchi.com https://nominatim.openstreetmap.org https://weather.mukoko.com https://*.mukoko.com",
+  "connect-src 'self' https://api.workos.com https://auth.mukoko.com https://accounts.mukoko.com https://nominatim.openstreetmap.org https://weather.mukoko.com https://*.mukoko.com",
   "frame-src 'self' https://weather.mukoko.com",
   "worker-src 'self' blob:",
   "manifest-src 'self'",
