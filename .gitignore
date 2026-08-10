@@ -56,4 +56,10 @@ worker/worker-configuration.d.ts
 
 # worktrees
 .worktrees
-.claude/worktrees/
+
+# ── Agent context — local dev only, never committed ──────────────────
+# CLAUDE.md and .claude/ carry this repo's agent instructions, skills,
+# hooks and settings. They are deliberately untracked so `main` never
+# ships them; keep your own local copies for development.
+CLAUDE.md
+.claude/
