@@ -11,7 +11,7 @@
  * point of this file:
  *
  * - `WORKOS_AUTHKIT_DOMAIN` — the hosted **AuthKit** domain
- *   (`identity.nyuchi.com` in production). This is the OAuth 2.1 authorization
+ *   (`accounts.mukoko.com` in production). This is the OAuth 2.1 authorization
  *   server: it serves its own self-consistent `/.well-known/oauth-authorization-server`
  *   and hosts the `/oauth2/{authorize,token,register,jwks}` endpoints, including
  *   **dynamic client registration** (`/oauth2/register`) and client-id metadata
@@ -20,7 +20,7 @@
  *   RFC 9728 `authorization_servers` pointer there gets a 404 and the flow
  *   dead-ends). So discovery advertises the AuthKit domain.
  *
- * - `WORKOS_API_HOSTNAME` — the WorkOS **API** domain (`api.identity.nyuchi.com`
+ * - `WORKOS_API_HOSTNAME` — the WorkOS **API** domain (`auth.mukoko.com`
  *   in production; the `api.workos.com` custom-domain stand-in). This is what
  *   the bearer-token verifier (`src/lib/auth/workos-token.ts`) fetches JWKS from
  *   at `/sso/jwks/${WORKOS_CLIENT_ID}`.
@@ -44,13 +44,26 @@ export function workosApiHost(): string {
 
 /**
  * Hosted AuthKit domain — the OAuth 2.1 authorization server MCP clients
- * discover and authenticate against. Defaults to the production domain; override
- * per environment (e.g. a WorkOS-hosted `*.authkit.app` domain) via env.
+ * discover and authenticate against. Override per environment via env.
+ *
+ * The default is `accounts.mukoko.com`. It was `identity.nyuchi.com` until the
+ * 10 Aug 2026 issuer migration, and that host is now GONE — attaching a new
+ * custom domain in WorkOS detaches the old one, so it stopped resolving the
+ * moment the switch happened (Cloudflare error 1014). A default is not a
+ * harmless fallback here: whenever `WORKOS_AUTHKIT_DOMAIN` is unset, every
+ * `.well-known` discovery route and `/auth.md` advertises this value to
+ * agents, so a stale default silently points them all at a dead issuer.
+ *
+ * `accounts` (plural) is the issuer. `account.mukoko.com` (singular) is the
+ * Mukoko Account app — one character apart, different hosts.
  */
 export function workosAuthkitDomain(): string {
-  const raw = process.env.WORKOS_AUTHKIT_DOMAIN || "identity.nyuchi.com";
+  const raw =
+    process.env.WORKOS_ISSUER ||
+    process.env.WORKOS_AUTHKIT_DOMAIN ||
+    "accounts.mukoko.com";
   // Callers prepend `https://`, so accept a value supplied with a scheme and/or
-  // trailing slash (the sibling MCP workers store it as `https://identity.nyuchi.com`)
+  // trailing slash (the sibling MCP workers store it as `https://accounts.mukoko.com`)
   // and normalise to a bare host — otherwise it would double to `https://https://…`.
   return raw.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
 }
