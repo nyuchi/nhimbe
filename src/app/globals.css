@@ -40,17 +40,22 @@
   /* Sodalite — AI / Shamwari mineral (light surface; AAA-strong navy) */
   --sodalite: #283593;
 
-  /* Five Heritage colours (atmospheric, theme-adaptive) */
-  --heritage-indigo:   #1A237E;
-  --heritage-savanna:  #5D4037;
-  --heritage-baobab:   #2E4A2E;
-  --heritage-sunset:   #8B2500;
-  --heritage-river:    #00525A;
+  /* Seven Heritage colours (atmospheric, theme-adaptive) — mzizi canon
+     lightHex; see mzizi-registry/lib/tokens/palette.source.ts. */
+  --heritage-indigo:   #4527A0;
+  --heritage-savanna:  #8D6E1A;
+  --heritage-baobab:   #4E342E;
+  --heritage-sunset:   #D84315;
+  --heritage-river:    #006064;
+  --heritage-hematite: #546E7A;
+  --heritage-kalahari: #C9B589;
   --color-indigo:   var(--heritage-indigo);
   --color-savanna:  var(--heritage-savanna);
   --color-baobab:   var(--heritage-baobab);
   --color-sunset:   var(--heritage-sunset);
   --color-river:    var(--heritage-river);
+  --color-hematite: var(--heritage-hematite);
+  --color-kalahari: var(--heritage-kalahari);
 
   /* Spacing scale — mzizi doctrine 4.1.0 extended ladder.
    * The *-plus half-steps and 4xl/5xl/6xl are 4.1.0 additions; the base rungs
@@ -283,11 +288,14 @@
   --on-container-gold:       #FFECB3;
   --on-container-terracotta: #FFCCBC;
   --on-container-sodalite:   #C5CAE9;
-  --heritage-indigo:  #8C9EFF;
-  --heritage-savanna: #FFCC80;
-  --heritage-baobab:  #A5D6A7;
-  --heritage-sunset:  #FF8A80;
-  --heritage-river:   #80DEEA;
+  /* Seven Heritage colours — mzizi canon darkHex. */
+  --heritage-indigo:   #7986CB;
+  --heritage-savanna:  #E5C158;
+  --heritage-baobab:   #A1887F;
+  --heritage-sunset:   #FF7043;
+  --heritage-river:    #4DD0E1;
+  --heritage-hematite: #90A4AE;
+  --heritage-kalahari: #E8D9B5;
 
   /* Surface ladder — warm-neutral (dark) */
   --pitch:     #050505;
@@ -508,6 +516,8 @@
   --color-sunset: var(--heritage-sunset);
   --color-indigo: var(--heritage-indigo);
   --color-river: var(--heritage-river);
+  --color-hematite: var(--heritage-hematite);
+  --color-kalahari: var(--heritage-kalahari);
   --color-terracotta: var(--mineral-terracotta-raw);
 
   /* nhimbe lead — usable as bg-nh-lead, text-nh-lead, etc. */

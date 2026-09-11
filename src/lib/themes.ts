@@ -65,23 +65,38 @@ function experimental(
 }
 
 /**
- * Build a washed theme from a single heritage hex. mzizi's heritage records
- * ship only the hex, so we derive the container (wash) by mixing the hex into
- * the active surface (~8% light / ~14% dark) and pick an AAA on-container.
+ * Build a washed theme from mzizi's canonical heritage pair.
+ *
+ * mzizi's heritage records ship BOTH `lightHex` and `darkHex` (see
+ * `mzizi-registry/lib/tokens/palette.source.ts` — the source of truth on disk;
+ * the same pair is visible on `GET /v1/brand`). Each mode therefore takes its
+ * accent straight from canon rather than deriving one from the other.
+ *
+ * This used to take a single `hex` and synthesise the dark accent from it
+ * (`color-mix(hex 62%, white)`), on the false premise that heritage records
+ * ship only one hex. That made all fourteen heritage values (7 families x 2
+ * modes) wrong, and — because it was a derivation, not a constant — wrong
+ * again on every regeneration. The pair is now passed in explicitly.
+ *
+ * What is unchanged, because it was never the bug: the container (wash) is
+ * still mixed from the mode's accent into the active surface (~8% light /
+ * ~14% dark) and the on-container is still solved to an AAA-safe foreground.
  * color-mix keeps the wash surface-relative so it adapts to light/dark.
  */
-function heritage(name: string, hex: string): WashedTheme {
+function heritage(name: string, lightHex: string, darkHex: string): WashedTheme {
+  const onL = `color-mix(in srgb, ${lightHex} 82%, black)`;
+  const onD = `color-mix(in srgb, ${darkHex} 48%, white)`;
   const light: ModeColors = {
-    accent: hex,
-    wash: `color-mix(in srgb, ${hex} 8%, var(--surface))`,
-    onWash: `color-mix(in srgb, ${hex} 82%, black)`,
-    gradient: `linear-gradient(135deg, color-mix(in srgb, ${hex} 82%, black), ${hex})`,
+    accent: lightHex,
+    wash: `color-mix(in srgb, ${lightHex} 8%, var(--surface))`,
+    onWash: onL,
+    gradient: `linear-gradient(135deg, ${onL}, ${lightHex})`,
   };
   const dark: ModeColors = {
-    accent: `color-mix(in srgb, ${hex} 62%, white)`,
-    wash: `color-mix(in srgb, ${hex} 14%, var(--surface))`,
-    onWash: `color-mix(in srgb, ${hex} 48%, white)`,
-    gradient: `linear-gradient(135deg, ${hex}, color-mix(in srgb, ${hex} 55%, white))`,
+    accent: darkHex,
+    wash: `color-mix(in srgb, ${darkHex} 14%, var(--surface))`,
+    onWash: onD,
+    gradient: `linear-gradient(135deg, ${darkHex}, ${onD})`,
   };
   return { name, gradient: light.gradient, light, dark };
 }
@@ -108,14 +123,14 @@ export const themes: Record<string, WashedTheme> = {
   // Brand default.
   tanzanite,
 
-  // Heritage palette (mzizi styling-heritage-colors).
-  baobab: heritage("Baobab", "#6D4C41"),
-  hematite: heritage("Hematite", "#607D8B"),
-  indigo: heritage("Indigo", "#3F51B5"),
-  kalahari: heritage("Kalahari", "#D9C7A0"),
-  river: heritage("River", "#0097A7"),
-  savanna: heritage("Savanna", "#C9A227"),
-  sunset: heritage("Sunset", "#FF7043"),
+  // Heritage palette — canon light/dark pairs, mzizi palette.source.ts.
+  baobab: heritage("Baobab", "#4E342E", "#A1887F"),
+  hematite: heritage("Hematite", "#546E7A", "#90A4AE"),
+  indigo: heritage("Indigo", "#4527A0", "#7986CB"),
+  kalahari: heritage("Kalahari", "#C9B589", "#E8D9B5"),
+  river: heritage("River", "#006064", "#4DD0E1"),
+  savanna: heritage("Savanna", "#8D6E1A", "#E5C158"),
+  sunset: heritage("Sunset", "#D84315", "#FF7043"),
 
   // Experimental palette (mzizi styling-experimental) — fully solved washes.
   acacia: experimental("Acacia", "#7E8C22", "#768420", "#E9EBDB", "#333521", "#48510E", "#B6CE23"),
