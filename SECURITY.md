@@ -4,10 +4,10 @@ The safety of the Nhimbe community matters to us. We welcome responsible disclos
 
 ## Supported versions
 
-| Version | Supported |
-| --- | --- |
-| Latest on `main` | ✅ |
-| Older releases | ❌ |
+| Version          | Supported |
+| ---------------- | --------- |
+| Latest on `main` | ✅        |
+| Older releases   | ❌        |
 
 Nhimbe is continuously deployed, so the latest `main` is the only supported version. Fixes land there and roll out from there.
 
@@ -15,7 +15,7 @@ Nhimbe is continuously deployed, so the latest `main` is the only supported vers
 
 **Please do not open a public GitHub issue for security vulnerabilities**, and don't disclose them in the community Discord.
 
-Instead, email **security@nyuchi.com** with:
+Instead, email **<security@nyuchi.com>** with:
 
 1. A description of the vulnerability
 2. Steps to reproduce

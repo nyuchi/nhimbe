@@ -64,7 +64,7 @@ These are approximate line ranges in the current `index.ts` for each handler gro
 
 - Modify: `worker/package.json`
 
-**Step 1: Install Hono**
+#### Step 1: Install Hono
 
 Run:
 
@@ -72,7 +72,7 @@ Run:
 cd worker && npm install hono
 ```
 
-**Step 2: Verify Hono is in dependencies**
+#### Step 2: Verify Hono is in dependencies
 
 Run:
 
@@ -82,7 +82,7 @@ cd worker && node -e "require('hono')" 2>&1 || echo "Hono not found"
 
 Expected: No output (success)
 
-**Step 3: Verify existing tests still pass**
+#### Step 3: Verify existing tests still pass
 
 Run:
 
@@ -92,7 +92,7 @@ cd worker && npx vitest run
 
 Expected: All tests PASS (no changes to code yet)
 
-**Step 4: Commit**
+#### Step 4: Commit
 
 ```bash
 git add worker/package.json worker/package-lock.json
@@ -285,7 +285,7 @@ export { dbRowToEvent } from "./db";
 export { jsonResponse, corsHeaders } from "./response";
 ```
 
-**Step 6: Verify TypeScript compiles**
+#### Step 6: Verify TypeScript compiles
 
 Run:
 
@@ -295,7 +295,7 @@ cd worker && npx tsc --noEmit
 
 Expected: PASS (new files compile, old index.ts still works independently)
 
-**Step 7: Verify tests still pass**
+#### Step 7: Verify tests still pass
 
 Run:
 
@@ -305,7 +305,7 @@ cd worker && npx vitest run
 
 Expected: All tests PASS
 
-**Step 8: Commit**
+#### Step 8: Commit
 
 ```bash
 git add worker/src/utils/
@@ -417,7 +417,7 @@ export { isAllowedOrigin, validateApiKey, writeAuth, apiKeyRequired, getAdminUse
 export type { AdminUser } from "./auth";
 ```
 
-**Step 3: Verify TypeScript compiles**
+#### Step 3: Verify TypeScript compiles
 
 Run:
 
@@ -427,7 +427,7 @@ cd worker && npx tsc --noEmit
 
 Expected: PASS
 
-**Step 4: Commit**
+#### Step 4: Commit
 
 ```bash
 git add worker/src/middleware/
@@ -607,7 +607,7 @@ export default {
 
 **CRITICAL:** At this stage, only the health, categories, and cities routes work. The remaining routes will 404. This is intentional — we add them in the following tasks.
 
-**Step 4: Verify TypeScript compiles**
+#### Step 4: Verify TypeScript compiles
 
 Run:
 
@@ -615,7 +615,7 @@ Run:
 cd worker && npx tsc --noEmit
 ```
 
-**Step 5: Verify health routes work locally**
+#### Step 5: Verify health routes work locally
 
 Run:
 
@@ -630,7 +630,7 @@ kill %1
 
 Expected: JSON responses
 
-**Step 6: Commit**
+#### Step 6: Commit
 
 ```bash
 git add worker/src/index.ts worker/src/index.old.ts worker/src/routes/
@@ -762,11 +762,11 @@ import { events } from "./routes/events";
 app.route("/api/events", events);
 ```
 
-**Step 3: Verify TypeScript compiles**
+#### Step 3: Verify TypeScript compiles
 
 Run: `cd worker && npx tsc --noEmit`
 
-**Step 4: Commit**
+#### Step 4: Commit
 
 ```bash
 git add worker/src/routes/events.ts worker/src/index.ts
@@ -858,7 +858,7 @@ app.route("/api", search);
 app.route("/api", ai);
 ```
 
-**Step 4: Verify TypeScript compiles and commit**
+#### Step 4: Verify TypeScript compiles and commit
 
 ```bash
 cd worker && npx tsc --noEmit
@@ -911,7 +911,7 @@ import { auth } from "./routes/auth";
 app.route("/api/auth", auth);
 ```
 
-**Step 3: Verify and commit**
+#### Step 3: Verify and commit
 
 ```bash
 cd worker && npx tsc --noEmit
@@ -1030,7 +1030,7 @@ media.delete("/:key", async (c) => {
 });
 ```
 
-**Step 4: Mount and commit**
+#### Step 4: Mount and commit
 
 ```typescript
 import { users } from "./routes/users";
@@ -1106,7 +1106,7 @@ stats.get("/stats", async (c) => {
 });
 ```
 
-**Step 4: Mount and commit**
+#### Step 4: Mount and commit
 
 ```typescript
 import { referrals } from "./routes/referrals";
@@ -1220,7 +1220,7 @@ seed.post("/admin/seed", apiKeyRequired, async (c) => {
 });
 ```
 
-**Step 3: Mount and commit**
+#### Step 3: Mount and commit
 
 ```typescript
 import { admin } from "./routes/admin";
@@ -1266,7 +1266,7 @@ import { processAnalyticsMessage, processEmailMessage } from "./queues/handlers"
 
 Remove the inline `processAnalyticsMessage` and `processEmailMessage` functions from `index.ts`.
 
-**Step 3: Verify and commit**
+#### Step 3: Verify and commit
 
 ```bash
 cd worker && npx tsc --noEmit
@@ -1307,7 +1307,7 @@ import { isAllowedOrigin, validateApiKey } from "../middleware/auth";
 
 **Note:** The `isAllowedOrigin` in tests takes `(origin, allowedOrigins)` while the module version takes `(request, env)`. You may need to keep the test-local version or adjust the test to create mock requests. **Evaluate which approach is simpler.** If the test function signatures differ, keep the test-local versions for now and add a TODO comment.
 
-**Step 3: Run all tests**
+#### Step 3: Run all tests
 
 Run:
 
@@ -1317,7 +1317,7 @@ cd worker && npx vitest run
 
 Expected: All tests PASS
 
-**Step 4: Commit**
+#### Step 4: Commit
 
 ```bash
 git add worker/src/__tests__/
@@ -1333,7 +1333,7 @@ git commit -m "refactor: update tests to import from extracted modules"
 - Delete: `worker/src/index.old.ts`
 - Modify: `worker/src/index.ts` (final cleanup)
 
-**Step 1: Run full test suite**
+#### Step 1: Run full test suite
 
 Run:
 
@@ -1343,7 +1343,7 @@ cd worker && npx vitest run
 
 Expected: All tests PASS
 
-**Step 2: Run type check**
+#### Step 2: Run type check
 
 Run:
 
@@ -1353,7 +1353,7 @@ cd worker && npx tsc --noEmit
 
 Expected: PASS
 
-**Step 3: Run the CI pipeline locally**
+#### Step 3: Run the CI pipeline locally
 
 Run from root:
 
@@ -1363,7 +1363,7 @@ npm run lint && npm run build
 
 Expected: PASS
 
-**Step 4: Delete the backup**
+#### Step 4: Delete the backup
 
 ```bash
 rm worker/src/index.old.ts
@@ -1373,7 +1373,7 @@ rm worker/src/index.old.ts
 
 The final `worker/src/index.ts` should be ~50 lines: imports, app creation, middleware, route mounting, queue handler, export.
 
-**Step 6: Final commit**
+#### Step 6: Final commit
 
 ```bash
 git add -A
@@ -1391,7 +1391,7 @@ Migrated 3,362-line index.ts to modular Hono router:
 
 ### Task 14: Run full CI and verify deployment readiness
 
-**Step 1: Run full test suite from root**
+#### Step 1: Run full test suite from root
 
 ```bash
 npx vitest run
@@ -1400,7 +1400,7 @@ cd worker && npx vitest run
 
 Expected: All tests PASS
 
-**Step 2: Type check**
+#### Step 2: Type check
 
 ```bash
 cd worker && npx tsc --noEmit
@@ -1408,7 +1408,7 @@ cd worker && npx tsc --noEmit
 
 Expected: PASS
 
-**Step 3: Lint**
+#### Step 3: Lint
 
 ```bash
 npm run lint
@@ -1416,7 +1416,7 @@ npm run lint
 
 Expected: PASS
 
-**Step 4: Build frontend (confirms no import breakage)**
+#### Step 4: Build frontend (confirms no import breakage)
 
 ```bash
 npm run build
@@ -1424,7 +1424,7 @@ npm run build
 
 Expected: PASS
 
-**Step 5: Local smoke test**
+#### Step 5: Local smoke test
 
 ```bash
 cd worker && npx wrangler dev --port 8788 &
