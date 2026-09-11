@@ -8,11 +8,12 @@
 
 Discover, host, and grow community events across African cities.
 
-[![Live site](https://img.shields.io/badge/live-nhimbe.com-1f6feb.svg)](https://nhimbe.com)
+[![CI](https://github.com/nyuchi/nhimbe/actions/workflows/ci.yml/badge.svg)](https://github.com/nyuchi/nhimbe/actions/workflows/ci.yml)
+[![Live site](https://img.shields.io/badge/live-events.mukoko.com-1f6feb.svg)](https://events.mukoko.com)
 [![Join the community on Discord](https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/CP2P4JpPR)
 [![License: MIT](https://img.shields.io/badge/License-MIT-1f6feb.svg)](./LICENSE)
 
-**[nhimbe.com](https://nhimbe.com)**
+**[events.mukoko.com](https://events.mukoko.com)** &nbsp;·&nbsp; **[nhimbe.com](https://nhimbe.com)**
 
 </div>
 
@@ -23,6 +24,32 @@ Discover, host, and grow community events across African cities.
 **Nhimbe** (pronounced /ˈnhimbɛ/) is the community events platform of the [Mukoko](https://mukoko.com) super app. It takes its name from the Shona tradition of _nhimbe_ — the communal work gathering where neighbours come together to get something done and share in the harvest.
 
 That spirit — the Ubuntu idea that _I am because we are_ — runs through the whole product. **Together we gather, together we grow.** Nhimbe exists to help communities across African cities find one another, plan the moment, and turn up.
+
+## Which piece this is
+
+Nhimbe is **the public app** — the thing an attendee or a host actually opens.
+Two sibling repos carry the other two surfaces, and the three are easy to
+confuse:
+
+| Repo                         | What it is                                                                                                                                                                                | Where it runs                                |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| **`nyuchi/nhimbe`** ← here   | **The public app and the data plane.** The Next.js app, the MongoDB layer, the `/api/events*` REST surface, and the OAuth resource-server metadata everything else authenticates against. | Vercel — `events.mukoko.com` + `nhimbe.com`  |
+| `nyuchi/mukoko-events-admin` | **The staff back office.** Moderating events, people, entities and platform settings. `/admin*` here 307s to it.                                                                          | Vercel — `admin.events.mukoko.com`           |
+| `nyuchi/mukoko-events-mcp`   | **The agent surface.** A stateless MCP server that owns no data — every tool calls this app's HTTP API.                                                                                   | Cloudflare Workers — `events.mukoko.com/mcp` |
+
+This repo ships no admin routes and no worker: `src/app/admin/` does not exist,
+and there is no `wrangler.toml`. What it does ship on their behalf is the host
+gate (`src/lib/auth/mcp-host.ts`) and the `.well-known` discovery documents the
+MCP's OAuth challenge points clients at.
+
+### Two production domains
+
+Both **`events.mukoko.com`** and **`nhimbe.com`** fully serve the app, and
+`www.nhimbe.com` redirects to the latter. `events.mukoko.com` is the **primary**:
+every self-referential URL a crawler consumes — canonical tags, OpenGraph and
+Twitter images, the sitemap, robots, schema.org JSON-LD — points there, so SEO
+signals consolidate on one origin instead of splitting across two. Runtime
+behaviour is identical on either host. See `src/lib/site-url.ts`.
 
 ## What you can do
 
@@ -44,7 +71,7 @@ That spirit — the Ubuntu idea that _I am because we are_ — runs through the 
 - **Next.js 16** (App Router, React 19, TypeScript strict, Tailwind v4) — one full-stack app, no separate backend.
 - **MongoDB** (Mukoko v3.1 cluster) — read/written **server-side only** via the `mongodb` driver; SSR-first, writes through Server Actions.
 - **WorkOS AuthKit** — hosted sign-in end to end.
-- **Cloudflare** — R2 for media, the AI Gateway for Shamwari (Qwen + BGE, with Atlas Vector Search retrieval).
+- **Cloudflare** — R2 for media, and the AI Gateway fronting Shamwari, with Atlas Vector Search for retrieval. (Model identifiers are deliberately not committed anywhere in this repo — see AGENTS.md.)
 - **Vercel** — builds and deploys every push (preview per branch, production on `main`).
 
 Maps (Leaflet + OpenStreetMap), geocoding (OSM Nominatim), and weather (the shared Mukoko embed) need no API keys.
@@ -60,10 +87,11 @@ cp .env.example .env.local   # then fill in your values
 npm run dev          # dev server at http://localhost:11825
 npm run build        # production build
 npm run lint         # ESLint
-npm run test:run     # run the Vitest suite once (~682 tests)
+npm run test:run     # the Vitest suite, once
+npm run test:integration  # the suite that needs a real MongoDB
 ```
 
-The full environment-variable list and architecture reference live in **[CLAUDE.md](./CLAUDE.md)**.
+Every environment variable is listed, with notes, in **[.env.example](./.env.example)**. The architecture reference is **[AGENTS.md](./AGENTS.md)**, with longer-form notes under **[docs/](./docs)**.
 
 ## Surface map
 
@@ -82,9 +110,12 @@ The full environment-variable list and architecture reference live in **[CLAUDE.
 
 Nhimbe is built to be worked on by coding agents as well as people.
 
-- **[AGENTS.md](./AGENTS.md)** — the tool-agnostic standing rules (checks, boundaries, workflow) any runner should follow.
-- **[.claude/skills/](./.claude/skills/)** — task routines (e.g. `release-check`, `db-seed-verify`, `verify`).
-- **[CLAUDE.md](./CLAUDE.md)** — the fuller architecture and contributor reference for Claude Code.
+- **[AGENTS.md](./AGENTS.md)** — the tool-agnostic standing rules (checks, boundaries, workflow) any runner should follow. This is the authoritative reference.
+- **[docs/](./docs)** — longer-form design notes and archived plans.
+
+`CLAUDE.md` and `.claude/` are deliberately **untracked** — they are local
+developer conveniences, not part of the repo. Do not expect them in a fresh
+clone.
 
 ## Community
 
@@ -98,7 +129,7 @@ Have a question, an idea, or want to help shape Nhimbe? Join the people building
 | ------------------------------------ | ------------------------------------------------- |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Set up a local environment and contribute         |
 | [AGENTS.md](./AGENTS.md)             | Standing rules for coding agents                  |
-| [CLAUDE.md](./CLAUDE.md)             | Architecture and contributor reference            |
+| [.env.example](./.env.example)       | Every environment variable, annotated             |
 | [SECURITY.md](./SECURITY.md)         | Security policy and how to report a vulnerability |
 | [RELEASES.md](./RELEASES.md)         | Changelog and release process                     |
 
