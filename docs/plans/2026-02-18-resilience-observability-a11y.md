@@ -22,14 +22,14 @@
 
 ---
 
-### Task 1: Create feature branch and ErrorBoundary components
+## Task 1: Create feature branch and ErrorBoundary components
 
 **Files:**
 
 - Create: `src/components/error/error-boundary.tsx`
 - Create: `src/components/error/widget-error-boundary.tsx`
 
-**Step 1: Create the feature branch**
+### Step 1: Create the feature branch
 
 ```bash
 git checkout -b feature/resilience-a11y
@@ -129,12 +129,12 @@ export class WidgetErrorBoundary extends Component<Props, State> {
 }
 ```
 
-**Step 4: Verify TypeScript compiles**
+### Step 4: Verify TypeScript compiles
 
 Run: `npx tsc --noEmit` (from root — frontend tsc)
 Expected: PASS (no errors related to new files)
 
-**Step 5: Commit**
+### Step 5: Commit
 
 ```bash
 git add src/components/error/
@@ -143,7 +143,7 @@ git commit -m "feat: add ErrorBoundary and WidgetErrorBoundary components"
 
 ---
 
-### Task 2: Create Skeleton component and loading.tsx files
+## Task 2: Create Skeleton component and loading.tsx files
 
 **Files:**
 
@@ -255,7 +255,7 @@ export default function EventDetailLoading() {
 }
 ```
 
-**Step 5: Create remaining loading files**
+### Step 5: Create remaining loading files
 
 - `src/app/events/create/loading.tsx` — form skeleton (title input, textarea, buttons)
 - `src/app/search/loading.tsx` — search bar + results skeleton
@@ -264,12 +264,12 @@ export default function EventDetailLoading() {
 
 Each follows the same pattern: import `Skeleton`, return layout-preserving placeholders matching the page's visual structure. Keep them simple — 15-25 lines each.
 
-**Step 6: Verify build**
+### Step 6: Verify build
 
 Run: `npm run build`
 Expected: PASS (loading.tsx files are automatically wrapped in Suspense by Next.js)
 
-**Step 7: Commit**
+### Step 7: Commit
 
 ```bash
 git add src/components/ui/skeleton.tsx src/app/loading.tsx src/app/events/loading.tsx src/app/events/\[id\]/loading.tsx src/app/events/create/loading.tsx src/app/search/loading.tsx src/app/admin/loading.tsx src/app/calendar/loading.tsx
@@ -278,7 +278,7 @@ git commit -m "feat: add Skeleton component and loading.tsx files for all routes
 
 ---
 
-### Task 3: Create error.tsx files (Next.js error boundaries)
+## Task 3: Create error.tsx files (Next.js error boundaries)
 
 **Files:**
 
@@ -371,7 +371,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
 }
 ```
 
-**Step 4: Create route-specific error.tsx files**
+### Step 4: Create route-specific error.tsx files
 
 Create error.tsx for: `events/`, `events/[id]/`, `events/create/`, `search/`, `admin/`, `calendar/`. Each follows the same pattern as root `error.tsx` but with route-specific messaging:
 
@@ -384,12 +384,12 @@ Create error.tsx for: `events/`, `events/[id]/`, `events/create/`, `search/`, `a
 
 All are `"use client"` components with `{ error, reset }` props and a "Try again" button.
 
-**Step 5: Verify build**
+### Step 5: Verify build
 
 Run: `npm run build`
 Expected: PASS
 
-**Step 6: Commit**
+### Step 6: Commit
 
 ```bash
 git add src/app/global-error.tsx src/app/not-found.tsx src/app/error.tsx src/app/events/error.tsx src/app/events/\[id\]/error.tsx src/app/events/create/error.tsx src/app/search/error.tsx src/app/admin/error.tsx src/app/calendar/error.tsx
@@ -398,7 +398,7 @@ git commit -m "feat: add error.tsx boundaries for all route segments"
 
 ---
 
-### Task 4: Integrate error boundaries into layout.tsx (app shell isolation)
+## Task 4: Integrate error boundaries into layout.tsx (app shell isolation)
 
 **Files:**
 
@@ -482,12 +482,12 @@ function MinimalNav() {
 }
 ```
 
-**Step 2: Verify build**
+### Step 2: Verify build
 
 Run: `npm run build`
 Expected: PASS
 
-**Step 3: Commit**
+### Step 3: Commit
 
 ```bash
 git add src/app/layout.tsx
@@ -496,7 +496,7 @@ git commit -m "feat: wrap app shell in error boundaries for crash isolation"
 
 ---
 
-### Task 5: Worker observability middleware (request ID + structured logging)
+## Task 5: Worker observability middleware (request ID + structured logging)
 
 **Files:**
 
@@ -580,7 +580,7 @@ app.use("*", requestId);
 app.use("*", requestLogger);
 ```
 
-**Step 5: Update global error handler to include request ID**
+### Step 5: Update global error handler to include request ID
 
 ```typescript
 app.onError((err, c) => {
@@ -604,12 +604,12 @@ app.onError((err, c) => {
 });
 ```
 
-**Step 6: Verify**
+### Step 6: Verify
 
 Run: `cd worker && npx tsc --noEmit && npx vitest run`
 Expected: PASS
 
-**Step 7: Commit**
+### Step 7: Commit
 
 ```bash
 git add worker/src/middleware/observability.ts worker/src/index.ts worker/src/types.ts
@@ -618,7 +618,7 @@ git commit -m "feat: add request ID and structured logging middleware to worker"
 
 ---
 
-### Task 6: Worker rate limiting middleware
+## Task 6: Worker rate limiting middleware
 
 **Files:**
 
@@ -662,7 +662,7 @@ app.use("/api/auth/*", rateLimit);
 app.use("/api/search", rateLimit);
 ```
 
-**Step 3: Export from middleware barrel**
+### Step 3: Export from middleware barrel
 
 Add to `worker/src/middleware/index.ts`:
 
@@ -671,12 +671,12 @@ export { rateLimit } from "./rate-limit";
 export { requestId, requestLogger } from "./observability";
 ```
 
-**Step 4: Verify**
+### Step 4: Verify
 
 Run: `cd worker && npx tsc --noEmit && npx vitest run`
 Expected: PASS
 
-**Step 5: Commit**
+### Step 5: Commit
 
 ```bash
 git add worker/src/middleware/rate-limit.ts worker/src/middleware/index.ts worker/src/index.ts
@@ -685,13 +685,13 @@ git commit -m "feat: wire up rate limiting middleware on AI and auth endpoints"
 
 ---
 
-### Task 7: Health check upgrade (actual service probing)
+## Task 7: Health check upgrade (actual service probing)
 
 **Files:**
 
 - Modify: `worker/src/routes/health.ts`
 
-**Step 1: Update health check to probe services**
+### Step 1: Update health check to probe services
 
 Replace the static binding-existence check with actual probes:
 
@@ -731,12 +731,12 @@ health.get("/api/health", async (c) => {
 });
 ```
 
-**Step 2: Verify**
+### Step 2: Verify
 
 Run: `cd worker && npx tsc --noEmit && npx vitest run`
 Expected: PASS
 
-**Step 3: Commit**
+### Step 3: Commit
 
 ```bash
 git add worker/src/routes/health.ts
@@ -745,7 +745,7 @@ git commit -m "feat: upgrade health check to probe D1 and KV with latency"
 
 ---
 
-### Task 8: AI circuit breakers (timeout wrapper)
+## Task 8: AI circuit breakers (timeout wrapper)
 
 **Files:**
 
@@ -793,7 +793,7 @@ if (!result) return `Found ${events.length} events matching your search.`;
 
 Apply the same pattern to assistant.ts and description-generator.ts. Each AI call gets a 10-second timeout with an appropriate fallback.
 
-**Step 3: Export from utils barrel**
+### Step 3: Export from utils barrel
 
 Add to `worker/src/utils/index.ts`:
 
@@ -801,12 +801,12 @@ Add to `worker/src/utils/index.ts`:
 export { withTimeout } from "./timeout";
 ```
 
-**Step 4: Verify**
+### Step 4: Verify
 
 Run: `cd worker && npx tsc --noEmit && npx vitest run`
 Expected: PASS
 
-**Step 5: Commit**
+### Step 5: Commit
 
 ```bash
 git add worker/src/utils/timeout.ts worker/src/utils/index.ts worker/src/ai/
@@ -815,7 +815,7 @@ git commit -m "feat: add timeout wrapper for AI calls with 10s circuit breaker"
 
 ---
 
-### Task 9: Skip-to-content link and LiveRegion provider
+## Task 9: Skip-to-content link and LiveRegion provider
 
 **Files:**
 
@@ -857,7 +857,7 @@ export function useAnnounce(): AnnounceFunction {
 }
 ```
 
-**Step 2: Add skip-to-content link and LiveRegionProvider to layout.tsx**
+### Step 2: Add skip-to-content link and LiveRegionProvider to layout.tsx
 
 At the top of the `<body>` (before all other elements), add:
 
@@ -884,12 +884,12 @@ Wrap the error boundary contents with `<LiveRegionProvider>`:
 </ErrorBoundary>
 ```
 
-**Step 3: Verify build**
+### Step 3: Verify build
 
 Run: `npm run build`
 Expected: PASS
 
-**Step 4: Commit**
+### Step 4: Commit
 
 ```bash
 git add src/components/ui/live-region.tsx src/app/layout.tsx
@@ -898,7 +898,7 @@ git commit -m "feat: add skip-to-content link and aria-live region provider"
 
 ---
 
-### Task 10: Focus trap hook and modal Escape handling
+## Task 10: Focus trap hook and modal Escape handling
 
 **Files:**
 
@@ -972,12 +972,12 @@ export function useFocusTrap<T extends HTMLElement>(options: UseFocusTrapOptions
 }
 ```
 
-**Step 2: Verify TypeScript compiles**
+### Step 2: Verify TypeScript compiles
 
 Run: `npx tsc --noEmit` (from root)
 Expected: PASS
 
-**Step 3: Commit**
+### Step 3: Commit
 
 ```bash
 git add src/lib/use-focus-trap.ts
@@ -986,7 +986,7 @@ git commit -m "feat: add useFocusTrap hook with Escape key and Tab cycling"
 
 ---
 
-### Task 11: ARIA improvements (Button, Input, Tabs, nav, event cards)
+## Task 11: ARIA improvements (Button, Input, Tabs, nav, event cards)
 
 **Files:**
 
@@ -997,7 +997,7 @@ git commit -m "feat: add useFocusTrap hook with Escape key and Tab cycling"
 - Modify: `src/components/layout/footer.tsx` — add aria-label on nav
 - Modify: `src/components/ui/event-card.tsx` — change wrapper to `<article>`
 
-**Step 1: Fix Button focus-visible**
+### Step 1: Fix Button focus-visible
 
 In `button.tsx`, add focus-visible ring to `baseStyles`:
 
@@ -1005,7 +1005,7 @@ In `button.tsx`, add focus-visible ring to `baseStyles`:
 const baseStyles = "inline-flex items-center justify-center gap-2 rounded-[var(--radius-button)] font-semibold cursor-pointer transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 ```
 
-**Step 2: Fix Input aria-invalid and aria-describedby**
+### Step 2: Fix Input aria-invalid and aria-describedby
 
 In `input.tsx`, generate a unique ID for error messages and link them:
 
@@ -1027,7 +1027,7 @@ const errorId = error ? `${props.id || "input"}-error` : undefined;
 }
 ```
 
-**Step 3: Fix Tabs — aria-controls, aria-labelledby, arrow key navigation**
+### Step 3: Fix Tabs — aria-controls, aria-labelledby, arrow key navigation
 
 In `tabs.tsx`:
 
@@ -1051,31 +1051,31 @@ function handleKeyDown(e: React.KeyboardEvent) {
 
 Add `onKeyDown={handleKeyDown}` to the TabsList `<div>`.
 
-**Step 4: Fix Header nav**
+### Step 4: Fix Header nav
 
 In `header.tsx`:
 
 - Add `aria-label="Main navigation"` to the `<nav>` element
 - Add `aria-current={pathname === link.href ? "page" : undefined}` to each nav link
 
-**Step 5: Fix Footer nav**
+### Step 5: Fix Footer nav
 
 In `footer.tsx`:
 
 - Add `aria-label="Footer navigation"` to the `<nav>` element
 
-**Step 6: Fix event card — article wrapper**
+### Step 6: Fix event card — article wrapper
 
 In `event-card.tsx`:
 
 - Find the outermost wrapper element (likely a `<div>` or `<Link>`) and change to `<article>` or wrap in `<article>`
 
-**Step 7: Verify build and tests**
+### Step 7: Verify build and tests
 
 Run: `npm run build && npx vitest run`
 Expected: PASS
 
-**Step 8: Commit**
+### Step 8: Commit
 
 ```bash
 git add src/components/ui/button.tsx src/components/ui/input.tsx src/components/ui/tabs.tsx src/components/layout/header.tsx src/components/layout/footer.tsx src/components/ui/event-card.tsx
@@ -1084,7 +1084,7 @@ git commit -m "feat: ARIA improvements - focus rings, labels, keyboard nav, land
 
 ---
 
-### Task 12: Extract BottomSheetModal and modals from create-event page
+## Task 12: Extract BottomSheetModal and modals from create-event page
 
 **Files:**
 
@@ -1154,7 +1154,7 @@ export function BottomSheetModal({ isOpen, onClose, title, children }: BottomShe
 }
 ```
 
-**Step 3: Extract each modal**
+### Step 3: Extract each modal
 
 For each of the 6 modals (date-time, location, category, description, ticketing, capacity):
 
@@ -1190,12 +1190,12 @@ export function DateTimeModal({ isOpen, onClose, ...props }: DateTimeModalProps)
 
 Replace inline modal JSX with the new components, passing state as props.
 
-**Step 5: Verify build**
+### Step 5: Verify build
 
 Run: `npm run build`
 Expected: PASS
 
-**Step 6: Commit**
+### Step 6: Commit
 
 ```bash
 git add src/components/modals/ src/app/events/create/page.tsx
@@ -1204,7 +1204,7 @@ git commit -m "refactor: extract 6 bottom-sheet modals from create-event page"
 
 ---
 
-### Task 13: Extract shared CityDropdown component
+## Task 13: Extract shared CityDropdown component
 
 **Files:**
 
@@ -1212,7 +1212,7 @@ git commit -m "refactor: extract 6 bottom-sheet modals from create-event page"
 - Modify: `src/app/page.tsx` — use shared CityDropdown
 - Modify: `src/app/events/page.tsx` — use shared CityDropdown
 
-**Step 1: Read both pages to identify the duplicated city dropdown pattern**
+### Step 1: Read both pages to identify the duplicated city dropdown pattern
 
 Read `src/app/page.tsx` and `src/app/events/page.tsx`, find the city dropdown JSX.
 
@@ -1266,16 +1266,16 @@ export function CityDropdown({ value, onChange, className = "" }: CityDropdownPr
 
 Adjust exact cities, markup, and styles to match the existing inline implementations.
 
-**Step 3: Replace inline dropdowns in both pages**
+### Step 3: Replace inline dropdowns in both pages
 
 Import and use `<CityDropdown value={activeCity} onChange={setActiveCity} />` in both pages.
 
-**Step 4: Verify build and tests**
+### Step 4: Verify build and tests
 
 Run: `npm run build && npx vitest run`
 Expected: PASS
 
-**Step 5: Commit**
+### Step 5: Commit
 
 ```bash
 git add src/components/ui/city-dropdown.tsx src/app/page.tsx src/app/events/page.tsx
@@ -1284,14 +1284,14 @@ git commit -m "refactor: extract shared CityDropdown component from home and eve
 
 ---
 
-### Task 14: Lazy loading heavy components with next/dynamic
+## Task 14: Lazy loading heavy components with next/dynamic
 
 **Files:**
 
 - Modify: `src/app/events/create/page.tsx` — lazy load the form
 - Modify pages that use heavy widgets — lazy load CommunityInsights, ReferralLeaderboard, AI wizard
 
-**Step 1: Wrap create-event form in next/dynamic**
+### Step 1: Wrap create-event form in next/dynamic
 
 In `src/app/events/create/page.tsx`, if the main form component is in the same file, extract it to a separate file (e.g., `create-event-form.tsx`) then:
 
@@ -1311,7 +1311,7 @@ const CreateEventForm = dynamic(() => import("./create-event-form"), {
 });
 ```
 
-**Step 2: Lazy load sidebar widgets**
+### Step 2: Lazy load sidebar widgets
 
 Where `CommunityInsights`, `ReferralLeaderboard`, or AI widgets are imported, wrap them:
 
@@ -1322,12 +1322,12 @@ const CommunityInsights = dynamic(
 );
 ```
 
-**Step 3: Verify build**
+### Step 3: Verify build
 
 Run: `npm run build`
 Expected: PASS
 
-**Step 4: Commit**
+### Step 4: Commit
 
 ```bash
 git add src/app/events/create/
@@ -1336,18 +1336,18 @@ git commit -m "feat: lazy load create-event form and sidebar widgets"
 
 ---
 
-### Task 15: RSC migration for events and home pages
+## Task 15: RSC migration for events and home pages
 
 **Files:**
 
 - Modify: `src/app/events/page.tsx` — convert to server component with client child
 - Modify: `src/app/page.tsx` — convert to server component with client child
 
-**Step 1: Read both pages to understand current data fetching pattern**
+### Step 1: Read both pages to understand current data fetching pattern
 
 Both use `useEffect` + `useState` in `"use client"` components.
 
-**Step 2: Migrate events page**
+### Step 2: Migrate events page
 
 Split `src/app/events/page.tsx` into:
 
@@ -1379,16 +1379,16 @@ export default async function EventsPage() {
 
 Move all the current `"use client"` logic into `events-client.tsx`, accepting `initialEvents` as a prop and using it as the initial state.
 
-**Step 3: Migrate home page**
+### Step 3: Migrate home page
 
 Same pattern — server component fetches featured events, passes to client component.
 
-**Step 4: Verify build and tests**
+### Step 4: Verify build and tests
 
 Run: `npm run build && npx vitest run`
 Expected: PASS (frontend tests may need updating if they import from these pages directly)
 
-**Step 5: Commit**
+### Step 5: Commit
 
 ```bash
 git add src/app/events/ src/app/page.tsx
@@ -1397,9 +1397,9 @@ git commit -m "refactor: migrate events and home pages to RSC data fetching"
 
 ---
 
-### Task 16: Final verification and PR creation
+## Task 16: Final verification and PR creation
 
-**Step 1: Run full CI locally**
+### Step 1: Run full CI locally
 
 ```bash
 npm run lint
@@ -1410,7 +1410,7 @@ cd worker && npx tsc --noEmit && npx vitest run
 
 All must PASS.
 
-**Step 2: Review git log**
+### Step 2: Review git log
 
 ```bash
 git log --oneline feature/hono-migration..HEAD
@@ -1418,7 +1418,7 @@ git log --oneline feature/hono-migration..HEAD
 
 Verify all commits are clean and well-described.
 
-**Step 3: Push and create PR**
+### Step 3: Push and create PR
 
 ```bash
 git push -u origin feature/resilience-a11y

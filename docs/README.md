@@ -6,13 +6,13 @@ truth — the canonical, always-current docs live at the repository root.
 
 ## Where the canonical docs live
 
-| Document | Purpose |
-| --- | --- |
-| [`../CLAUDE.md`](../CLAUDE.md) | Architecture and conventions — the source of truth, kept current |
-| [`../README.md`](../README.md) | Project overview and what Nhimbe does |
-| [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Local setup, conventions, and the PR process |
-| [`../SECURITY.md`](../SECURITY.md) | Security policy and vulnerability reporting |
-| [`../RELEASES.md`](../RELEASES.md) | Changelog and release process |
+| Document                                   | Purpose                                                          |
+| ------------------------------------------ | ---------------------------------------------------------------- |
+| [`../CLAUDE.md`](../CLAUDE.md)             | Architecture and conventions — the source of truth, kept current |
+| [`../README.md`](../README.md)             | Project overview and what Nhimbe does                            |
+| [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Local setup, conventions, and the PR process                     |
+| [`../SECURITY.md`](../SECURITY.md)         | Security policy and vulnerability reporting                      |
+| [`../RELEASES.md`](../RELEASES.md)         | Changelog and release process                                    |
 
 The task-based MCP server (`events.mukoko.com/mcp`) and the admin dashboard now
 live in their own repos — `nyuchi/mukoko-events-mcp` and
@@ -26,8 +26,8 @@ media, and the **Shamwari** Cloudflare AI Gateway. The Mukoko Events MCP server
 
 ## Active references
 
-| Document | What it is |
-| --- | --- |
+| Document                                                       | What it is                                                                                                        |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | [`mukoko-navigation-system.md`](./mukoko-navigation-system.md) | Reusable header / footer / theme components for Mukoko apps — a design-system reference, not runtime architecture |
 
 ## Archived plans (historical records)
@@ -40,14 +40,14 @@ consolidated onto Vercel + MongoDB, and the MCP server was extracted to its own
 repo (`nyuchi/mukoko-events-mcp`). Do not use these as a guide to how the app
 works today.
 
-| Plan | Date | Status |
-| --- | --- | --- |
-| [`plans/2026-02-17-next-phase-design.md`](./plans/2026-02-17-next-phase-design.md) | 2026-02-17 | Archived — roadmap; Hono phase superseded, Paynow not adopted, email later shipped via Resend on the app |
-| [`plans/2026-02-17-hono-migration.md`](./plans/2026-02-17-hono-migration.md) | 2026-02-17 | Archived — targeted the retired REST worker; never adopted |
-| [`plans/2026-02-18-resilience-observability-a11y-design.md`](./plans/2026-02-18-resilience-observability-a11y-design.md) | 2026-02-18 | Archived — error-boundary/a11y parts shipped; worker observability superseded |
-| [`plans/2026-02-18-resilience-observability-a11y.md`](./plans/2026-02-18-resilience-observability-a11y.md) | 2026-02-18 | Archived — implementation plan for the above |
-| [`superpowers/plans/2026-03-20-progressive-onboarding.md`](./superpowers/plans/2026-03-20-progressive-onboarding.md) | 2026-03-20 | Archived — onboarding UX shipped; backend mechanics now Server Actions + MongoDB |
-| [`superpowers/specs/2026-03-20-progressive-onboarding-design.md`](./superpowers/specs/2026-03-20-progressive-onboarding-design.md) | 2026-03-20 | Archived — design spec for the above |
+| Plan                                                                                                                               | Date       | Status                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------- |
+| [`plans/2026-02-17-next-phase-design.md`](./plans/2026-02-17-next-phase-design.md)                                                 | 2026-02-17 | Archived — roadmap; Hono phase superseded, Paynow not adopted, email later shipped via Resend on the app |
+| [`plans/2026-02-17-hono-migration.md`](./plans/2026-02-17-hono-migration.md)                                                       | 2026-02-17 | Archived — targeted the retired REST worker; never adopted                                               |
+| [`plans/2026-02-18-resilience-observability-a11y-design.md`](./plans/2026-02-18-resilience-observability-a11y-design.md)           | 2026-02-18 | Archived — error-boundary/a11y parts shipped; worker observability superseded                            |
+| [`plans/2026-02-18-resilience-observability-a11y.md`](./plans/2026-02-18-resilience-observability-a11y.md)                         | 2026-02-18 | Archived — implementation plan for the above                                                             |
+| [`superpowers/plans/2026-03-20-progressive-onboarding.md`](./superpowers/plans/2026-03-20-progressive-onboarding.md)               | 2026-03-20 | Archived — onboarding UX shipped; backend mechanics now Server Actions + MongoDB                         |
+| [`superpowers/specs/2026-03-20-progressive-onboarding-design.md`](./superpowers/specs/2026-03-20-progressive-onboarding-design.md) | 2026-03-20 | Archived — design spec for the above                                                                     |
 
 ### The `superpowers/` subtree
 

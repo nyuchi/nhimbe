@@ -12,10 +12,10 @@ point-in-time records** — each file carries an archival banner. See the root
 
 ## Contents
 
-| Document | Kind | Note |
-| --- | --- | --- |
+| Document                                                                                                   | Kind | Note                                                                                |
+| ---------------------------------------------------------------------------------------------------------- | ---- | ----------------------------------------------------------------------------------- |
 | [`specs/2026-03-20-progressive-onboarding-design.md`](./specs/2026-03-20-progressive-onboarding-design.md) | Spec | Progressive-onboarding design intent (shipped); D1/Supabase data details superseded |
-| [`plans/2026-03-20-progressive-onboarding.md`](./plans/2026-03-20-progressive-onboarding.md) | Plan | Implementation plan for the spec; profile writes are now Server Actions on MongoDB |
+| [`plans/2026-03-20-progressive-onboarding.md`](./plans/2026-03-20-progressive-onboarding.md)               | Plan | Implementation plan for the spec; profile writes are now Server Actions on MongoDB  |
 
 The nested `plans/` and `specs/` layout is preserved so any external references
 to these paths keep resolving.

@@ -20,9 +20,9 @@ Discover, host, and grow community events across African cities.
 
 ## About
 
-**Nhimbe** (pronounced /ˈnhimbɛ/) is the community events platform of the [Mukoko](https://mukoko.com) super app. It takes its name from the Shona tradition of *nhimbe* — the communal work gathering where neighbours come together to get something done and share in the harvest.
+**Nhimbe** (pronounced /ˈnhimbɛ/) is the community events platform of the [Mukoko](https://mukoko.com) super app. It takes its name from the Shona tradition of _nhimbe_ — the communal work gathering where neighbours come together to get something done and share in the harvest.
 
-That spirit — the Ubuntu idea that *I am because we are* — runs through the whole product. **Together we gather, together we grow.** Nhimbe exists to help communities across African cities find one another, plan the moment, and turn up.
+That spirit — the Ubuntu idea that _I am because we are_ — runs through the whole product. **Together we gather, together we grow.** Nhimbe exists to help communities across African cities find one another, plan the moment, and turn up.
 
 ## What you can do
 
@@ -67,16 +67,16 @@ The full environment-variable list and architecture reference live in **[CLAUDE.
 
 ## Surface map
 
-| Surface | Route | What it is |
-| --- | --- | --- |
-| Home | `/` | Auth-split — a lean landing when logged out, "Your events" when signed in |
-| Discover | `/discover` | The browse surface: category tiles → featured circles → city cards |
-| Events | `/events` | The all-events timeline, scopeable by `?category=` / `?city=`; plus create, detail, and manage |
-| Circles | `/circles` | Community groups (formerly "Kraal"), each leading with an events tab |
-| Calendar | `/calendar` | Branded month view + agenda; followable calendars and ICS export |
-| Search | `/search` | Interest, place, and time search |
-| Signage / kiosk | `/signage`, `/events/[id]/kiosk` | Live event displays and on-site check-in |
-| Admin | `/admin` | Operator dashboard — a **separate app** (`nyuchi/mukoko-events-admin`); `/admin*` redirects there |
+| Surface         | Route                            | What it is                                                                                        |
+| --------------- | -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Home            | `/`                              | Auth-split — a lean landing when logged out, "Your events" when signed in                         |
+| Discover        | `/discover`                      | The browse surface: category tiles → featured circles → city cards                                |
+| Events          | `/events`                        | The all-events timeline, scopeable by `?category=` / `?city=`; plus create, detail, and manage    |
+| Circles         | `/circles`                       | Community groups (formerly "Kraal"), each leading with an events tab                              |
+| Calendar        | `/calendar`                      | Branded month view + agenda; followable calendars and ICS export                                  |
+| Search          | `/search`                        | Interest, place, and time search                                                                  |
+| Signage / kiosk | `/signage`, `/events/[id]/kiosk` | Live event displays and on-site check-in                                                          |
+| Admin           | `/admin`                         | Operator dashboard — a **separate app** (`nyuchi/mukoko-events-admin`); `/admin*` redirects there |
 
 ## Working with agents
 
@@ -94,13 +94,13 @@ Have a question, an idea, or want to help shape Nhimbe? Join the people building
 
 ## Documentation
 
-| Document | Purpose |
-| --- | --- |
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | Set up a local environment and contribute |
-| [AGENTS.md](./AGENTS.md) | Standing rules for coding agents |
-| [CLAUDE.md](./CLAUDE.md) | Architecture and contributor reference |
-| [SECURITY.md](./SECURITY.md) | Security policy and how to report a vulnerability |
-| [RELEASES.md](./RELEASES.md) | Changelog and release process |
+| Document                             | Purpose                                           |
+| ------------------------------------ | ------------------------------------------------- |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | Set up a local environment and contribute         |
+| [AGENTS.md](./AGENTS.md)             | Standing rules for coding agents                  |
+| [CLAUDE.md](./CLAUDE.md)             | Architecture and contributor reference            |
+| [SECURITY.md](./SECURITY.md)         | Security policy and how to report a vulnerability |
+| [RELEASES.md](./RELEASES.md)         | Changelog and release process                     |
 
 ## Security
 

@@ -1,22 +1,37 @@
-# Thin caller for the org's reusable lint workflow.
+# The org-wide lint gate. Drop this file in as
+# .github/workflows/lint.yml and change nothing else.
 #
-# The five jobs (actionlint, JSON validity, prettier, markdownlint,
-# yamllint) are defined ONCE in nyuchi/.github/.github/workflows/
-# reusable-lint.yml and consumed identically by every repo in the
-# org. Branch protection requires status from each — adding this
-# caller is what makes the `lint / actionlint`, `lint / JSON validity`,
-# `lint / prettier`, `lint / markdownlint`, and `lint / yamllint`
-# checks report status on each PR.
+# The five checks it publishes are exactly the five contexts the
+# org ruleset requires:
 #
-# Do not inline the jobs here — drift between repos defeats the point.
-# If a tool version or config needs to change, do it in the reusable.
+#   lint / actionlint
+#   lint / JSON validity
+#   lint / prettier
+#   lint / markdownlint
+#   lint / yamllint
+#
+# Those strings come from the job being called `lint` and calling a
+# reusable workflow - a check publishes as "<caller job> / <called job>".
+# Do NOT convert this to a matrix: a matrix publishes
+# "lint (actionlint)" instead and will not satisfy the ruleset.
+#
+# Also copy .prettierrc, .prettierignore, .markdownlint.jsonc and
+# .yamllint.yaml from nyuchi/.github into your repo root.
 
-name: lint
+name: Lint
 
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+  # DEVIATION from the canonical caller (one line). nhimbe's repo ruleset
+  # 14157790 requires a MERGE QUEUE on main. Required status checks must be
+  # reported on the `gh-readonly-queue/**` ref, which only a `merge_group`
+  # trigger produces. Without this the queue waits out its 60-minute
+  # check_response_timeout and nothing can ever land. This strengthens the
+  # gate (more refs linted); it never weakens it. Fold it into the canonical
+  # caller in nyuchi/.github rather than keeping it local.
   merge_group:
 
 concurrency:

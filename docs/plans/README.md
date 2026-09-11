@@ -19,12 +19,12 @@ mechanics in these plans are superseded, even where the user-facing outcome
 
 ## How they relate
 
-| Order | Plan | Note |
-| --- | --- | --- |
-| 1 | [`2026-02-17-next-phase-design.md`](./2026-02-17-next-phase-design.md) | Roadmap that framed the phases below |
-| 2 | [`2026-02-17-hono-migration.md`](./2026-02-17-hono-migration.md) | Phase 1 of the roadmap — the backend refactor (never adopted) |
-| 3 | [`2026-02-18-resilience-observability-a11y-design.md`](./2026-02-18-resilience-observability-a11y-design.md) | Design that built on the Hono branch |
-| 4 | [`2026-02-18-resilience-observability-a11y.md`](./2026-02-18-resilience-observability-a11y.md) | Implementation plan for design (3) |
+| Order | Plan                                                                                                         | Note                                                          |
+| ----- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| 1     | [`2026-02-17-next-phase-design.md`](./2026-02-17-next-phase-design.md)                                       | Roadmap that framed the phases below                          |
+| 2     | [`2026-02-17-hono-migration.md`](./2026-02-17-hono-migration.md)                                             | Phase 1 of the roadmap — the backend refactor (never adopted) |
+| 3     | [`2026-02-18-resilience-observability-a11y-design.md`](./2026-02-18-resilience-observability-a11y-design.md) | Design that built on the Hono branch                          |
+| 4     | [`2026-02-18-resilience-observability-a11y.md`](./2026-02-18-resilience-observability-a11y.md)               | Implementation plan for design (3)                            |
 
 The progressive-onboarding plan and spec (2026-03-20) live under
 [`../superpowers/`](../superpowers/) because they use the superpowers
